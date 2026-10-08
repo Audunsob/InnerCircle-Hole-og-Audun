@@ -1,9 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import webpush from 'web-push';
 import { VAPID_PUBLIC_KEY } from '@/lib/push';
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+import { SUPABASE_KEY, SUPABASE_URL } from '@/lib/supabase';
 const KINDS = new Set(['posts', 'matches', 'results']);
 
 type Target = { endpoint: string; p256dh: string; auth: string };

@@ -13,7 +13,7 @@ import {
   visiblePosts,
 } from '@/lib/derive';
 import { fmtLong } from '@/lib/format';
-import { matchTitle, playerMap } from '@/lib/selectors';
+import { matchTitle, opponentText, playerMap } from '@/lib/selectors';
 import { useStore } from '@/lib/store';
 import type { Match } from '@/lib/types';
 import { DateCol, Icon, SwitchRow, Tabs } from '../ui';
@@ -84,6 +84,7 @@ export function KamperView() {
                     <DateCol date={m.date} />
                     <div className="row-text">
                       <span style={{ font: '600 16px/1.25 var(--body)' }}>{matchTitle(st, m)}</span>
+                      {opponentText(m) && <span className="row-sub">{opponentText(m)}</span>}
                       <span className="row-sub">
                         {m.time} · {m.venue}
                       </span>
@@ -125,6 +126,7 @@ export function KamperView() {
                     <span className="row-text">
                       <span style={{ font: '600 16px/1.25 var(--body)' }}>{matchTitle(st, m)}</span>
                       <span className="row-sub">
+                        {opponentText(m) && opponentText(m) + ' · '}
                         {photoText(matchPhotoCount(allowed, m.id))} · {m.kind}
                       </span>
                     </span>
@@ -168,6 +170,11 @@ function NextMatch({ m }: { m: Match }) {
           <h2 style={{ margin: '4px 0 0', font: '700 24px/1.15 var(--display)', letterSpacing: '-.02em' }}>{matchTitle(st, m)}</h2>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, font: '400 15px/1.4 var(--body)' }}>
+          {m.opp && (
+            <InfoLine label="Motstander">
+              <span>{m.opp}</span>
+            </InfoLine>
+          )}
           <InfoLine label="Dato">
             <span style={{ textTransform: 'capitalize' }}>{fmtLong(m.date)}</span>
           </InfoLine>
@@ -243,6 +250,7 @@ export function MatchDetail({ id }: { id: string }) {
           {fmtLong(m.date)} · {homeAway(m)} · {m.kind}
         </div>
         <h1 className="h1">{matchTitle(st, m)}</h1>
+        {opponentText(m) && <div style={{ font: '600 15px var(--body)' }}>{opponentText(m)}</div>}
         {o && (
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
             <span className="tnum" style={{ font: '700 40px/1 var(--display)', letterSpacing: '-.02em' }}>

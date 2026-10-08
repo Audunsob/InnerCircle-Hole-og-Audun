@@ -8,16 +8,14 @@ Everyone on a team shares the same data: a coach creates the team, players and f
 
 1. **Database.** In Supabase, open **SQL Editor → New query**, paste all of [`supabase/schema.sql`](supabase/schema.sql) and press **Run**. It is safe to run again, and it upgrades the first version.
 2. **Login emails.** In Supabase, **Authentication → URL Configuration**: set **Site URL** to the app's address (for example `https://<project>.vercel.app`) and add the same address under **Redirect URLs**. The default login email contains a link that signs the person in. Supabase's built-in email only reaches your own project members; to log in other people, set up custom SMTP (for example Resend) under **Authentication → Emails → SMTP Settings**. With custom SMTP you can also add the code `{{ .Token }}` to the **Magic Link** and **Confirm signup** templates; the app accepts both the link and the code.
-3. **Keys.** The app reads these environment variables. On Vercel the Supabase integration adds the first two.
+3. **Keys.** The Supabase project URL and publishable key (project "InnerCircle") are built into [`src/lib/supabase.ts`](src/lib/supabase.ts); both are public. Change them there to use another project. The app ignores `NEXT_PUBLIC_SUPABASE_*` environment variables, so a hosting integration can't point it at a different database. For push notifications, set:
 
    ```
-   NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
-   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_…
    VAPID_PRIVATE_KEY=…            # for push notifications (server only, keep secret)
    NEXT_PUBLIC_VAPID_PUBLIC_KEY=… # optional; a default public key is built in
    ```
 
-   `NEXT_PUBLIC_SUPABASE_ANON_KEY` also works. Never put the Supabase service role key in the app. Generate a new VAPID pair with `npx web-push generate-vapid-keys` if you need one, and set both keys.
+   Never put the Supabase service role key in the app. Generate a new VAPID pair with `npx web-push generate-vapid-keys` if you need one, and set both keys.
 
 ## Run
 

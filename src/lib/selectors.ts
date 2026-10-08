@@ -9,6 +9,9 @@ export const shortTeam = (s: S) => teamName(s).split(' ')[0];
 export const matchTitle = (s: S, m: Match) =>
   m.title || (m.home ? shortTeam(s) + ' – ' + m.opp : m.opp + ' – ' + shortTeam(s));
 
+/** "Mot Lørenskog" — shown when a custom title hides who the opponent is. */
+export const opponentText = (m: Match) => (m.title && m.opp ? 'Mot ' + m.opp : '');
+
 export const price = (s: S) => s.data.price ?? DEFAULT_PRICE;
 export const priceText = (s: S) => price(s) + ' kr';
 

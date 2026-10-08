@@ -2,7 +2,7 @@
 
 import { homeAway, splitMatches, visiblePosts } from '@/lib/derive';
 import { firstName, inviteLink, nextChargeText } from '@/lib/format';
-import { codes, matchTitle, playerMap, priceText, teamName } from '@/lib/selectors';
+import { codes, matchTitle, opponentText, playerMap, priceText, teamName } from '@/lib/selectors';
 import { useStore } from '@/lib/store';
 import type { AppState, Player, Post } from '@/lib/types';
 import { DateCol, Icon, Tabs } from '../ui';
@@ -115,6 +115,7 @@ export function LagView() {
           <span className="row-text" style={{ gap: 1 }}>
             <span style={{ font: '500 13px var(--body)', color: 'var(--muted)' }}>Neste kamp · {homeAway(next)}</span>
             <span style={{ font: '600 17px/1.25 var(--body)' }}>{matchTitle(st, next)}</span>
+            {opponentText(next) && <span style={{ font: '500 14px var(--body)' }}>{opponentText(next)}</span>}
             <span style={{ font: '400 14px var(--body)', color: 'var(--muted)' }}>
               {next.time} · {next.venue}
             </span>
