@@ -9,6 +9,7 @@ import type { PayMethod, PostType, SheetName } from '@/lib/types';
 import { economy } from '../app/OkonomiView';
 import { METHOD_NAMES } from '../app/MinSide';
 import { Field, SwitchRow, Tabs } from '../ui';
+import { MediaView } from '../MediaView';
 
 const TITLES: Record<Exclude<SheetName, 'confirm'>, string> = {
   composer: 'Nytt innlegg',
@@ -140,16 +141,20 @@ function Composer() {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <span className="field-label">Bilder</span>
+          <span className="field-label">Bilder og video</span>
           <span className="row-meta">
-            {dr.media.length ? dr.media.length + (dr.media.length === 1 ? ' bilde' : ' bilder') : 'Ingen bilder ennå'}
+            {dr.media.length ? dr.media.length + (dr.media.length === 1 ? ' fil' : ' filer') : 'Ingen bilder ennå'}
           </span>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 4 }}>
           {dr.media.map((m) => (
             <div key={m.id} style={{ position: 'relative', aspectRatio: '1', borderRadius: 4, overflow: 'hidden', background: stripe(m.hue ?? 20, dark) }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              {m.src && <img src={m.src} alt="" className="media-img" />}
+              {m.src && <MediaView src={m.src} kind={m.kind} />}
+              {m.kind === 'video' && (
+                <span className="badge-dark" style={{ left: 4, bottom: 4 }}>
+                  {m.dur || 'video'}
+                </span>
+              )}
               <button
                 type="button"
                 onClick={() => st.removeMedia(m.id)}
@@ -204,7 +209,7 @@ function Composer() {
           >
             <input
               type="file"
-              accept="image/*"
+              accept="image/*,video/*"
               multiple
               onChange={(e) => {
                 const files = [...(e.target.files || [])];
@@ -432,6 +437,7 @@ function Confirm() {
 
 function Notifs() {
   const notifs = useStore((s) => s.data.notifs);
+  const seenAt = useStore((s) => s.seenNotifsAt);
   if (!notifs.length)
     return (
       <p className="note" style={{ textAlign: 'center' }}>
@@ -442,7 +448,7 @@ function Notifs() {
     <div className="sheet-flush">
       {notifs.map((n) => (
         <div key={n.id} className="row" style={{ padding: '14px 0' }}>
-          <span style={{ width: 8, height: 8, flex: 'none', borderRadius: '50%', background: n.read ? 'transparent' : 'var(--accent)' }} />
+          <span style={{ width: 8, height: 8, flex: 'none', borderRadius: '50%', background: n.ts <= seenAt ? 'transparent' : 'var(--accent)' }} />
           <span style={{ flex: 1, font: '400 15px/1.4 var(--body)' }}>{n.text}</span>
           <span className="row-meta">{rel(n.ts)}</span>
         </div>
@@ -671,7 +677,7 @@ function Method() {
 function Receipts() {
   const st = useStore();
   const sub = st.prof.sub;
-  const mine = (st.data.payments || []).filter((p) => p.subId === 'me-sub').sort((a, b) => b.at - a.at);
+  const mine = (st.data.payments || []).filter((p) => p.subId === 'sub-' + st.uid).sort((a, b) => b.at - a.at);
   const method = METHOD_NAMES(sub.last4)[sub.method];
   if (!mine.length)
     return (

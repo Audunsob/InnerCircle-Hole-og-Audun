@@ -84,7 +84,8 @@ export interface Post {
   text: string;
   tagged: string[];
   likes: number;
-  likedBy: Role[];
+  /** Device user ids that gave a heart. */
+  likedBy: string[];
   edited?: boolean;
 }
 
@@ -159,6 +160,10 @@ export interface Flow {
   teamName?: string;
   newCoachCode: string;
   newTeamCode: string;
+  subName?: string;
+  busy?: boolean;
+  /** Team found from a code, before joining it. */
+  peek?: { code: string; teamName: string; isCoachCode: boolean; players: { id: string; name: string }[] } | null;
   err: string;
 }
 
@@ -180,10 +185,12 @@ export interface SignedForm {
   g?: 'yes' | 'no' | null;
   ps: string | null;
   gs?: string | null;
+  busy?: boolean;
   err: string;
 }
 
 export interface SubProfile {
+  name?: string;
   viaId: string | null;
   active: boolean;
   cancelled: boolean;
@@ -246,8 +253,20 @@ export interface Confirm {
 }
 
 /** Saved to localStorage. */
+export type MemberRole = 'coach' | 'player' | 'parent' | 'sub';
+
 export interface PersistedState {
-  v: 1;
+  v: 3;
+  /** The signed-in account's id, used for hearts and subscriptions. */
+  uid: string;
+  /** The team this device is showing, and which of your roles on it. */
+  team: { id: string; role: MemberRole } | null;
+  /** Push notifications are switched on for this device. */
+  pushOn?: boolean;
+  /** Last server version of the team document this device has seen. */
+  version: number;
+  /** Notifications newer than this are shown as unread. */
+  seenNotifsAt: number;
   theme: Theme;
   screen: Screen;
   flow: Flow;

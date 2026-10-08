@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { registerWorker } from '@/lib/push';
 import { startPersistence, useStore } from '@/lib/store';
+import { currentSession, onSignedIn } from '@/lib/supabase';
 import { AppShell } from './app/AppShell';
 import { CoachConsent, ParentConsent, PlayerConsent } from './overlays/Consent';
 import { Payment } from './overlays/Payment';
@@ -22,6 +24,42 @@ export default function InnerCircleApp() {
   const [, setTick] = useState(0);
 
   useEffect(() => startPersistence(), []);
+
+  // The signed-in account (hearts and subscriptions are tied to it), and the push worker.
+  useEffect(() => {
+    // Also handles the link in the login email: it opens the app signed in, and sign-up continues.
+    const stop = onSignedIn((id, email) => useStore.getState().linkSignedIn(id, email));
+    void currentSession().then((u) => u && useStore.setState({ uid: u.id }));
+    void registerWorker();
+    return stop;
+  }, []);
+
+  // Pick up changes others make: check every 8 seconds and whenever the app comes back into view.
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === 'visible') void useStore.getState().refresh();
+    };
+    refresh();
+    const t = setInterval(refresh, 8000);
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('focus', refresh);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('focus', refresh);
+    };
+  }, []);
+
+  // Invite links look like /?lag=TEAMCODE&via=PLAYERID and open the subscriber sign-up.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const code = q.get('lag');
+    if (!code) return;
+    window.history.replaceState(null, '', window.location.pathname);
+    const st = useStore.getState();
+    const alreadyFollowing = st.screen === 'app' && st.role === 'sub' && st.data.teamCode === code.toUpperCase();
+    if (!alreadyFollowing) st.startInvite(code, q.get('via'));
+  }, []);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
