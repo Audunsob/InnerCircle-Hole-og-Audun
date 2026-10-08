@@ -221,13 +221,20 @@ export function SignaturePad({
     ctx.lineWidth = 4.5;
     let drawing = false;
     let last: [number, number] = [0, 0];
-    const pt = (e: PointerEvent): [number, number] => {
-      const r = el.getBoundingClientRect();
-      return [((e.clientX - r.left) * el.width) / r.width, ((e.clientY - r.top) * el.height) / r.height];
+    let r = el.getBoundingClientRect();
+    const pt = (e: PointerEvent): [number, number] => [
+      ((e.clientX - r.left) * el.width) / r.width,
+      ((e.clientY - r.top) * el.height) / r.height,
+    ];
+    // iOS Safari still scrolls the page on touch unless touch events are cancelled
+    // with non-passive listeners; touch-action alone isn't enough inside scroll containers.
+    const block = (e: TouchEvent) => {
+      if (e.cancelable) e.preventDefault();
     };
     const down = (e: PointerEvent) => {
       e.preventDefault();
       drawing = true;
+      r = el.getBoundingClientRect();
       last = pt(e);
       try {
         el.setPointerCapture(e.pointerId);
@@ -240,12 +247,15 @@ export function SignaturePad({
     const move = (e: PointerEvent) => {
       if (!drawing) return;
       e.preventDefault();
-      const p = pt(e);
+      // Coalesced events give the full-resolution path on fast finger strokes.
+      const evs = e.getCoalescedEvents?.() ?? [];
       ctx.beginPath();
       ctx.moveTo(last[0], last[1]);
-      ctx.lineTo(p[0], p[1]);
+      for (const ev of evs.length ? evs : [e]) {
+        last = pt(ev);
+        ctx.lineTo(last[0], last[1]);
+      }
       ctx.stroke();
-      last = p;
     };
     const up = () => {
       if (!drawing) return;
@@ -257,7 +267,11 @@ export function SignaturePad({
     el.addEventListener('pointerup', up);
     el.addEventListener('pointercancel', up);
     el.addEventListener('pointerleave', up);
+    el.addEventListener('touchstart', block, { passive: false });
+    el.addEventListener('touchmove', block, { passive: false });
     return () => {
+      el.removeEventListener('touchstart', block);
+      el.removeEventListener('touchmove', block);
       el.removeEventListener('pointerdown', down);
       el.removeEventListener('pointermove', move);
       el.removeEventListener('pointerup', up);
