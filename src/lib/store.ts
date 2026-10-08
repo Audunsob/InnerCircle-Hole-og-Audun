@@ -469,7 +469,7 @@ export const useStore = create<Store>()((set, get) => {
       const r = st.flow.role;
       const map: Partial<Record<Screen, Screen>> = {
         playerKind: 'role',
-        login: r === 'player' || r === 'parent' ? 'playerKind' : r === 'coach' ? 'coachChoice' : 'role',
+        login: r === 'player' ? 'playerKind' : r === 'coach' ? 'coachChoice' : 'role',
         coachChoice: 'role',
         pconsent: 'pickPlayer',
         otp: 'login',
@@ -573,7 +573,7 @@ export const useStore = create<Store>()((set, get) => {
       const pc = st.data.players.find((p) => p.id === st.prof.player.playerId)?.consent;
       set({
         pcCtx: 'app',
-        pcons: { step: 1, adult: pc ? pc.adult !== false : !!st.flow.adult, p: null, g: null, ps: null, gs: null, err: '' },
+        pcons: { step: 1, adult: pc?.adult ?? !!st.flow.adult, p: null, g: null, ps: null, gs: null, err: '' },
       });
     },
     ccNext: () => {
@@ -628,6 +628,8 @@ export const useStore = create<Store>()((set, get) => {
 
     openPay: (ctx) => set({ payCtx: ctx, pay: newPay() }),
     payBack: () => {
+      // payDone is already scheduled; leaving now would run it with the wrong context.
+      if (s().pay?.busy) return;
       if (s().payCtx) return set({ payCtx: null, pay: null });
       get().back();
     },
@@ -653,6 +655,9 @@ export const useStore = create<Store>()((set, get) => {
         const [mm, yy] = p.exp.split('/');
         if (n.length < 16) return setPay({ err: 'Kortnummeret må ha 16 sifre.' });
         if (!mm || !yy || +mm < 1 || +mm > 12 || yy.length < 2) return setPay({ err: 'Sjekk utløpsdatoen (MM/ÅÅ).' });
+        const now = new Date();
+        if (2000 + +yy < now.getFullYear() || (2000 + +yy === now.getFullYear() && +mm < now.getMonth() + 1))
+          return setPay({ err: 'Kortet har gått ut.' });
         if (p.cvc.length < 3) return setPay({ err: 'CVC er de tre sifrene bak på kortet.' });
       }
       setPay({ busy: true, err: '' });
@@ -847,6 +852,7 @@ export const useStore = create<Store>()((set, get) => {
       const st = s();
       const dr = st.draft;
       if (!dr) return;
+      if (dr.loading) return toast('Vent til bildene er lastet');
       if (!dr.text.trim() && !dr.media.length) return toast('Legg til tekst eller bilder først');
       const matchId = dr.type === 'kamp' && dr.matchId ? dr.matchId : null;
       if (dr.id) {
