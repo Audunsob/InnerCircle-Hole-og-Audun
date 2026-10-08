@@ -1,13 +1,15 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { TeamData } from './types';
 
-const URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+// Project "InnerCircle". Both values are public (they ship to the browser anyway), so they are
+// built in. Hosting integrations can set NEXT_PUBLIC_SUPABASE_* to a different project, which
+// splits accounts across two databases, so those variables are deliberately not read.
+export const SUPABASE_URL = 'https://mabuooolvmijveepqbcu.supabase.co';
+export const SUPABASE_KEY = 'sb_publishable_lt6qAZNcNpPr5GVXmfF1vQ_XsujqNkN';
 
 let client: SupabaseClient | null = null;
 export const db = () => {
-  if (!URL || !KEY) throw new Error('Supabase er ikke satt opp (mangler NEXT_PUBLIC_SUPABASE_URL eller nøkkel).');
-  if (!client) client = createClient(URL, KEY, { auth: { persistSession: true, autoRefreshToken: true } });
+  if (!client) client = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
   return client;
 };
 
