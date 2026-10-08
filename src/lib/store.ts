@@ -214,6 +214,9 @@ export type Store = AppState & Actions;
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 let otpTimer: ReturnType<typeof setTimeout> | undefined;
+/** Login codes from Supabase are 6 to 10 digits, set per project. */
+export const OTP_MIN = 6;
+export const OTP_MAX = 10;
 
 const scrollTop = () => {
   try {
@@ -400,7 +403,7 @@ export const useStore = create<Store>()((set, get) => {
   const afterOtp = async () => {
     const st = s();
     if (st.screen !== 'otp' || !st.flow.role || st.flow.busy) return;
-    if (st.flow.otp.length !== 6) return setFlow({ err: 'Koden har 6 sifre.' });
+    if (st.flow.otp.length < OTP_MIN) return setFlow({ err: 'Skriv inn hele koden fra e-posten.' });
     setFlow({ busy: true, err: '' });
     try {
       const uid = await verifyCode(st.flow.contact, st.flow.otp);
@@ -700,10 +703,14 @@ export const useStore = create<Store>()((set, get) => {
       handlers[s().screen]?.();
     },
     setOtp: (raw) => {
-      const v = raw.replace(/\D/g, '').slice(0, 6);
+      const prev = s().flow.otp;
+      const v = raw.replace(/\D/g, '').slice(0, OTP_MAX);
       setFlow({ otp: v, err: '' });
-      if (v.length === 6) {
-        clearTimeout(otpTimer);
+      clearTimeout(otpTimer);
+      // Supabase codes are 6–10 digits depending on the project, so only send by
+      // itself when the whole code arrives at once (paste or autofill). Typed codes
+      // are sent with the button.
+      if (v.length >= OTP_MIN && v.length - prev.length > 1) {
         otpTimer = setTimeout(afterOtp, 280);
       }
     },

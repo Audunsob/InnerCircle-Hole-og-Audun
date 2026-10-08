@@ -3,7 +3,7 @@
 import type { FormEvent } from 'react';
 import { NB } from '@/lib/format';
 import { ROLES } from '@/lib/seed';
-import { useStore } from '@/lib/store';
+import { OTP_MAX, OTP_MIN, useStore } from '@/lib/store';
 import type { Screen } from '@/lib/types';
 import { Checkbox, ChevronRow, Field, Icon, TopBar } from '../ui';
 
@@ -47,7 +47,7 @@ export function FlowScreen() {
   const btn = BUTTONS[screen];
   const dim =
     !!flow.busy ||
-    (screen === 'otp' && flow.otp.length < 6) ||
+    (screen === 'otp' && flow.otp.length < OTP_MIN) ||
     (screen === 'pickPlayer' && !flow.pickId) ||
     (screen === 'terms' && (!flow.terms || !flow.inviteVia));
 
@@ -169,14 +169,16 @@ function Otp() {
   const otp = useStore((s) => s.flow.otp);
   const setOtp = useStore((s) => s.setOtp);
   const resendCode = useStore((s) => s.resendCode);
-  const active = Math.min(otp.length, 5);
+  // Six boxes to start with; longer codes add a box per digit.
+  const boxes = Math.max(OTP_MIN, otp.length);
+  const active = Math.min(otp.length, boxes - 1);
   return (
     <>
       <Intro title="Sjekk e-posten" text={`Vi har sendt en e-post til ${contact}. Trykk på lenken i den for å logge inn.`} />
-      <p className="note">Står det en kode med 6 sifre i e-posten, kan du skrive den inn her i stedet:</p>
+      <p className="note">Står det en kode i e-posten, kan du skrive den inn her i stedet:</p>
       <div style={{ position: 'relative' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 6 }}>
-          {[0, 1, 2, 3, 4, 5].map((i) => (
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${boxes},1fr)`, gap: 6 }}>
+          {Array.from({ length: boxes }, (_, i) => (
             <div
               key={i}
               className="tnum"
@@ -200,7 +202,7 @@ function Otp() {
           inputMode="numeric"
           autoComplete="one-time-code"
           aria-label="Engangskode"
-          maxLength={6}
+          maxLength={OTP_MAX}
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0.01, border: 'none', fontSize: 16, cursor: 'text' }}
         />
       </div>

@@ -50,7 +50,7 @@ async function rpc<T>(fn: string, args: Record<string, unknown> = {}): Promise<T
 // ---------- Login ----------
 
 /**
- * Emails a login link (and a 6-digit code if the email template includes {{ .Token }}).
+ * Emails a login link (and a 6–10 digit code if the email template includes {{ .Token }}).
  * Creates the account the first time. The link brings the person back to this site, signed in.
  */
 export async function sendCode(email: string) {

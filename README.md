@@ -30,7 +30,7 @@ npm run lint
 
 ## How it works
 
-- **Accounts.** Everyone logs in with a link (or a 6-digit code) sent to their email (Supabase Auth). The account remembers which teams and roles it has, so logging in on a new phone goes straight to the team.
+- **Accounts.** Everyone logs in with a link (or a 6–10 digit code) sent to their email (Supabase Auth). The account remembers which teams and roles it has, so logging in on a new phone goes straight to the team.
 - **Joining.** A coach creates a team with a coach code and a team code. Coaches join with the coach code and sign the coach rules. Players pick themselves from the coach's list and sign the consent form (players under 15 also need a parent's signature). Subscribers join with the team code or a player's invite link (`/?lag=CODE&via=PLAYER`), enter their name, accept the terms and pay. Codes are only used to join; after that, access is checked against the account.
 - **Data.** Each team is one row in `public.teams`, holding the team document as JSON, and `public.team_members` records who is on which team as what. Nobody reads the tables directly; the app calls database functions that check the signed-in account.
 - **Permissions.** Coaches can change everything. Everyone else can only change their own things: their own hearts, their own player's consent, and their own subscription and payments. Non-coaches don't receive the coach code, the payout account, coach signatures or other people's payments.
