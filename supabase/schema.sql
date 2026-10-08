@@ -40,6 +40,7 @@ create table if not exists public.push_subscriptions (
   prefs jsonb not null default '{"posts": true, "matches": true, "results": true}'::jsonb,
   created_at timestamptz not null default now()
 );
+create index if not exists push_subscriptions_team_id_idx on public.push_subscriptions (team_id);
 
 -- Nobody reads these tables directly. Everything goes through the functions below.
 alter table public.teams enable row level security;
@@ -60,11 +61,11 @@ drop function if exists public.ic_payload(public.teams, text);
 -- ---------- Helpers ----------
 
 create or replace function public.ic_norm(p text) returns text
-language sql immutable as $$ select upper(regexp_replace(coalesce(p, ''), '\s', '', 'g')) $$;
+language sql immutable set search_path = public as $$ select upper(regexp_replace(coalesce(p, ''), '\s', '', 'g')) $$;
 
 -- The signed-in account. Fails if nobody is signed in.
 create or replace function public.ic_uid() returns uuid
-language plpgsql stable as $$
+language plpgsql stable set search_path = public as $$
 begin
   if auth.uid() is null then raise exception 'not_signed_in'; end if;
   return auth.uid();
@@ -83,14 +84,14 @@ $$;
 
 -- Removes array items whose text equals p_value.
 create or replace function public.ic_without(p_arr jsonb, p_value text) returns jsonb
-language sql immutable as $$
+language sql immutable set search_path = public as $$
   select coalesce(jsonb_agg(x), '[]'::jsonb) from jsonb_array_elements(coalesce(p_arr, '[]'::jsonb)) x where x #>> '{}' <> p_value
 $$;
 
 -- What a member gets back. Coaches see everything; others don't see the coach code,
 -- payout account, coach signatures or other people's payments.
 create or replace function public.ic_payload(t public.teams, p_role text) returns jsonb
-language sql stable as $$
+language sql stable set search_path = public as $$
   select jsonb_build_object(
     'teamId', t.id,
     'role', p_role,
@@ -316,6 +317,12 @@ end $$;
 -- ---------- Who may call what ----------
 
 revoke all on function public.ic_member(uuid, text) from public, anon, authenticated;
+-- Internal helpers, only called from the functions above.
+revoke all on function public.ic_norm(text) from public, anon, authenticated;
+revoke all on function public.ic_uid() from public, anon, authenticated;
+revoke all on function public.ic_without(jsonb, text) from public, anon, authenticated;
+revoke all on function public.ic_payload(public.teams, text) from public, anon, authenticated;
+revoke all on function public.ic_is_member(text) from public, anon;
 revoke all on function public.peek_team(text) from public, anon;
 revoke all on function public.join_team(text, text, text) from public, anon;
 revoke all on function public.create_team(text, text, text, jsonb) from public, anon;
