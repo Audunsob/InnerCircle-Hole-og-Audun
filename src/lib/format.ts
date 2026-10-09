@@ -91,7 +91,7 @@ export const nextMonthly = (start: number) => {
 /** Formatted next charge date (or end of access) for a subscription that started at `start`. */
 export const nextChargeText = (start: number | null) => fmtDate(nextMonthly(start ?? Date.now()));
 
-/** Striped placeholder used for demo photos without a real image. */
+/** Striped background shown behind a photo while it loads. */
 export const stripe = (h: number, dark: boolean) =>
   dark
     ? `repeating-linear-gradient(135deg,hsl(${h} 10% 20%) 0 10px,hsl(${h} 10% 17%) 10px 20px)`

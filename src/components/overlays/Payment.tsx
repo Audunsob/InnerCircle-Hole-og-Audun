@@ -1,7 +1,7 @@
 'use client';
 
 import type { FormEvent } from 'react';
-import { DEMO_HINTS, newPay } from '@/lib/seed';
+import { newPay } from '@/lib/seed';
 import { priceText, teamName } from '@/lib/selectors';
 import { useStore } from '@/lib/store';
 import type { PayMethod } from '@/lib/types';
@@ -92,11 +92,6 @@ export function Payment() {
                 <input className="input" value={p.cvc} onChange={(e) => st.setCard('cvc', e.target.value)} inputMode="numeric" autoComplete="cc-csc" placeholder="123" />
               </Field>
             </div>
-            {DEMO_HINTS && (
-              <p className="note" style={{ fontSize: 13 }}>
-                Demo: 16 sifre, en dato fram i tid og 3 sifre fungerer.
-              </p>
-            )}
           </div>
         )}
 
