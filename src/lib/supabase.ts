@@ -73,6 +73,19 @@ export function onSignedIn(cb: (id: string, email: string) => void) {
   return () => data.subscription.unsubscribe();
 }
 
+/**
+ * Signs in from the login email's link (/?token_hash=…&type=email). The link only opens the app;
+ * the token is used here, in the browser, so mail scanners that open links can't use it up and
+ * make the 6-digit code in the same email stop working.
+ */
+export async function verifyLink(tokenHash: string, type: string) {
+  const { error } = await db().auth.verifyOtp({
+    token_hash: tokenHash,
+    type: type === 'signup' ? 'signup' : type === 'magiclink' ? 'magiclink' : 'email',
+  });
+  if (error) throw new Error(error.message);
+}
+
 /** Checks the code and signs in. Returns the account id. */
 export async function verifyCode(email: string, token: string): Promise<string> {
   const { data, error } = await db().auth.verifyOtp({ email, token, type: 'email' });

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { registerWorker } from '@/lib/push';
 import { startPersistence, useStore } from '@/lib/store';
-import { currentSession, onSignedIn } from '@/lib/supabase';
+import { currentSession, onSignedIn, verifyLink } from '@/lib/supabase';
 import { AppShell } from './app/AppShell';
 import { CoachConsent, ParentConsent, PlayerConsent } from './overlays/Consent';
 import { Payment } from './overlays/Payment';
@@ -29,6 +29,14 @@ export default function InnerCircleApp() {
   useEffect(() => {
     // Also handles the link in the login email: it opens the app signed in, and sign-up continues.
     const stop = onSignedIn((id, email) => useStore.getState().linkSignedIn(id, email));
+    const q = new URLSearchParams(window.location.search);
+    const tokenHash = q.get('token_hash');
+    if (tokenHash) {
+      window.history.replaceState(null, '', window.location.pathname);
+      verifyLink(tokenHash, q.get('type') || 'email').catch(() =>
+        useStore.getState().toast('Lenken er brukt eller utløpt. Be om en ny kode.'),
+      );
+    }
     void currentSession().then((u) => u && useStore.setState({ uid: u.id }));
     void registerWorker();
     return stop;
