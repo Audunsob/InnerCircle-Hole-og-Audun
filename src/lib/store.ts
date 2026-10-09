@@ -308,6 +308,13 @@ export const useStore = create<Store>()((set, get) => {
     }
   };
   const netError = 'Fikk ikke kontakt. Sjekk nettet og prøv igjen.';
+  /** Why a login email couldn't be sent, in words the person can act on. */
+  const sendError = (e: unknown) => {
+    const msg = e instanceof Error ? e.message : '';
+    if (/rate|seconds|many/i.test(msg)) return 'Du har bedt om mange koder. Vent litt og prøv igjen.';
+    if (/email|mail|smtp/i.test(msg)) return 'Vi fikk ikke sendt e-posten akkurat nå. Prøv igjen om litt, eller kontakt treneren.';
+    return netError;
+  };
 
   /** Tells the team's phones about something new. Only coaches can; it does nothing for others. */
   const notify = async (kind: 'posts' | 'matches' | 'results', title: string, body: string) => {
@@ -377,11 +384,7 @@ export const useStore = create<Store>()((set, get) => {
     try {
       await sendCode(email);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : '';
-      return setFlow({
-        busy: false,
-        err: /rate|seconds|many/i.test(msg) ? 'Du har bedt om mange koder. Vent litt og prøv igjen.' : netError,
-      });
+      return setFlow({ busy: false, err: sendError(e) });
     }
     setFlow({ busy: false });
     go('otp');
@@ -392,8 +395,8 @@ export const useStore = create<Store>()((set, get) => {
     try {
       await sendCode(s().flow.contact);
       toast('Ny kode er sendt');
-    } catch {
-      toast('Vent litt før du ber om en ny kode.');
+    } catch (e) {
+      toast(sendError(e));
     }
   };
 
