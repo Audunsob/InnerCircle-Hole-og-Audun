@@ -2,7 +2,7 @@ import { deletePush, savePush } from './supabase';
 
 /** Public half of the app's push key pair. The private half lives only on the server (VAPID_PRIVATE_KEY). */
 export const VAPID_PUBLIC_KEY =
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 'BISU8zfav-tY8wgWJcy5Tp8YHj2YiwoRJLasBsJuczzmjj568vMhCZd2g-ZMIsEY6I4U4Cx7pRSl0XJ-OVLcxCI';
+  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 'BN1waSIW1Ws86Fi9qmS206bhQLu_zgsolRZHalVFnVmKiAdT2kZIfKE3dokKThEANllhDfcPm1Kl9tlKf_-edFY';
 
 export type PushPrefs = { posts: boolean; matches: boolean; results: boolean };
 
