@@ -156,7 +156,7 @@ function PlayerKind() {
 function Login() {
   return (
     <>
-      <Intro title="Logg inn" text="Vi sender deg en e-post med en lenke. Ingen passord å huske." />
+      <Intro title="Logg inn" text="Vi sender deg en kode på e-post. Ingen passord å huske." />
       <Field label="E-post">
         <FlowInput field="contact" type="email" inputMode="email" autoFocus autoComplete="email" placeholder="navn@epost.no" />
       </Field>
@@ -172,8 +172,7 @@ function Otp() {
   const active = Math.min(otp.length, 5);
   return (
     <>
-      <Intro title="Sjekk e-posten" text={`Vi har sendt en e-post til ${contact}. Trykk på lenken i den for å logge inn.`} />
-      <p className="note">Står det en kode med 6 sifre i e-posten, kan du skrive den inn her i stedet:</p>
+      <Intro title="Sjekk e-posten" text={`Vi har sendt en kode med 6 sifre til ${contact}. Skriv den inn her:`} />
       <div style={{ position: 'relative' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 6 }}>
           {[0, 1, 2, 3, 4, 5].map((i) => (

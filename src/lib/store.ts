@@ -422,7 +422,7 @@ export const useStore = create<Store>()((set, get) => {
       return setFlow({
         busy: false,
         otp: '',
-        err: 'Koden virker ikke. Den kan bare brukes én gang (også lenken i e-posten bruker den opp), og bare den nyeste koden gjelder. Be om en ny kode.',
+        err: 'Koden stemmer ikke eller er utløpt. Bare den nyeste koden gjelder. Prøv igjen eller be om en ny.',
       });
     }
     setFlow({ busy: false });
