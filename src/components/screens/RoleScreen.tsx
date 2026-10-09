@@ -37,6 +37,7 @@ export function RoleScreen() {
       <p className="note" style={{ marginTop: 16 }}>
         Ingenting er offentlig. Bare de som er invitert, ser bildene.
       </p>
+      <div style={{ flex: 0.5 }} />
     </div>
   );
 }
