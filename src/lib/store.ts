@@ -132,6 +132,8 @@ export interface Actions {
   switchRole: () => void;
   /** Signed in from somewhere other than the code box, e.g. the link in the email. */
   linkSignedIn: (id: string, email: string) => void;
+  /** After the email link signed this browser in: continue where it makes sense. */
+  resumeAfterLink: (email: string) => Promise<void>;
   resendCode: () => Promise<void>;
 
   // Parent consent wizard
@@ -409,7 +411,19 @@ export const useStore = create<Store>()((set, get) => {
       const uid = await verifyCode(st.flow.contact, st.flow.otp);
       set({ uid });
     } catch {
-      return setFlow({ busy: false, otp: '', err: 'Koden stemmer ikke eller er utløpt. Prøv igjen eller be om en ny.' });
+      // The code and the link in the email share one token. If the link was opened in this
+      // browser (another tab), we are already signed in, so carry on.
+      const session = await currentSession();
+      if (session && session.email === st.flow.contact) {
+        set({ uid: session.id });
+        setFlow({ busy: false });
+        return afterLogin();
+      }
+      return setFlow({
+        busy: false,
+        otp: '',
+        err: 'Koden virker ikke. Den kan bare brukes én gang (også lenken i e-posten bruker den opp), og bare den nyeste koden gjelder. Be om en ny kode.',
+      });
     }
     setFlow({ busy: false });
     await afterLogin();
@@ -678,7 +692,7 @@ export const useStore = create<Store>()((set, get) => {
     // ---------- Onboarding ----------
 
     chooseRole: (r) => {
-      set({ flow: { ...blankFlow(), role: r === 'player' ? null : r } });
+      set({ flow: { ...blankFlow(), contact: s().flow.contact, role: r === 'player' ? null : r } });
       go(r === 'player' ? 'playerKind' : r === 'coach' ? 'coachChoice' : 'login');
     },
     choosePlayerKind: (adult) => {
@@ -765,6 +779,25 @@ export const useStore = create<Store>()((set, get) => {
       scrollTop();
     },
     resendCode,
+    resumeAfterLink: async (email) => {
+      const st = s();
+      // Same browser that asked for the code: linkSignedIn already continues sign-up.
+      if (st.screen === 'app' || (st.screen === 'otp' && st.flow.contact === email)) return;
+      // Opened on another device or browser: go into the account's team if it has one.
+      try {
+        const mine = await myTeams();
+        const order: MemberRole[] = ['coach', 'player', 'parent', 'sub'];
+        const m = order.map((r) => mine.find((x) => x.role === r)).find(Boolean);
+        if (m) {
+          set({ flow: { ...blankFlow(), contact: email, role: m.role, coachMode: 'join' } });
+          return afterLogin();
+        }
+      } catch {
+        // Fall through and let the person pick a role.
+      }
+      setFlow({ contact: email, err: '' });
+      toast('Du er logget inn som ' + email + '. Velg hvem du er for å fortsette.');
+    },
     linkSignedIn: (id, email) => {
       set({ uid: id });
       const st = s();
