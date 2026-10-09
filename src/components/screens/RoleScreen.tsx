@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import { useStore } from '@/lib/store';
 import { ChevronRow, Icon } from '../ui';
 
@@ -12,7 +11,6 @@ export function RoleScreen() {
   return (
     <div className="screen" style={{ padding: '0 16px calc(24px + env(safe-area-inset-bottom))' }}>
       <div style={{ minHeight: 64, display: 'flex', alignItems: 'center', gap: 10 }}>
-        <Image src="/ic-logo.png" alt="" width={36} height={36} style={{ borderRadius: '50%' }} priority />
         <span style={{ flex: 1, font: "700 19px var(--display)", letterSpacing: '-.02em', color: 'var(--accent-ink)' }}>InnerCircle</span>
         <button type="button" className="icon-btn" onClick={toggleTheme} aria-label="Bytt mellom lys og mørk modus" style={{ marginRight: -12 }}>
           <Icon name={theme === 'dark' ? 'light_mode' : 'dark_mode'} />
