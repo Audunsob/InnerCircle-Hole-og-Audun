@@ -33,8 +33,9 @@ export default function InnerCircleApp() {
     const tokenHash = q.get('token_hash');
     if (tokenHash) {
       window.history.replaceState(null, '', window.location.pathname);
-      verifyLink(tokenHash, q.get('type') || 'email').catch(() =>
-        useStore.getState().toast('Lenken er brukt eller utløpt. Be om en ny kode.'),
+      verifyLink(tokenHash, q.get('type') || 'email').then(
+        (email) => useStore.getState().resumeAfterLink(email),
+        () => useStore.getState().toast('Lenken er allerede brukt eller utløpt. Bruk koden, eller be om en ny.'),
       );
     }
     void currentSession().then((u) => u && useStore.setState({ uid: u.id }));
