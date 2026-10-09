@@ -26,7 +26,6 @@ import {
   freshState,
   LS_KEY,
   newPay,
-  seedWithLedger,
 } from './seed';
 import {
   accessToken,
@@ -129,7 +128,6 @@ export interface Actions {
   enterApp: (r: Role) => void;
   logout: () => void;
   /** Back to the start screen without signing out. */
-  switchRole: () => void;
   /** Signed in from somewhere other than the code box, e.g. the link in the email. */
   linkSignedIn: (id: string, email: string) => void;
   /** After the email link signed this browser in: continue where it makes sense. */
@@ -202,7 +200,6 @@ export interface Actions {
   removeSub: (id: string) => void;
   addPlayer: () => void;
   removePlayer: (id: string) => void;
-  resetDemo: () => void;
 
   // Subscriber / family
   cancelSub: () => void;
@@ -774,10 +771,6 @@ export const useStore = create<Store>()((set, get) => {
       });
       scrollTop();
     },
-    switchRole: () => {
-      set({ role: null, screen: 'role', flow: blankFlow(), sheet: null, payCtx: null, pay: null, tab: 'lag', openMatch: null });
-      scrollTop();
-    },
     resendCode,
     resumeAfterLink: async (email) => {
       const st = s();
@@ -1284,17 +1277,6 @@ export const useStore = create<Store>()((set, get) => {
         },
       );
     },
-    resetDemo: () =>
-      ask(
-        'Laste inn eksempeldata?',
-        'Laget fylles med 40 eksempelspillere, innlegg, kamper og abonnenter. Det som ligger der nå, erstattes for alle på laget.',
-        'Last inn',
-        () => {
-        setData((d) => ({ ...seedWithLedger(), teamName: d.teamName, teamCode: d.teamCode, coachCode: d.coachCode, coachConsents: d.coachConsents }));
-        toast('Eksempeldata er lastet inn');
-        },
-      ),
-
     // ---------- Subscriber / family ----------
 
     cancelSub: () => {

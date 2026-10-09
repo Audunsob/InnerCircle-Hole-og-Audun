@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type FormEvent, type ReactNode } from 'react';
-import { CKEYS, ROLE_SWITCHER, TYPES } from '@/lib/seed';
+import { CKEYS, TYPES } from '@/lib/seed';
 import { firstName, fmtShort, initials, inviteLink, nextChargeText, rel, stripe } from '@/lib/format';
 import { codes, coachName, matchTitle, playerMap, priceText, teamName } from '@/lib/selectors';
 import { useStore } from '@/lib/store';
@@ -139,18 +139,6 @@ export function MinSide() {
       <button type="button" className="btn btn-secondary btn-block" style={{ marginTop: 24 }} onClick={st.logout}>
         Logg ut
       </button>
-      {ROLE_SWITCHER && (
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 24, marginTop: 8 }}>
-          {role === 'coach' && (
-            <button type="button" className="link-btn quiet" onClick={st.resetDemo}>
-              Last inn eksempeldata
-            </button>
-          )}
-          <button type="button" className="link-btn quiet" onClick={st.switchRole}>
-            Bytt rolle
-          </button>
-        </div>
-      )}
     </>
   );
 }
