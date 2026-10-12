@@ -61,7 +61,7 @@ import {
 } from './supabase';
 import { scoreTitle } from './derive';
 import { disablePush, enablePush, isStandalone, needsHomeScreen, phoneKind, updatePushPrefs, type PushPrefs } from './push';
-import { coachName, hasConsent, matchTitle, price, shortTeam, teamName } from './selectors';
+import { canPost, coachName, hasConsent, matchTitle, memberAuthor, price, shortTeam, teamName } from './selectors';
 
 const MAX_VIDEO = 50 * 1024 * 1024;
 
@@ -129,7 +129,7 @@ import type {
   TrainingSeries,
   TeamEvent,
 } from './types';
-import { findEvent, firstOn, isRunning, repeatText, seriesIcs, timeText, WEEKDAYS, yesterday } from './trainings';
+import { findEvent, firstOn, isRunning, isTraining, repeatText, seriesIcs, timeText, WEEKDAYS, yesterday } from './trainings';
 
 const EPHEMERAL_KEYS = Object.keys(ephemeral()) as (keyof EphemeralState)[];
 
@@ -1863,6 +1863,7 @@ export const useStore = create<Store>()((set, get) => {
     },
     openComposer: (postId, eventId) => {
       const st = s();
+      if (!postId && !canPost(st)) return;
       let dr: Draft;
       const p = postId ? st.data.posts.find((x) => x.id === postId) : null;
       const ev = findEvent(st.data, eventId);
@@ -1915,8 +1916,13 @@ export const useStore = create<Store>()((set, get) => {
       if (!dr) return;
       if (dr.loading) return toast('Vent til opplastingen er ferdig');
       if (!dr.text.trim() && !dr.media.length) return toast('Legg til tekst, bilder eller video først');
-      const matchId = dr.type === 'kamp' && dr.matchId ? dr.matchId : null;
-      const eventId = dr.type !== 'kamp' && dr.eventId ? dr.eventId : null;
+      const coach = st.role === 'coach';
+      // Players and parents post about a match, training or event the coaches made, never on their own.
+      const ev = findEvent(st.data, dr.eventId);
+      if (!coach && !st.data.matches.some((m) => m.id === dr.matchId) && (!ev || (isTraining(ev) && ev.cancelled)))
+        return toast('Velg kampen, treningen eller hendelsen innlegget gjelder');
+      const matchId = (dr.type === 'kamp' || !coach) && dr.matchId ? dr.matchId : null;
+      const eventId = (dr.type !== 'kamp' || !coach) && dr.eventId ? dr.eventId : null;
       if (dr.id) {
         const kept = new Set(dr.media.map((m) => m.src));
         const dropped = (st.data.posts.find((p) => p.id === dr.id)?.media || []).filter((m) => !kept.has(m.src));
@@ -1932,13 +1938,14 @@ export const useStore = create<Store>()((set, get) => {
         return;
       }
       const now = Date.now();
-      const author = coachName(st);
+      const by = coach ? { author: coachName(st), authorRole: 'Administrator' } : memberAuthor(st);
+      const author = by.author;
       const post: Post = {
-        id: 'post' + now,
+        id: 'post' + now + (coach ? '' : Math.random().toString(36).slice(2, 6)),
         type: dr.type,
-        authorId: 'coach',
+        authorId: coach ? 'coach' : st.uid,
         author,
-        authorRole: 'Administrator',
+        authorRole: by.authorRole,
         ts: now,
         matchId,
         eventId,
@@ -1948,7 +1955,8 @@ export const useStore = create<Store>()((set, get) => {
         likes: 0,
         likedBy: [],
       };
-      const notifyAll = dr.notify !== false;
+      // Only coaches send notifications.
+      const notifyAll = coach && dr.notify !== false;
       setData((d) => ({
         ...d,
         posts: [post, ...d.posts],
@@ -1957,7 +1965,7 @@ export const useStore = create<Store>()((set, get) => {
       // Posted from an event: stay there and see it turn up. Otherwise go to the feed.
       set(eventId ? { sheet: null, draft: null } : { sheet: null, draft: null, tab: 'lag', filter: 'all', openMatch: null });
       // Those who asked to hear about this match get it even with notifications for posts switched off.
-      if (notifyAll || matchId) void notify('posts', teamName(s()), author + ': ' + (post.text || mediaText(post.media)).slice(0, 120), { matchId, onlyWatchers: !notifyAll });
+      if (coach && (notifyAll || matchId)) void notify('posts', teamName(s()), author + ': ' + (post.text || mediaText(post.media)).slice(0, 120), { matchId, onlyWatchers: !notifyAll });
       scrollTop();
       toast(notifyAll ? 'Publisert. Laget er varslet.' : 'Innlegget er publisert');
     },

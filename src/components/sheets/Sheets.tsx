@@ -4,7 +4,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { download, firstName, fmtAcct, fmtDate, fmtDay, fmtLong, fmtShort, iso, krd, matchTime, NB, rel, stripe } from '@/lib/format';
 import { CKEYS, EVENT_ICONS, EVENT_KINDS, TYPES } from '@/lib/seed';
 import { allEvents, isTraining, WEEK_ORDER, WEEKDAYS } from '@/lib/trainings';
-import { CONSENT_INK, CONSENT_LABEL, consentStatus, waitsForParent, matchTitle, playerMap, price, shortTeam, teamName } from '@/lib/selectors';
+import { canPost, CONSENT_INK, CONSENT_LABEL, consentStatus, waitsForParent, matchTitle, playerMap, price, shortTeam, teamName } from '@/lib/selectors';
 import { canInstall, installApp, phoneKind } from '@/lib/push';
 import { receiptText, useStore } from '@/lib/store';
 import type { Draft, Media, PayMethod, Player, PostType, SheetName } from '@/lib/types';
@@ -122,9 +122,16 @@ function Composer() {
   const dark = st.theme === 'dark';
   const matches = [...st.data.matches].sort((a, b) => matchTime(b) - matchTime(a));
   const events = allEvents(st.data).filter((e) => !isTraining(e) || (!e.cancelled && e.date <= iso(new Date()))).sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
-  const ready = (dr.text.trim() || dr.media.length) && !dr.loading;
+  const coach = st.role === 'coach';
+  const ready = (dr.text.trim() || dr.media.length) && !dr.loading && (coach || !!dr.matchId || !!dr.eventId);
   return (
     <>
+      {!coach && (
+        <p className="note" style={{ fontSize: 13 }}>
+          Del bilder og video fra en kamp, trening eller hendelse administratorene har lagt inn. Administratorene kan fjerne innlegg.
+        </p>
+      )}
+      {coach && (
       <div className="field">
         <span className="field-label">Type</span>
         <div
@@ -162,11 +169,12 @@ function Composer() {
           })}
         </div>
       </div>
+      )}
 
-      {dr.type === 'kamp' && (
+      {(dr.type === 'kamp' || !coach) && (
         <Field label="Kamp">
           <select className="input" value={dr.matchId} onChange={(e) => st.setDraft({ matchId: e.target.value })}>
-            <option value="">Ingen kamp valgt</option>
+            <option value="">{coach ? 'Ingen kamp valgt' : 'Velg kamp'}</option>
             {matches.map((m) => (
               <option key={m.id} value={m.id}>
                 {matchTitle(st, m) + ' · ' + fmtDay(m.date)}
@@ -176,7 +184,7 @@ function Composer() {
         </Field>
       )}
 
-      {dr.type !== 'kamp' && events.length > 0 && (
+      {(dr.type !== 'kamp' || !coach) && events.length > 0 && (
         <Field label="Hendelse">
           <select className="input" value={dr.eventId || ''} onChange={(e) => st.setDraft({ eventId: e.target.value })}>
             <option value="">Ikke knyttet til en hendelse</option>
@@ -294,6 +302,7 @@ function Composer() {
         />
       </Field>
 
+      {coach && (
       <div className="list">
         <SwitchRow
           label="Varsle abonnentene"
@@ -302,6 +311,7 @@ function Composer() {
           onToggle={() => st.setDraft({ notify: dr.notify === false })}
         />
       </div>
+      )}
 
       <div
         style={{
@@ -765,12 +775,19 @@ function PostMenu() {
   const id = useStore((s) => s.menuPost);
   const openComposer = useStore((s) => s.openComposer);
   const deletePost = useStore((s) => s.deletePost);
+  // Coaches edit their own posts and delete any post; players and parents edit and delete their own.
+  const canEdit = useStore((s) => {
+    const p = s.data.posts.find((x) => x.id === id);
+    return !!p && (s.role === 'coach' ? p.authorId === 'coach' : p.authorId === s.uid && canPost(s));
+  });
   if (!id) return null;
   return (
     <div className="sheet-flush">
-      <button type="button" className="row-btn" style={{ font: '500 16px var(--body)' }} onClick={() => openComposer(id)}>
-        Rediger innlegg
-      </button>
+      {canEdit && (
+        <button type="button" className="row-btn" style={{ font: '500 16px var(--body)' }} onClick={() => openComposer(id)}>
+          Rediger innlegg
+        </button>
+      )}
       <button
         type="button"
         className="row-btn"

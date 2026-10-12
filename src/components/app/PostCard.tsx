@@ -26,7 +26,9 @@ export function PostCard({ post, P }: { post: Post; P: Record<string, Player> })
 
   const outcome = resultTitle && match ? outcomeOf(match) : null;
   const liked = post.likedBy.includes(uid);
-  const canEdit = role === 'coach' && post.authorId === 'coach';
+  const mine = role !== 'coach' && post.authorId === uid;
+  // Coaches can remove any post; players and parents their own.
+  const hasMenu = role === 'coach' || mine;
 
   const tagged = post.tagged.map((id) => P[id]).filter(Boolean);
   const shown = tagged.filter((x) => x.consent?.name).map((x) => firstName(x.name));
@@ -78,7 +80,7 @@ export function PostCard({ post, P }: { post: Post; P: Record<string, Player> })
             {typeLabel} · {rel(post.ts)}
           </div>
         </div>
-        {canEdit && (
+        {hasMenu && (
           <button
             type="button"
             className="icon-btn"
@@ -203,7 +205,7 @@ export function PostCard({ post, P }: { post: Post; P: Record<string, Player> })
           </span>
         </button>
         {post.edited && <span style={{ marginLeft: 'auto', font: '400 13px var(--body)', color: 'var(--muted)' }}>Redigert</span>}
-        {role !== 'coach' && (
+        {role !== 'coach' && !mine && (
           <button
             type="button"
             className="icon-btn"
