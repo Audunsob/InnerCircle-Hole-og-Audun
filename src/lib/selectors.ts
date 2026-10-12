@@ -27,6 +27,12 @@ export const playerMap = (players: Player[]) => {
 
 export const hasConsent = (p: Player | undefined) => !!(p && p.consent && p.consent.photo);
 
+/** For the coach's overview: photos allowed, someone said no, or nothing given yet. */
+export type ConsentStatus = 'given' | 'declined' | 'none';
+export const consentStatus = (p: Player): ConsentStatus => (hasConsent(p) ? 'given' : p.declined ? 'declined' : 'none');
+export const CONSENT_LABEL: Record<ConsentStatus, string> = { given: 'Samtykke gitt', declined: 'Sa nei', none: 'Ikke gitt' };
+export const CONSENT_INK: Record<ConsentStatus, string> = { given: 'var(--ok)', declined: 'var(--accent-ink)', none: 'var(--muted)' };
+
 /** A post is hidden as soon as anyone tagged in it lacks consent (or video consent for videos). */
 export const postAllowed = (P: Record<string, Player>, post: Post) =>
   post.tagged.every((id) => {
