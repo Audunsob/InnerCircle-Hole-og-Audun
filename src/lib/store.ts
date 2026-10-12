@@ -447,13 +447,15 @@ export const useStore = create<Store>()((set, get) => {
     await afterLogin();
   };
 
-  /** After signing in: go straight into a team this account already belongs to, or continue sign-up. */
+  /** After signing in: go straight into a team this account already belongs to, or continue sign-up.
+   *  Coaches always type the coach code, also when the account is already a coach on the team. */
   const afterLogin = async () => {
     const st = s();
     const r = st.flow.role;
     if (!r) return;
     const wanted: MemberRole = r;
-    if (!(r === 'coach' && st.flow.coachMode === 'create')) {
+    if (r === 'coach' && !st.flow.coachName && st.prof.coach.name) setFlow({ coachName: st.prof.coach.name });
+    if (r !== 'coach') {
       try {
         const mine = (await myTeams()).filter((m) => m.role === wanted);
         const pick = mine.find((m) => m.teamId === st.team?.id) || mine[0];
@@ -579,6 +581,20 @@ export const useStore = create<Store>()((set, get) => {
     const p = await lookup(c);
     if (s().flow.err) return;
     if (!p || !p.isCoachCode) return setFlow({ err: 'Koden stemmer ikke. Spør en annen trener på laget.' });
+    // Already a coach on this team: the code was right, so go straight in without signing again.
+    let returning = false;
+    try {
+      returning = (await myTeams()).some((m) => m.role === 'coach' && m.teamId === p.teamId);
+    } catch {
+      return setFlow({ err: netError });
+    }
+    if (returning) {
+      if (!(await join('coach', null))) return;
+      setProf('coach', { name: f.coachName.trim().replace(/\s+/g, ' ') });
+      enterApp('coach');
+      toast('Velkommen tilbake!');
+      return;
+    }
     set({ pcons: { step: 1, coach: true, mode: 'join', p: null, ps: null, err: '' } });
     setFlow({ err: '' });
     go('cconsent');
