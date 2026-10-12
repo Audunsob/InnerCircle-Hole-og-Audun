@@ -8,8 +8,7 @@ import { MediaView } from '../MediaView';
 
 const navBtn: React.CSSProperties = {
   position: 'absolute',
-  top: '50%',
-  transform: 'translateY(-50%)',
+  top: 'calc(50% - 24px)',
   width: 48,
   height: 48,
   border: 'none',
@@ -47,6 +46,7 @@ export function Viewer() {
       role="dialog"
       aria-modal="true"
       aria-label="Bilde i fullskjerm"
+      className="viewer"
       style={{ position: 'fixed', inset: 0, zIndex: 80, background: '#0c0809', display: 'flex', flexDirection: 'column', color: '#fff' }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: 56, padding: '4px 4px 4px 16px' }}>
@@ -58,7 +58,11 @@ export function Viewer() {
         </button>
       </div>
       <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', paddingBottom: 24 }}>
-        <div style={{ position: 'relative', width: '100%', maxWidth: 640, aspectRatio: '4/5', maxHeight: '100%', background: stripe(m.hue ?? 20, true) }}>
+        <div
+          key={viewer.i}
+          className="viewer-media"
+          style={{ position: 'relative', width: '100%', maxWidth: 640, aspectRatio: '4/5', maxHeight: '100%', background: stripe(m.hue ?? 20, true) }}
+        >
           {m.src ? (
             <MediaView key={m.src} src={m.src} kind={m.kind} fit="contain" controls autoPlay style={{ background: '#0c0809' }} />
           ) : (

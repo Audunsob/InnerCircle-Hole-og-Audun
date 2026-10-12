@@ -67,7 +67,7 @@ export function OkonomiView() {
       </header>
       <section style={{ padding: '24px 0 16px', borderBottom: '1px solid var(--line)' }}>
         <div className="note">Tjent denne måneden</div>
-        <div className="tnum" style={{ marginTop: 2, font: '700 40px/1.1 var(--display)', letterSpacing: '-.025em' }}>
+        <div className="tnum" style={{ marginTop: 2, font: 'italic 800 52px/1 var(--display)', color: 'var(--accent-ink)' }}>
           {krd(ec.earned)}
         </div>
         <button

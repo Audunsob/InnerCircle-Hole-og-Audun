@@ -92,7 +92,7 @@ export default function InnerCircleApp() {
       {screen === 'cconsent' && <CoachConsent />}
       <Viewer />
       {toast && (
-        <div role="status" className="toast">
+        <div key={toast} role="status" className="toast">
           {toast}
         </div>
       )}

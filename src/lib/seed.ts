@@ -77,17 +77,14 @@ export const defCons = (): ParentConsentDraft => ({
 export const newPay = (): PayForm => ({ autoRenew: true, method: 'card', num: '', exp: '', cvc: '', err: '', busy: false });
 
 export function freshState(): PersistedState {
-  let dark = false;
-  try {
-    dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  } catch {}
   return {
     v: 3,
     uid: newId(),
     team: null,
     version: 0,
     seenNotifsAt: 0,
-    theme: dark ? 'dark' : 'light',
+    // The design is dark first; light mode is a choice on Min side.
+    theme: 'dark',
     screen: 'role',
     flow: blankFlow(),
     cons: null,

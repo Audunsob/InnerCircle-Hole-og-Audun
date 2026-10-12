@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState, type ReactNode } from 'react';
 import { useStore } from '@/lib/store';
 import type { Tab } from '@/lib/types';
 import { Icon } from '../ui';
@@ -23,48 +24,39 @@ export function AppShell() {
   // Økonomi is coach-only; fall back to Lag if a saved tab no longer applies.
   const current: Tab = tab === 'okonomi' && !isCoach ? 'lag' : tab;
 
+  const idx = tabs.findIndex(([k]) => k === current);
+  // Remember the last tab so the new one slides in from the side it sits on.
+  useEffect(() => {
+    lastTab = idx;
+  }, [idx]);
+  const dir = idx >= lastTab ? 'right' : 'left';
+  const view = current === 'kamper' && openMatch ? 'match:' + openMatch : current;
+
   return (
     <>
-      <div className="screen" style={{ padding: '0 16px calc(88px + env(safe-area-inset-bottom))' }}>
-        {current === 'lag' && <LagView />}
-        {current === 'kamper' && (openMatch ? <MatchDetail id={openMatch} /> : <KamperView />)}
-        {current === 'okonomi' && <OkonomiView />}
-        {current === 'min' && <MinSide />}
+      <div className="screen" style={{ padding: '0 16px calc(104px + env(safe-area-inset-bottom))' }}>
+        <TabView key={view} dir={view.startsWith('match:') ? 'right' : dir}>
+          {current === 'lag' && <LagView />}
+          {current === 'kamper' && (openMatch ? <MatchDetail id={openMatch} /> : <KamperView />)}
+          {current === 'okonomi' && <OkonomiView />}
+          {current === 'min' && <MinSide />}
+        </TabView>
       </div>
-      <nav aria-label="Hovedmeny" style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 40, background: 'var(--navbg)', borderTop: '1px solid var(--line)' }}>
-        <div
-          style={{
-            maxWidth: 480,
-            margin: '0 auto',
-            display: 'grid',
-            gridAutoFlow: 'column',
-            gridAutoColumns: '1fr',
-            paddingBottom: 'env(safe-area-inset-bottom)',
-          }}
-        >
+      <nav aria-label="Hovedmeny" className="tabbar">
+        <div className="tabbar-inner">
           {tabs.map(([k, label, icon]) => {
             const active = current === k;
             return (
               <button
                 key={k}
                 type="button"
+                className="tabbar-btn"
                 onClick={() => setTab(k)}
                 aria-current={active ? 'page' : undefined}
-                style={{
-                  minHeight: 60,
-                  border: 'none',
-                  background: 'none',
-                  color: active ? 'var(--accent-ink)' : 'var(--muted)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 3,
-                  font: '500 12px var(--body)',
-                  cursor: 'pointer',
-                }}
               >
-                <Icon name={icon} size={24} filled={active} />
+                <span className="tabbar-pill">
+                  <Icon name={icon} size={22} filled={active} />
+                </span>
                 {label}
               </button>
             );
@@ -73,4 +65,12 @@ export function AppShell() {
       </nav>
     </>
   );
+}
+
+let lastTab = 0;
+
+/** One tab's content. The slide direction is fixed when it mounts, so later renders don't restart it. */
+function TabView({ dir, children }: { dir: 'left' | 'right'; children: ReactNode }) {
+  const [d] = useState(dir);
+  return <div className={d === 'left' ? 'view-from-left' : 'view-from-right'}>{children}</div>;
 }

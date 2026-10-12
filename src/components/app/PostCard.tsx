@@ -37,24 +37,29 @@ export function PostCard({ post, P }: { post: Post; P: Record<string, Player> })
 
   const like = () => {
     toggleLike(post.id);
-    setPop(true);
+    // Only giving a heart celebrates; taking it back is quiet.
+    setPop(false);
     clearTimeout(popTimer.current);
-    popTimer.current = setTimeout(() => setPop(false), 160);
+    if (liked) return;
+    requestAnimationFrame(() => setPop(true));
+    popTimer.current = setTimeout(() => setPop(false), 450);
   };
 
   return (
-    <article style={{ padding: '16px 0 4px', borderBottom: '1px solid var(--line)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+    <article className="card" style={{ overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px' }}>
         <span
           style={{
-            width: 36,
-            height: 36,
+            width: 38,
+            height: 38,
             flex: 'none',
             borderRadius: '50%',
+            border: '1.5px solid var(--gold)',
             background: 'var(--surface2)',
+            color: 'var(--accent-ink)',
             display: 'grid',
             placeItems: 'center',
-            font: '600 13px var(--body)',
+            font: '700 14px var(--body)',
           }}
         >
           {initials(post.author)}
@@ -72,7 +77,7 @@ export function PostCard({ post, P }: { post: Post; P: Record<string, Player> })
             type="button"
             className="icon-btn"
             aria-label="Valg for innlegget"
-            style={{ marginRight: -12, color: 'var(--muted)' }}
+            style={{ marginRight: -8, color: 'var(--muted)' }}
             onClick={() => useStore.setState({ sheet: 'postMenu', menuPost: post.id })}
           >
             <Icon name="more_horiz" />
@@ -81,8 +86,8 @@ export function PostCard({ post, P }: { post: Post; P: Record<string, Player> })
       </div>
 
       {outcome && (
-        <div className="tnum" style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, font: '600 16px var(--body)' }}>
-          <span className="outcome" style={{ background: OUTCOME_COLOR[outcome] }}>
+        <div className="tnum" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px 12px', font: 'italic 800 20px/1.1 var(--display)', textTransform: 'uppercase' }}>
+          <span className="outcome" style={{ background: OUTCOME_COLOR[outcome], fontStyle: 'normal' }}>
             {outcome}
           </span>
           <span>{resultTitle}</span>
@@ -96,7 +101,7 @@ export function PostCard({ post, P }: { post: Post; P: Record<string, Player> })
             gap: 2,
             overflowX: 'auto',
             scrollSnapType: 'x mandatory',
-            margin: '12px -16px 0',
+            margin: 0,
             scrollbarWidth: 'none',
           }}
         >
@@ -106,6 +111,7 @@ export function PostCard({ post, P }: { post: Post; P: Record<string, Player> })
               type="button"
               onClick={() => openViewer(post.id, i)}
               aria-label={`Åpne ${m.label || 'bilde'} i fullskjerm`}
+              className="no-press"
               style={{
                 position: 'relative',
                 flex: '0 0 ' + (many ? '84%' : '100%'),
@@ -155,14 +161,14 @@ export function PostCard({ post, P }: { post: Post; P: Record<string, Player> })
         </div>
       )}
 
-      {post.text && <p style={{ margin: '12px 0 0', font: '400 16px/1.5 var(--body)', textWrap: 'pretty' }}>{post.text}</p>}
+      {post.text && <p style={{ margin: 0, padding: '12px 14px 0', font: '400 15px/1.5 var(--body)', textWrap: 'pretty' }}>{post.text}</p>}
       {tagText && (
-        <p className="note" style={{ marginTop: 6 }}>
+        <p className="note" style={{ padding: '6px 14px 0', fontSize: 13 }}>
           {tagText}
         </p>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'center', marginTop: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', padding: '2px 14px 4px' }}>
         <button
           type="button"
           onClick={like}
@@ -178,13 +184,17 @@ export function PostCard({ post, P }: { post: Post; P: Record<string, Player> })
             padding: '0 10px',
             border: 'none',
             background: 'none',
-            color: liked ? 'var(--accent-ink)' : 'var(--muted)',
+            color: liked ? 'var(--heart)' : 'var(--muted)',
             font: '600 15px var(--body)',
             cursor: 'pointer',
           }}
         >
-          <Icon name="favorite" size={26} filled={liked} style={{ transform: `scale(${pop ? 1.25 : 1})`, transition: 'transform .12s' }} />
-          {post.likes + post.likedBy.length}
+          <span className={'heart' + (pop ? ' pop' : '')}>
+            <Icon name="favorite" size={26} filled={liked} />
+          </span>
+          <span key={post.likes + post.likedBy.length} style={{ display: 'inline-block', animation: 'ic-rise 200ms var(--ease-out)' }}>
+            {post.likes + post.likedBy.length}
+          </span>
         </button>
         {post.edited && <span style={{ marginLeft: 'auto', font: '400 13px var(--body)', color: 'var(--muted)' }}>Redigert</span>}
       </div>
