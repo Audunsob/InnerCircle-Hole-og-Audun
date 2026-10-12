@@ -237,7 +237,8 @@ export type SheetName =
   | 'payout'
   | 'subscribers'
   | 'method'
-  | 'receipts';
+  | 'receipts'
+  | 'consentView';
 
 export interface Draft {
   id: string | null;
@@ -307,6 +308,8 @@ export interface EphemeralState {
   pf: { name: string; err: string };
   /** Coach: accounts linked to players, waiting or approved. Null until loaded. */
   links: TeamLink[] | null;
+  /** Coach: the player whose consent form is open. */
+  consentPlayer: string | null;
 }
 
 export type AppState = PersistedState & EphemeralState;

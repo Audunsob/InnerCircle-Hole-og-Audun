@@ -2,8 +2,8 @@
 
 import { useEffect, type FormEvent } from 'react';
 import { download, firstName, fmtAcct, fmtDate, fmtDay, fmtShort, iso, krd, matchTime, NB, rel, stripe } from '@/lib/format';
-import { TYPES } from '@/lib/seed';
-import { matchTitle, playerMap, price, shortTeam, teamName } from '@/lib/selectors';
+import { CKEYS, TYPES } from '@/lib/seed';
+import { CONSENT_INK, CONSENT_LABEL, consentStatus, matchTitle, playerMap, price, shortTeam, teamName } from '@/lib/selectors';
 import { receiptText, useStore } from '@/lib/store';
 import type { Draft, Media, PayMethod, Player, PostType, SheetName } from '@/lib/types';
 import { economy } from '../app/OkonomiView';
@@ -23,6 +23,7 @@ const TITLES: Record<Exclude<SheetName, 'confirm'>, string> = {
   subscribers: 'Abonnenter',
   method: 'Betalingsmåte',
   receipts: 'Kvitteringer',
+  consentView: 'Samtykke',
 };
 
 /** "2 bilder", "1 video", "2 bilder og 1 video". */
@@ -72,6 +73,7 @@ export function SheetHost() {
           {sheet === 'subscribers' && <Subscribers />}
           {sheet === 'method' && <Method />}
           {sheet === 'receipts' && <Receipts />}
+          {sheet === 'consentView' && <ConsentView />}
         </div>
       </div>
     </div>
@@ -785,3 +787,64 @@ function Receipts() {
   );
 }
 
+
+/** A signature as it was drawn, on white like the pad it was drawn on. */
+function Signature({ label, src }: { label: string; src: string }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span className="field-label">{label}</span>
+      <div style={{ position: 'relative', height: 120, background: '#fff', border: '1px solid var(--line)', borderRadius: 6, overflow: 'hidden' }}>
+        <MediaView src={src} kind="photo" fit="contain" />
+      </div>
+    </div>
+  );
+}
+
+/** Coach: one player's consent, who gave it and when, and the signatures. */
+function ConsentView() {
+  const id = useStore((s) => s.consentPlayer);
+  const p = useStore((s) => s.data.players.find((x) => x.id === id));
+  if (!p) return <p className="note">Fant ikke spilleren.</p>;
+  const status = consentStatus(p);
+  const c = p.consent;
+  // The player form records the signatures (and the age group); the parent's form in the app does not.
+  const signedForm = !!c && ('playerSig' in c || c.adult !== undefined);
+  const who = !c
+    ? null
+    : signedForm
+      ? c.adult
+        ? 'Signert av spilleren (over 15 år)'
+        : 'Signert av spilleren og en foresatt (under 15 år)'
+      : 'Gitt av en foresatt i appen';
+  const no =
+    p.declined === 'parent' ? 'En foresatt sa nei til bilder.' : p.declined === 'player' ? 'Spilleren sa nei til bilder.' : null;
+  return (
+    <>
+      <div>
+        <div style={{ font: 'italic 800 24px/1.05 var(--display)', textTransform: 'uppercase' }}>{p.name}</div>
+        <div style={{ marginTop: 4, font: '600 15px var(--body)', color: CONSENT_INK[status] }}>{CONSENT_LABEL[status]}</div>
+      </div>
+      {c ? (
+        <>
+          <p className="note">
+            {who}, {fmtDate(c.at)}.
+          </p>
+          <div className="sheet-flush">
+            {CKEYS.map(([k, label]) => (
+              <div key={k} className="row">
+                <span className="row-label">{label}</span>
+                <span style={{ font: '600 15px var(--body)', color: c[k] ? 'var(--ok)' : 'var(--muted)' }}>{c[k] ? 'Ja' : 'Nei'}</span>
+              </div>
+            ))}
+          </div>
+          {c.playerSig && <Signature label="Signatur, spiller" src={c.playerSig} />}
+          {c.parentSig && <Signature label="Signatur, foresatt" src={c.parentSig} />}
+        </>
+      ) : (
+        <p className="note">
+          {no || 'Ingen har fylt ut samtykket ennå.'} {firstName(p.name)} kan ikke merkes og skal ikke være i fokus på bildene.
+        </p>
+      )}
+    </>
+  );
+}
