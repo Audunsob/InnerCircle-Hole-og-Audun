@@ -1,4 +1,4 @@
-import type { TeamCoach, TeamLink } from './supabase';
+import type { Membership, TeamCoach, TeamLink } from './supabase';
 
 export type Role = 'player' | 'parent' | 'sub' | 'coach';
 export type Theme = 'light' | 'dark';
@@ -240,7 +240,8 @@ export type SheetName =
   | 'subscribers'
   | 'method'
   | 'receipts'
-  | 'consentView';
+  | 'consentView'
+  | 'switchTeam';
 
 export interface Draft {
   id: string | null;
@@ -314,6 +315,8 @@ export interface EphemeralState {
   coaches: TeamCoach[] | null;
   /** Coach: the player whose consent form is open. */
   consentPlayer: string | null;
+  /** Every team and role this account has, for switching between them. Null until loaded. */
+  teams: Membership[] | null;
 }
 
 export type AppState = PersistedState & EphemeralState;
