@@ -51,7 +51,7 @@ import {
   type TeamPayload,
 } from './supabase';
 import { scoreTitle } from './derive';
-import { updatePushPrefs } from './push';
+import { disablePush, isStandalone, phoneKind, updatePushPrefs } from './push';
 import { coachName, matchTitle, price, shortTeam, teamName } from './selectors';
 
 const MAX_VIDEO = 50 * 1024 * 1024;
@@ -289,12 +289,26 @@ export const useStore = create<Store>()((set, get) => {
   /** The session ended or this account was removed from the team: back to the start screen. */
   const signedOutError = (e: unknown) => {
     const msg = e instanceof Error ? e.message : '';
-    if (!/not_signed_in|not_member|JWT|jwt/.test(msg)) return false;
+    if (/not_member/.test(msg)) {
+      leaveTeam();
+      return true;
+    }
+    if (!/not_signed_in|JWT|jwt/.test(msg)) return false;
     pending = [];
     server = null;
     set({ team: null, role: null, screen: 'role', sheet: null });
     toast('Logg inn igjen for å fortsette.');
     return true;
+  };
+  /** The coach removed this account, or the player it was linked to, from the team. */
+  const leaveTeam = () => {
+    pending = [];
+    server = null;
+    set({ team: null, role: null, screen: 'role', flow: blankFlow() });
+    inform(
+      'Du er ikke lenger på laget',
+      'Administratoren har fjernet deg fra laget eller koblet kontoen din fra. Snakk med administratoren hvis det er feil.',
+    );
   };
   const flush = async (): Promise<void> => {
     const team = s().team;
@@ -347,11 +361,22 @@ export const useStore = create<Store>()((set, get) => {
       const p = await getTeam(team.id, team.role);
       if (!server || !pending.length) applyServer(p);
       if (pending.length) void flush();
+      // Removed from the list by a coach whose app didn't also unlink the account.
+      const mine = team.role === 'player' ? s().prof.player.playerId : team.role === 'parent' ? s().prof.parent.childId : null;
+      if (mine && s().screen === 'app' && !p.data.players.some((x) => x.id === mine)) leaveTeam();
     } catch (e) {
       signedOutError(e);
     }
   };
   const netError = 'Fikk ikke kontakt. Sjekk nettet og prøv igjen.';
+  /** What went wrong talking to the server, in words the person can act on. */
+  const errorText = (e: unknown) => {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/fetch|network|load failed|timeout/i.test(msg)) return netError;
+    if (/not_signed_in|JWT|jwt/.test(msg)) return 'Du er logget ut. Gå tilbake og logg inn på nytt.';
+    if (/not_member/.test(msg)) return 'Du er ikke lenger på laget. Snakk med administratoren.';
+    return 'Noe gikk galt. Prøv igjen, eller snakk med administratoren hvis det skjer igjen.';
+  };
   /** Why a login email couldn't be sent, in words the person can act on. */
   const sendError = (e: unknown) => {
     const msg = e instanceof Error ? e.message : '';
@@ -390,6 +415,9 @@ export const useStore = create<Store>()((set, get) => {
   };
   const ask = (title: string, body: string, label: string, action: () => void) =>
     set({ sheet: 'confirm', confirm: { title, body, label, action } });
+  /** A message with only an OK button. */
+  const inform = (title: string, body: string) =>
+    set({ sheet: 'confirm', confirm: { title, body, label: 'OK', action: () => {}, info: true } });
   const setPC = (p: Partial<SignedForm>) =>
     set((st) => ({ pcons: { ...(st.pcons || { step: 1, p: null, ps: null, err: '' }), ...p, err: p.err || '' } }));
   const setCons = (p: Partial<ParentConsentDraft>) => set((st) => ({ cons: { ...(st.cons || defCons()), ...p } }));
@@ -410,6 +438,9 @@ export const useStore = create<Store>()((set, get) => {
       onboarded: { ...st.onboarded, [r]: true },
     }));
     scrollTop();
+    // Everyone on a phone gets the home screen guide once, the first time in. iPhone only gives
+    // notifications to apps on the home screen.
+    if (!s().homeTip && phoneKind() && !isStandalone()) set({ homeTip: true, sheet: 'homeScreen' });
   };
 
   // ---------- Onboarding steps ----------
@@ -490,8 +521,8 @@ export const useStore = create<Store>()((set, get) => {
           setFlow({ coachMode: 'join', err: '' });
           return go('coachCode');
         }
-      } catch {
-        return setFlow({ err: netError });
+      } catch (e) {
+        return setFlow({ err: errorText(e) });
       }
     }
     if (r !== 'coach') {
@@ -518,8 +549,8 @@ export const useStore = create<Store>()((set, get) => {
           toast('Velkommen tilbake!');
           return;
         }
-      } catch {
-        return setFlow({ err: netError });
+      } catch (e) {
+        return setFlow({ err: errorText(e) });
       }
     }
     const next: Record<Role, Screen> = {
@@ -538,8 +569,8 @@ export const useStore = create<Store>()((set, get) => {
       const p = await peekTeam(code);
       setFlow({ busy: false, peek: p ? { code, teamName: p.teamName, isCoachCode: p.isCoachCode, players: p.players } : null });
       return p;
-    } catch {
-      setFlow({ busy: false, err: netError });
+    } catch (e) {
+      setFlow({ busy: false, err: errorText(e) });
       return null;
     }
   };
@@ -571,7 +602,11 @@ export const useStore = create<Store>()((set, get) => {
           ? name + ' er allerede koblet til en annen konto. Si fra til administratoren, så kan administratoren koble den fra.'
           : e instanceof ParentLimitError
             ? 'To foresatte er allerede koblet til ' + firstName(name) + '. Si fra til administratoren hvis det er feil.'
-            : netError;
+            : e instanceof Error && /unknown_player/.test(e.message)
+              ? name + ' står ikke lenger på lista til laget. Snakk med administratoren.'
+              : e instanceof Error && e.message === 'not_found'
+                ? 'Fant ikke laget lenger. Sjekk koden med administratoren.'
+                : errorText(e);
       setFlow({ busy: false, err });
       return false;
     }
@@ -613,8 +648,8 @@ export const useStore = create<Store>()((set, get) => {
       }
       continueApproved(await getTeam(pt.id, pt.role), pt.role, pt.playerId);
       toast('Administratoren har godkjent deg!');
-    } catch {
-      if (manual) toast(netError);
+    } catch (e) {
+      if (manual) toast(errorText(e));
     } finally {
       checking = false;
     }
@@ -682,7 +717,12 @@ export const useStore = create<Store>()((set, get) => {
     const [links, coaches] = await Promise.allSettled([teamLinks(team.id), teamCoaches(team.id)]);
     // Older database without approvals or the coach list, or offline: leave the lists as they were.
     if (links.status === 'fulfilled') set({ links: links.value });
-    if (coaches.status === 'fulfilled') set({ coaches: coaches.value });
+    if (coaches.status === 'fulfilled') {
+      set({ coaches: coaches.value });
+      // On a new phone the name is only on the server: take it from the coach rules this account signed.
+      const me = coaches.value.find((c) => c.me);
+      if (!s().prof.coach.name && me?.name) setProf('coach', { name: me.name });
+    }
   };
 
   const submitTeam = async () => {
@@ -754,8 +794,8 @@ export const useStore = create<Store>()((set, get) => {
     let returning = false;
     try {
       returning = (await myTeams()).some((m) => m.role === 'coach' && m.status !== 'pending' && m.teamId === p.teamId);
-    } catch {
-      return setFlow({ err: netError });
+    } catch (e) {
+      return setFlow({ err: errorText(e) });
     }
     if (returning) {
       if (!(await join('coach', null))) return;
@@ -973,7 +1013,8 @@ export const useStore = create<Store>()((set, get) => {
     logout: () => {
       pending = [];
       server = null;
-      void signOut();
+      // Stop notifications to this phone first; that needs the account still signed in.
+      void disablePush().finally(() => signOut());
       set({
         role: null,
         team: null,
@@ -989,6 +1030,7 @@ export const useStore = create<Store>()((set, get) => {
         openMatch: null,
         links: null,
         coaches: null,
+        pushOn: false,
       });
       scrollTop();
     },
@@ -1131,7 +1173,7 @@ export const useStore = create<Store>()((set, get) => {
         } catch (e) {
           set({ pcons: null });
           go('createTeam');
-          setFlow({ err: e instanceof CodeTakenError ? 'En av kodene er allerede i bruk. Velg andre koder.' : netError });
+          setFlow({ err: e instanceof CodeTakenError ? 'En av kodene er allerede i bruk. Velg andre koder.' : errorText(e) });
           return;
         }
         setProf('coach', { name: cn });
@@ -1141,7 +1183,7 @@ export const useStore = create<Store>()((set, get) => {
         toast(n + ' er opprettet. Legg inn spillerne.');
         return;
       }
-      if (!(await join('coach', null))) return setPC({ busy: false, err: netError });
+      if (!(await join('coach', null))) return setPC({ busy: false, err: s().flow.err || netError });
       const sig = (await storeSignature(c.ps)) || '';
       setProf('coach', { name: cn });
       setData((d) => ({ ...d, coachConsents: [...(d.coachConsents || []), { ...rec, sig }] }));
@@ -1490,13 +1532,23 @@ export const useStore = create<Store>()((set, get) => {
         'Fjerne ' + (p ? firstName(p.name) : 'spilleren') + '?',
         (p ? p.name : 'Spilleren') + ' fjernes fra laget og kan ikke merkes i nye innlegg.',
         'Fjern',
-        () => {
+        async () => {
           setData((d) => ({
             ...d,
             players: d.players.filter((x) => x.id !== id),
             posts: d.posts.map((q) => ({ ...q, tagged: q.tagged.filter((t) => t !== id) })),
           }));
           toast('Spilleren er fjernet');
+          // Unlink the player's own account and parents too, so they no longer get into the team.
+          const team = s().team;
+          if (!team) return;
+          try {
+            const links = (await teamLinks(team.id)).filter((l) => l.playerId === id);
+            await Promise.all(links.map((l) => decideLink(team.id, l.userId, l.role, false)));
+          } catch {
+            // Older database without approvals, or offline. They lose access once the list no longer has the player.
+          }
+          void loadLinks();
         },
       );
     },
@@ -1540,8 +1592,8 @@ export const useStore = create<Store>()((set, get) => {
         try {
           await decideLink(team.id, userId, role, approve);
           toast(approve ? 'Godkjent' : 'Koblet fra');
-        } catch {
-          toast(netError);
+        } catch (e) {
+          toast(errorText(e));
         }
         void loadLinks();
       };

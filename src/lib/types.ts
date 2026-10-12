@@ -241,6 +241,7 @@ export type SheetName =
   | 'method'
   | 'receipts'
   | 'consentView'
+  | 'homeScreen'
   | 'switchTeam';
 
 export interface Draft {
@@ -259,6 +260,8 @@ export interface Confirm {
   body: string;
   label: string;
   action: () => void;
+  /** Just a message: one OK button and nothing to cancel. */
+  info?: boolean;
 }
 
 /** Saved to localStorage. */
@@ -272,6 +275,8 @@ export interface PersistedState {
   team: { id: string; role: MemberRole } | null;
   /** Push notifications are switched on for this device. */
   pushOn?: boolean;
+  /** The tip about adding the app to the iPhone home screen has been shown on this device. */
+  homeTip?: boolean;
   /** Last server version of the team document this device has seen. */
   version: number;
   /** Notifications newer than this are shown as unread. */

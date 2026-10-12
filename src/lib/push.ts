@@ -9,13 +9,42 @@ export type PushPrefs = { posts: boolean; matches: boolean; results: boolean };
 export const pushSupported = () =>
   typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 
-/** iPhone/iPad only allow push when the app has been added to the home screen. */
-export const needsHomeScreen = () => {
-  if (typeof window === 'undefined') return false;
-  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
-  const standalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone;
-  return ios && !standalone;
+/** Opened from the home screen icon, not in the browser. */
+export const isStandalone = () =>
+  typeof window !== 'undefined' &&
+  (window.matchMedia('(display-mode: standalone)').matches || !!(navigator as { standalone?: boolean }).standalone);
+
+/** Which home screen guide fits this device. iPads that say they are a Mac count as iPhone. */
+export const phoneKind = (): 'ios' | 'android' | null => {
+  if (typeof window === 'undefined') return null;
+  const ua = navigator.userAgent;
+  if (/iphone|ipad|ipod/i.test(ua) || (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1)) return 'ios';
+  if (/android/i.test(ua)) return 'android';
+  return null;
 };
+
+/** iPhone/iPad only allow push when the app has been added to the home screen. */
+export const needsHomeScreen = () => phoneKind() === 'ios' && !isStandalone();
+
+type InstallEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }> };
+let installEvent: InstallEvent | null = null;
+if (typeof window !== 'undefined')
+  window.addEventListener('beforeinstallprompt', (e) => {
+    // Keep Chrome's own install offer for the button in the guide.
+    e.preventDefault();
+    installEvent = e as InstallEvent;
+  });
+
+/** Chrome on Android can add the app with one tap when it has offered to. */
+export const canInstall = () => !!installEvent;
+
+export async function installApp() {
+  const e = installEvent;
+  if (!e) return false;
+  installEvent = null;
+  await e.prompt();
+  return (await e.userChoice).outcome === 'accepted';
+}
 
 const keyBytes = (base64: string) => {
   const pad = '='.repeat((4 - (base64.length % 4)) % 4);
