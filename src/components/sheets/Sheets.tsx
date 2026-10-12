@@ -2,8 +2,8 @@
 
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { download, firstName, fmtAcct, fmtDate, fmtDay, fmtLong, fmtShort, iso, krd, matchTime, NB, rel, stripe } from '@/lib/format';
-import { CKEYS, TYPES } from '@/lib/seed';
-import { WEEK_ORDER, WEEKDAYS } from '@/lib/trainings';
+import { CKEYS, EVENT_ICONS, EVENT_KINDS, TYPES } from '@/lib/seed';
+import { allEvents, isTraining, WEEK_ORDER, WEEKDAYS } from '@/lib/trainings';
 import { CONSENT_INK, CONSENT_LABEL, consentStatus, waitsForParent, matchTitle, playerMap, price, shortTeam, teamName } from '@/lib/selectors';
 import { canInstall, installApp, phoneKind } from '@/lib/push';
 import { receiptText, useStore } from '@/lib/store';
@@ -16,6 +16,7 @@ import { MediaView } from '../MediaView';
 const TITLES: Record<Exclude<SheetName, 'confirm'>, string> = {
   composer: 'Nytt innlegg',
   addMatch: 'Legg til kamp',
+  addEvent: 'Ny hendelse',
   training: 'Fast trening',
   trainingDay: 'Endre én trening',
   result: 'Resultat',
@@ -51,6 +52,7 @@ export function SheetHost() {
   const editing = useStore((s) => !!s.draft?.id);
   const asking = useStore((s) => s.sheet === 'report' && !s.form.postId);
   const editingMatch = useStore((s) => s.sheet === 'addMatch' && !!s.form.matchId);
+  const editingEvent = useStore((s) => s.sheet === 'addEvent' && !!s.form.eventId);
   const editingTraining = useStore((s) => s.sheet === 'training' && !!s.form.trainingId);
   const closeSheet = useStore((s) => s.closeSheet);
 
@@ -62,7 +64,7 @@ export function SheetHost() {
   }, [sheet, closeSheet]);
 
   if (!sheet) return null;
-  const title = sheet === 'confirm' ? confirm?.title || '' : sheet === 'composer' && editing ? 'Rediger innlegg' : asking ? 'Spør administratorene' : editingMatch ? 'Endre kamp' : editingTraining ? 'Endre fast trening' : TITLES[sheet];
+  const title = sheet === 'confirm' ? confirm?.title || '' : sheet === 'composer' && editing ? 'Rediger innlegg' : asking ? 'Spør administratorene' : editingMatch ? 'Endre kamp' : editingEvent ? 'Endre hendelse' : editingTraining ? 'Endre fast trening' : TITLES[sheet];
 
   return (
     <div className="sheet-wrap">
@@ -77,6 +79,7 @@ export function SheetHost() {
         <div className="sheet-body">
           {sheet === 'composer' && <Composer />}
           {sheet === 'addMatch' && <AddMatch />}
+          {sheet === 'addEvent' && <AddEvent />}
           {sheet === 'training' && <TrainingForm />}
           {sheet === 'trainingDay' && <TrainingDay />}
           {sheet === 'result' && <Result />}
@@ -118,6 +121,7 @@ function Composer() {
   if (!dr) return null;
   const dark = st.theme === 'dark';
   const matches = [...st.data.matches].sort((a, b) => matchTime(b) - matchTime(a));
+  const events = allEvents(st.data).filter((e) => !isTraining(e) || (!e.cancelled && e.date <= iso(new Date()))).sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
   const ready = (dr.text.trim() || dr.media.length) && !dr.loading;
   return (
     <>
@@ -166,6 +170,19 @@ function Composer() {
             {matches.map((m) => (
               <option key={m.id} value={m.id}>
                 {matchTitle(st, m) + ' · ' + fmtDay(m.date)}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+
+      {dr.type !== 'kamp' && events.length > 0 && (
+        <Field label="Hendelse">
+          <select className="input" value={dr.eventId || ''} onChange={(e) => st.setDraft({ eventId: e.target.value })}>
+            <option value="">Ikke knyttet til en hendelse</option>
+            {events.map((ev) => (
+              <option key={ev.id} value={ev.id}>
+                {ev.title + ' · ' + fmtDay(ev.date)}
               </option>
             ))}
           </select>
@@ -445,6 +462,128 @@ function AddMatch() {
       {f.matchId && (
         <button type="button" className="link-btn" style={{ color: 'var(--accent-ink)' }} onClick={() => deleteMatch(String(f.matchId))}>
           Slett kampen
+        </button>
+      )}
+    </form>
+  );
+}
+
+function AddEvent() {
+  const form = useStore((s) => s.form);
+  const setForm = useStore((s) => s.setForm);
+  const saveEvent = useStore((s) => s.saveEvent);
+  const deleteEvent = useStore((s) => s.deleteEvent);
+  const f = form as Record<string, string | undefined>;
+  const preset = EVENT_KINDS.find((k) => k.kind === f.kind);
+  // Writing your own kind: on when the kind isn't one of the suggestions, or the coach picked "Egen type".
+  const [own, setOwn] = useState(!preset);
+  const bind = (k: string) => ({
+    value: String(f[k] ?? ''),
+    onChange: (e: { target: { value: string } }) => setForm({ [k]: e.target.value, err: '' }),
+  });
+  // The title follows the kind until the coach writes one of their own.
+  const pickKind = (kind: string, icon: string) =>
+    setForm({ kind, icon, title: !f.title || f.title === f.kind ? '' : f.title, err: '' });
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    saveEvent();
+  };
+  return (
+    <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div className="field">
+        <span className="field-label">Type</span>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {EVENT_KINDS.map((k) => (
+            <Chip
+              key={k.kind}
+              label={k.kind}
+              on={!own && f.kind === k.kind}
+              onClick={() => {
+                setOwn(false);
+                pickKind(k.kind, k.icon);
+              }}
+            />
+          ))}
+          <Chip
+            label="Egen type"
+            on={own}
+            onClick={() => {
+              setOwn(true);
+              pickKind(preset ? '' : f.kind || '', f.icon || 'event');
+            }}
+          />
+        </div>
+      </div>
+      {own && (
+        <>
+          <Field label="Navn på typen">
+            <input className="input" {...bind('kind')} placeholder="F.eks. Juleavslutning" />
+          </Field>
+          <div className="field">
+            <span className="field-label">Ikon</span>
+            <div role="group" aria-label="Ikon" style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {EVENT_ICONS.map((ic) => {
+                const on = f.icon === ic;
+                return (
+                  <button
+                    key={ic}
+                    type="button"
+                    aria-label={ic}
+                    aria-pressed={on}
+                    onClick={() => setForm({ icon: ic })}
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 12,
+                      display: 'grid',
+                      placeItems: 'center',
+                      cursor: 'pointer',
+                      border: '1px solid ' + (on ? 'var(--accent)' : 'var(--line-strong)'),
+                      background: on ? 'var(--accent-soft)' : 'none',
+                      color: on ? 'var(--accent-ink)' : 'var(--ink)',
+                    }}
+                  >
+                    <Icon name={ic} size={22} filled={on} />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
+      <Field label="Tittel" hint="Tomt felt gir typen som tittel.">
+        <input className="input" {...bind('title')} placeholder={f.kind ? 'F.eks. ' + f.kind + ' etter treningen' : 'F.eks. Pizzakveld etter treningen'} />
+      </Field>
+      <Field label="Dato">
+        <input className="input" type="date" {...bind('date')} />
+      </Field>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <Field label="Start">
+          <input className="input" type="time" {...bind('time')} />
+        </Field>
+        <Field label="Slutt (valgfritt)">
+          <input className="input" type="time" {...bind('end')} />
+        </Field>
+      </div>
+      <Field label="Sted">
+        <input className="input" {...bind('venue')} placeholder="F.eks. Klubbhuset" />
+      </Field>
+      <Field label="Beskrivelse">
+        <textarea
+          className="input"
+          {...bind('note')}
+          rows={3}
+          placeholder="F.eks. Laget spanderer pizza. Si fra til en voksen om allergier."
+          style={{ minHeight: 96 }}
+        />
+      </Field>
+      <FormError text={f.err} />
+      <button type="submit" className="btn btn-primary btn-block">
+        {f.eventId ? 'Lagre endringer' : 'Legg til'}
+      </button>
+      {f.eventId && (
+        <button type="button" className="link-btn" style={{ color: 'var(--accent-ink)' }} onClick={() => deleteEvent(String(f.eventId))}>
+          Slett hendelsen
         </button>
       )}
     </form>

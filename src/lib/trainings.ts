@@ -1,5 +1,5 @@
 import { DAY, iso } from './format';
-import type { TrainingSeries } from './types';
+import type { TeamData, TeamEvent, TrainingSeries } from './types';
 
 /** Weekday names, indexed like Date.getDay(). */
 export const WEEKDAYS = ['søndag', 'mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag', 'lørdag'];
@@ -121,3 +121,50 @@ function addMinutes(time: string, n: number) {
 }
 
 export const yesterday = (now = new Date()) => addDays(iso(now), -1);
+
+/** A training from a series, shaped like the team's other events. */
+export type TrainingEvent = TeamEvent & { seriesId: string; cancelled: boolean; changed: boolean };
+
+/** One training's id: the series id and the date, like "t1760300000000:2026-10-14". */
+export const trainingEventId = (seriesId: string, date: string) => seriesId + ':' + date;
+
+const asEvent = (x: Training): TrainingEvent => ({
+  id: trainingEventId(x.seriesId, x.date),
+  kind: 'Trening',
+  icon: 'directions_run',
+  title: x.title,
+  date: x.date,
+  time: x.time,
+  end: x.end || undefined,
+  venue: x.venue,
+  note: x.note || undefined,
+  seriesId: x.seriesId,
+  cancelled: x.cancelled,
+  changed: x.changed,
+});
+
+/** Trainings from the series, some weeks back and some weeks ahead, as events. */
+export function trainingEvents(series: TrainingSeries[] | undefined, back = 8, ahead = 6, now = new Date()): TrainingEvent[] {
+  const today = iso(now);
+  return (series || []).flatMap((t) => occurrences(t, addDays(today, -back * 7), addDays(today, ahead * 7)).map(asEvent));
+}
+
+/** The team's events with the trainings from the series mixed in. */
+export const allEvents = (data: Pick<TeamData, 'events' | 'trainings'>): (TeamEvent | TrainingEvent)[] => [
+  ...(data.events || []),
+  ...trainingEvents(data.trainings),
+];
+
+/** An event by id, also a single training from a series, however long ago. */
+export function findEvent(data: Pick<TeamData, 'events' | 'trainings'>, id: string | null | undefined): TeamEvent | TrainingEvent | undefined {
+  if (!id) return undefined;
+  const e = (data.events || []).find((x) => x.id === id);
+  if (e) return e;
+  const [seriesId, date] = id.split(':');
+  const t = date && (data.trainings || []).find((x) => x.id === seriesId);
+  if (!t) return undefined;
+  const x = occurrences(t, date, date)[0];
+  return x && asEvent(x);
+}
+
+export const isTraining = (e: TeamEvent | TrainingEvent | undefined): e is TrainingEvent => !!e && 'cancelled' in e;

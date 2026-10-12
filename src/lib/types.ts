@@ -24,7 +24,7 @@ export type Screen =
   | 'cconsent'
   | 'app';
 
-export type Tab = 'lag' | 'kamper' | 'okonomi' | 'min';
+export type Tab = 'lag' | 'kamper' | 'arrangement' | 'okonomi' | 'min';
 
 export interface Consent {
   photo: boolean;
@@ -69,6 +69,27 @@ export interface Match {
   note?: string;
   us: number | null;
   them: number | null;
+}
+
+/**
+ * Anything on the team's calendar that isn't a match: a pizza night, a players' meeting, a training.
+ * Only coaches create, change or delete them.
+ */
+export interface TeamEvent {
+  id: string;
+  /** What kind of thing it is. One of the suggestions in EVENT_KINDS, or a name the coach wrote. */
+  kind: string;
+  /** Material Symbols name shown next to it. */
+  icon: string;
+  title: string;
+  date: string; // yyyy-mm-dd
+  time: string; // hh:mm, start
+  /** When it ends, hh:mm. */
+  end?: string;
+  venue: string;
+  note?: string;
+  /** Set on events that were made from a repeating plan, such as a fixed weekly training. */
+  seriesId?: string | null;
 }
 
 /** A change to one training in a series: moved, or cancelled. Keyed by its date. */
@@ -117,6 +138,8 @@ export interface Post {
   authorRole: string;
   ts: number;
   matchId: string | null;
+  /** The event (not a match) the post belongs to. */
+  eventId?: string | null;
   media: Media[];
   text: string;
   tagged: string[];
@@ -178,7 +201,9 @@ export interface CoachConsentRecord {
 export interface TeamData {
   players: Player[];
   matches: Match[];
-  /** Missing on teams made before there were trainings. */
+  /** Missing on teams made before events existed. */
+  events?: TeamEvent[];
+  /** Trainings that repeat every week. Missing on teams made before there were any. */
   trainings?: TrainingSeries[];
   posts: Post[];
   subs: Subscriber[];
@@ -280,6 +305,7 @@ export interface PayForm {
 export type SheetName =
   | 'composer'
   | 'addMatch'
+  | 'addEvent'
   | 'training'
   | 'trainingDay'
   | 'result'
@@ -305,6 +331,7 @@ export interface Draft {
   id: string | null;
   type: PostType;
   matchId: string;
+  eventId?: string;
   media: Media[];
   tagged: string[];
   text: string;
@@ -350,7 +377,7 @@ export interface PersistedState {
   prof: Profiles;
   tab: Tab;
   filter: 'all' | PostType;
-  kampTab: 'upcoming' | 'played' | 'trening';
+  kampTab: 'upcoming' | 'played';
   openMatch: string | null;
   notifyMatch: Record<string, boolean>;
   data: TeamData;
@@ -359,6 +386,8 @@ export interface PersistedState {
 /** Kept in memory only. */
 export interface EphemeralState {
   sheet: SheetName | null;
+  /** The event open in the Hendelser tab. */
+  openEvent: string | null;
   viewer: { postId: string; i: number } | null;
   toastMsg: string | null;
   draft: Draft | null;

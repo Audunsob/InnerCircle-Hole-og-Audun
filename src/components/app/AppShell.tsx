@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useStore } from '@/lib/store';
 import type { Tab } from '@/lib/types';
 import { Icon } from '../ui';
+import { ArrangementView, EventDetail } from './ArrangementView';
 import { KamperView, MatchDetail } from './KamperView';
 import { LagView } from './LagView';
 import { MinSide } from './MinSide';
@@ -12,12 +13,14 @@ import { OkonomiView } from './OkonomiView';
 export function AppShell() {
   const tab = useStore((s) => s.tab);
   const openMatch = useStore((s) => s.openMatch);
+  const openEvent = useStore((s) => s.openEvent);
   const isCoach = useStore((s) => s.role === 'coach');
   const setTab = useStore((s) => s.setTab);
 
   const tabs: [Tab, string, string][] = [
     ['lag', 'Lag', 'groups'],
     ['kamper', 'Kamper', 'sports_soccer'],
+    ['arrangement', 'Hendelser', 'celebration'],
     ...(isCoach ? ([['okonomi', 'Økonomi', 'payments']] as [Tab, string, string][]) : []),
     ['min', 'Min side', 'person'],
   ];
@@ -30,14 +33,16 @@ export function AppShell() {
     lastTab = idx;
   }, [idx]);
   const dir = idx >= lastTab ? 'right' : 'left';
-  const view = current === 'kamper' && openMatch ? 'match:' + openMatch : current;
+  const view =
+    current === 'kamper' && openMatch ? 'match:' + openMatch : current === 'arrangement' && openEvent ? 'event:' + openEvent : current;
 
   return (
     <>
       <div className="screen" style={{ padding: '0 16px calc(104px + env(safe-area-inset-bottom))' }}>
-        <TabView key={view} dir={view.startsWith('match:') ? 'right' : dir}>
+        <TabView key={view} dir={view.includes(':') ? 'right' : dir}>
           {current === 'lag' && <LagView />}
           {current === 'kamper' && (openMatch ? <MatchDetail id={openMatch} /> : <KamperView />)}
+          {current === 'arrangement' && (openEvent ? <EventDetail id={openEvent} /> : <ArrangementView />)}
           {current === 'okonomi' && <OkonomiView />}
           {current === 'min' && <MinSide />}
         </TabView>
