@@ -51,6 +51,7 @@ import {
   type TeamPayload,
 } from './supabase';
 import { scoreTitle } from './derive';
+import { updatePushPrefs } from './push';
 import { coachName, matchTitle, price, shortTeam, teamName } from './selectors';
 
 const MAX_VIDEO = 50 * 1024 * 1024;
@@ -237,6 +238,12 @@ export interface Actions {
   removePlayer: (id: string) => void;
   /** Coach: loads the accounts linked to players, and the other coaches. */
   loadLinks: () => Promise<void>;
+  /** Loads every team and role this account has (for «Dine lag» under Min side). */
+  loadTeams: () => Promise<void>;
+  /** Shows another of this account's teams or roles. A coach role asks for the coach code first. */
+  switchTeam: (teamId: string, role: MemberRole) => void;
+  /** From the switchTeam sheet: checks the coach code and switches. */
+  submitSwitchCode: () => Promise<void>;
   /** Coach: approves a waiting player or parent, or removes the link. */
   decide: (userId: string, role: 'player' | 'parent', approve: boolean) => void;
 
@@ -628,6 +635,54 @@ export const useStore = create<Store>()((set, get) => {
     if (m.role !== 'player' && m.role !== 'parent') return;
     setFlow({ pendingTeam: { id: m.teamId, name: m.teamName, role: m.role, playerId: m.playerId || '', playerName: '' } });
     go('pending');
+  };
+
+  const loadTeams = async () => {
+    try {
+      set({ teams: await myTeams() });
+    } catch {
+      // Offline or older database: keep what we had.
+    }
+  };
+
+  /** Opens one of this account's teams in the given role, like logging in to it. */
+  const openTeam = async (teamId: string, role: MemberRole) => {
+    let p: TeamPayload;
+    try {
+      p = await getTeam(teamId, role);
+    } catch (e) {
+      if (/not_member/.test(e instanceof Error ? e.message : '')) {
+        void loadTeams();
+        return toast('Du er ikke lenger med på det laget.');
+      }
+      return toast(netError);
+    }
+    const m = (s().teams || []).find((x) => x.teamId === teamId && x.role === role);
+    connect(p);
+    set({ links: null, coaches: null, sheet: null, form: {}, openMatch: null, notifyMatch: {} });
+    const uid = s().uid;
+    if (role === 'player') setProf('player', { playerId: m?.playerId || null });
+    if (role === 'parent') setProf('parent', { childId: m?.playerId || null, subscribed: p.data.subs.some((x) => x.id === 'par-' + uid) });
+    if (role === 'coach') {
+      const session = await currentSession();
+      const signed = (p.data.coachConsents || []).filter((x) => x.contact === session?.email).pop()?.name;
+      if (signed) setProf('coach', { name: signed });
+    }
+    if (role === 'sub') {
+      const own = p.data.subs.find((x) => x.id === mySubId());
+      if (!own) {
+        // Joined but never finished paying: continue the sign-up.
+        setFlow({ ...blankFlow(), role: 'sub', peek: { code: p.data.teamCode || '', teamName: p.data.teamName || '', isCoachCode: false, players: p.data.players }, terms: false });
+        set({ role: null });
+        return go('terms');
+      }
+      setProf('sub', { viaId: own.via, name: own.name, active: true, cancelled: false, startedAt: own.since, autoRenew: own.autoRenew !== false });
+    }
+    // Notifications follow the team on screen.
+    if (s().pushOn) void updatePushPrefs(teamId, s().prof.sub.notify).catch(() => {});
+    enterApp(role);
+    set({ tab: 'min' });
+    toast('Du ser nå ' + (p.data.teamName || 'laget'));
   };
 
   const loadLinks = async () => {
@@ -1560,6 +1615,33 @@ export const useStore = create<Store>()((set, get) => {
       );
     },
     loadLinks,
+    loadTeams,
+    switchTeam: (teamId, role) => {
+      const m = (s().teams || []).find((x) => x.teamId === teamId && x.role === role);
+      if (!m) return;
+      if (m.status === 'pending') return toast('Administratoren har ikke godkjent deg ennå');
+      // Coaches always type the coach code to get in, also when switching.
+      if (role === 'coach') return set({ sheet: 'switchTeam', form: { teamId, teamName: m.teamName, code: '', err: '' } });
+      void openTeam(teamId, role);
+    },
+    submitSwitchCode: async () => {
+      const f = s().form;
+      if (f.busy) return;
+      const teamId = String(f.teamId || '');
+      const code = String(f.code || '').replace(/\s/g, '').toUpperCase();
+      if (code.length < 4) return setForm({ err: 'Skriv inn administratorkoden.' });
+      setForm({ busy: true, err: '' });
+      let p;
+      try {
+        p = await peekTeam(code);
+      } catch {
+        return setForm({ busy: false, err: netError });
+      }
+      if (!p || !p.isCoachCode || p.teamId !== teamId)
+        return setForm({ busy: false, err: 'Koden stemmer ikke. Spør en annen administrator på laget.' });
+      await openTeam(teamId, 'coach');
+      setForm({ busy: false });
+    },
     decide: (userId, role, approve) => {
       const team = s().team;
       if (!team) return;

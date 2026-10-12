@@ -134,6 +134,7 @@ export function MinSide() {
       {role === 'player' && me && <PlayerSections me={me} />}
       {role === 'parent' && child && <ParentSections child={child} />}
 
+      <TeamsSection />
       <PushSection />
 
       <div className="list" style={{ marginTop: 28 }}>
@@ -598,6 +599,48 @@ function PushSection() {
           )}
         </div>
       )}
+    </Section>
+  );
+}
+
+const ROLE_NAME: Record<string, string> = { coach: 'Administrator', player: 'Spiller', parent: 'Foresatt', sub: 'Abonnent' };
+
+/** Other teams and roles this account has. Shown only when there is somewhere else to go. */
+function TeamsSection() {
+  const st = useStore();
+  const loadTeams = st.loadTeams;
+  useEffect(() => {
+    void loadTeams();
+  }, [loadTeams]);
+  const teams = st.teams || [];
+  const isCurrent = (t: { teamId: string; role: string }) => t.teamId === st.team?.id && t.role === st.team?.role;
+  if (!teams.some((t) => !isCurrent(t))) return null;
+  return (
+    <Section title="Dine lag">
+      <p className="note">Bytt til et annet lag eller en annen rolle uten å logge ut.</p>
+      <div>
+        {teams.map((t) => {
+          const current = isCurrent(t);
+          const waiting = t.status === 'pending';
+          return (
+            <button
+              key={t.teamId + t.role}
+              type="button"
+              className="row-btn"
+              disabled={current}
+              onClick={() => st.switchTeam(t.teamId, t.role)}
+            >
+              <span className="row-text">
+                <span style={{ font: '400 16px var(--body)' }}>{t.teamName}</span>
+                <span className="row-sub">
+                  {ROLE_NAME[t.role] + (current ? ' · vises nå' : waiting ? ' · venter på godkjenning' : '')}
+                </span>
+              </span>
+              {!current && <Icon name="chevron_right" className="chev" size={20} />}
+            </button>
+          );
+        })}
+      </div>
     </Section>
   );
 }
