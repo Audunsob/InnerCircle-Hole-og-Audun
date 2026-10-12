@@ -147,6 +147,8 @@ export interface Actions {
   chooseRole: (r: Role) => void;
   choosePlayerKind: (adult: boolean) => void;
   chooseCoachMode: (mode: 'join' | 'create') => void;
+  /** From the coach code screen: create another team instead of logging in to the one this account has. */
+  createAnotherTeam: () => void;
   flowSubmit: () => void;
   setOtp: (v: string) => void;
   suggestCodes: () => void;
@@ -462,13 +464,28 @@ export const useStore = create<Store>()((set, get) => {
   };
 
   /** After signing in: go straight into a team this account already belongs to, or continue sign-up.
-   *  Coaches always type the coach code, also when the account is already a coach on the team. */
+   *  Coaches always type the coach code. One who already coaches a team logs in to it with the code,
+   *  even if they picked «Opprett lag». */
   const afterLogin = async () => {
     const st = s();
     const r = st.flow.role;
     if (!r) return;
     const wanted: MemberRole = r;
-    if (r === 'coach' && !st.flow.coachName && st.prof.coach.name) setFlow({ coachName: st.prof.coach.name });
+    if (r === 'coach') {
+      if (!st.flow.coachName && st.prof.coach.name) setFlow({ coachName: st.prof.coach.name });
+      try {
+        const coachTeams = (await myTeams())
+          .filter((m) => m.role === 'coach' && m.status !== 'pending')
+          .map((m) => ({ id: m.teamId, name: m.teamName }));
+        setFlow({ coachTeams });
+        if (coachTeams.length) {
+          setFlow({ coachMode: 'join', err: '' });
+          return go('coachCode');
+        }
+      } catch {
+        return setFlow({ err: netError });
+      }
+    }
     if (r !== 'coach') {
       try {
         const all = (await myTeams()).filter((m) => m.role === wanted);
@@ -671,25 +688,34 @@ export const useStore = create<Store>()((set, get) => {
   const submitCoach = async () => {
     const f = s().flow;
     const c = f.coachCode.replace(/\s/g, '').toUpperCase();
-    if (!hasFullName(f.coachName)) return setFlow({ err: 'Skriv inn fornavn og etternavn.' });
+    const known = !!f.coachTeams?.length;
+    if (!known && !hasFullName(f.coachName)) return setFlow({ err: 'Skriv inn fornavn og etternavn.' });
     if (c.length < 4) return setFlow({ err: 'Skriv inn trenerkoden.' });
     const p = await lookup(c);
     if (s().flow.err) return;
-    if (!p || !p.isCoachCode) return setFlow({ err: 'Koden stemmer ikke. Spør en annen trener på laget.' });
+    if (!p || !p.isCoachCode)
+      return setFlow({ err: known ? 'Koden stemmer ikke. Sjekk trenerkoden, eller spør en annen trener på laget.' : 'Koden stemmer ikke. Spør en annen trener på laget.' });
     // Already a coach on this team: the code was right, so go straight in without signing again.
     let returning = false;
     try {
-      returning = (await myTeams()).some((m) => m.role === 'coach' && m.teamId === p.teamId);
+      returning = (await myTeams()).some((m) => m.role === 'coach' && m.status !== 'pending' && m.teamId === p.teamId);
     } catch {
       return setFlow({ err: netError });
     }
     if (returning) {
       if (!(await join('coach', null))) return;
-      setProf('coach', { name: f.coachName.trim().replace(/\s+/g, ' ') });
+      // Keep the name from when they signed the coach rules on this team.
+      const signed = (s().data.coachConsents || []).filter((x) => x.contact === f.contact).pop()?.name;
+      const name = f.coachName.trim().replace(/\s+/g, ' ') || signed || s().prof.coach.name;
+      if (name) setProf('coach', { name });
+      setFlow({ coachTeams: [] });
       enterApp('coach');
       toast('Velkommen tilbake!');
       return;
     }
+    // A code for another team: they join it as a new coach, so show the name field.
+    if (!hasFullName(f.coachName))
+      return setFlow({ coachTeams: [], coachName: s().prof.coach.name || '', err: 'Koden gjelder et annet lag. Skriv inn fornavn og etternavn for å bli trener der.' });
     set({ pcons: { step: 1, coach: true, mode: 'join', p: null, ps: null, err: '' } });
     setFlow({ err: '' });
     go('cconsent');
@@ -831,6 +857,10 @@ export const useStore = create<Store>()((set, get) => {
     chooseCoachMode: (mode) => {
       setFlow({ coachMode: mode, err: '' });
       go('login');
+    },
+    createAnotherTeam: () => {
+      setFlow({ coachMode: 'create', coachTeams: [], err: '' });
+      go('createTeam');
     },
     flowSubmit: () => {
       const handlers: Partial<Record<Screen, () => void>> = {

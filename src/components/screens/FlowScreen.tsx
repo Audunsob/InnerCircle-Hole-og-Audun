@@ -391,6 +391,27 @@ function CoachNameField() {
 }
 
 function CoachCode() {
+  const teams = useStore((s) => s.flow.coachTeams) || [];
+  const createAnother = useStore((s) => s.createAnotherTeam);
+  if (teams.length)
+    return (
+      <>
+        <Intro
+          title="Velkommen tilbake"
+          text={
+            'Du er allerede trener for ' +
+            teams.map((t) => t.name).join(', ') +
+            '. Skriv trenerkoden for laget for å logge inn.'
+          }
+        />
+        <Field label="Trenerkode">
+          <FlowInput field="coachCode" format={upper} autoFocus autoCapitalize="characters" placeholder="F.eks. SOLBERG-TRENER" />
+        </Field>
+        <button type="button" className="link-btn start" onClick={createAnother}>
+          Opprett et nytt lag i stedet
+        </button>
+      </>
+    );
   return (
     <>
       <Intro title="Trenerkode" text="Trenerkoden får du av en annen trener på laget." />
