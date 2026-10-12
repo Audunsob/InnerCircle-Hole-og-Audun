@@ -49,6 +49,27 @@ import { coachName, matchTitle, price, shortTeam, teamName } from './selectors';
 
 const MAX_VIDEO = 50 * 1024 * 1024;
 
+const VIDEO_EXT: Record<string, string> = { mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm' };
+
+/**
+ * Some phones hand over videos without a file type, or as .m4v. Give them the type
+ * the storage bucket accepts, judged from the file name. Anything else is left as is.
+ */
+function withVideoType(f: File): File {
+  const ext = f.name.split('.').pop()?.toLowerCase() || '';
+  const type = (!f.type || f.type === 'video/x-m4v') && VIDEO_EXT[ext];
+  return type ? new File([f], f.name, { type }) : f;
+}
+
+/** "Ny video", "Nytt bilde", "3 bilder og 1 video" — for push notifications without text. */
+function mediaText(media: Media[]) {
+  const v = media.filter((m) => m.kind === 'video').length;
+  const p = media.length - v;
+  if (!v) return p === 1 ? 'Nytt bilde' : 'Nye bilder';
+  if (!p) return v === 1 ? 'Ny video' : 'Nye videoer';
+  return p + (p === 1 ? ' bilde' : ' bilder') + ' og ' + v + (v === 1 ? ' video' : ' videoer');
+}
+
 /** Length of a video file as m:ss, read from its metadata. */
 function videoDuration(file: File): Promise<string> {
   return new Promise((resolve) => {
@@ -1143,8 +1164,9 @@ export const useStore = create<Store>()((set, get) => {
     setDraft: (p) => set((st) => ({ draft: st.draft ? { ...st.draft, ...p } : st.draft })),
     addFiles: async (files) => {
       const team = s().team;
-      const picked = files.filter((f) => f.type.startsWith('image/') || f.type.startsWith('video/'));
-      if (!picked.length || !team) return;
+      const picked = files.map(withVideoType).filter((f) => f.type.startsWith('image/') || f.type.startsWith('video/'));
+      if (!team) return;
+      if (!picked.length) return void toast('Velg et bilde eller en video.');
       get().setDraft({ loading: true });
       const out: Media[] = [];
       for (const f of picked.slice(0, 10)) {
@@ -1152,7 +1174,7 @@ export const useStore = create<Store>()((set, get) => {
         try {
           if (f.type.startsWith('video/')) {
             if (f.size > MAX_VIDEO) {
-              toast('Videoen er for stor. Maks 50 MB, omtrent ett minutt.');
+              toast(`Videoen er ${Math.round(f.size / 1048576)} MB, og grensen er 50 MB. Klipp den kortere på telefonen og prøv igjen.`);
               continue;
             }
             const dur = await videoDuration(f);
@@ -1171,8 +1193,8 @@ export const useStore = create<Store>()((set, get) => {
       const st = s();
       const dr = st.draft;
       if (!dr) return;
-      if (dr.loading) return toast('Vent til bildene er lastet');
-      if (!dr.text.trim() && !dr.media.length) return toast('Legg til tekst eller bilder først');
+      if (dr.loading) return toast('Vent til opplastingen er ferdig');
+      if (!dr.text.trim() && !dr.media.length) return toast('Legg til tekst, bilder eller video først');
       const matchId = dr.type === 'kamp' && dr.matchId ? dr.matchId : null;
       if (dr.id) {
         setData((d) => ({
@@ -1208,7 +1230,7 @@ export const useStore = create<Store>()((set, get) => {
         notifs: notifyAll ? [{ id: 'n' + now, text: 'Nytt innlegg fra ' + author, ts: now, read: false, from: 'coach' as const }, ...d.notifs] : d.notifs,
       }));
       set({ sheet: null, draft: null, tab: 'lag', filter: 'all', openMatch: null });
-      if (notifyAll) void notify('posts', teamName(s()), author + ': ' + (post.text || (post.media.length === 1 ? 'Nytt bilde' : 'Nye bilder')).slice(0, 120));
+      if (notifyAll) void notify('posts', teamName(s()), author + ': ' + (post.text || mediaText(post.media)).slice(0, 120));
       scrollTop();
       toast(notifyAll ? 'Publisert. Laget er varslet.' : 'Innlegget er publisert');
     },

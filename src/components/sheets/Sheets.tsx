@@ -5,10 +5,10 @@ import { download, fmtAcct, fmtDate, fmtDay, fmtShort, iso, krd, matchTime, NB, 
 import { TYPES } from '@/lib/seed';
 import { matchTitle, playerMap, price, shortTeam, teamName } from '@/lib/selectors';
 import { receiptText, useStore } from '@/lib/store';
-import type { PayMethod, PostType, SheetName } from '@/lib/types';
+import type { Media, PayMethod, PostType, SheetName } from '@/lib/types';
 import { economy } from '../app/OkonomiView';
 import { METHOD_NAMES } from '../app/MinSide';
-import { Field, SwitchRow, Tabs } from '../ui';
+import { Field, Icon, SwitchRow, Tabs } from '../ui';
 import { MediaView } from '../MediaView';
 
 const TITLES: Record<Exclude<SheetName, 'confirm'>, string> = {
@@ -24,6 +24,14 @@ const TITLES: Record<Exclude<SheetName, 'confirm'>, string> = {
   method: 'Betalingsmåte',
   receipts: 'Kvitteringer',
 };
+
+/** "2 bilder", "1 video", "2 bilder og 1 video". */
+function mediaCount(media: Media[]) {
+  const v = media.filter((m) => m.kind === 'video').length;
+  const p = media.length - v;
+  const parts = [p && p + (p === 1 ? ' bilde' : ' bilder'), v && v + (v === 1 ? ' video' : ' videoer')].filter(Boolean);
+  return parts.join(' og ');
+}
 
 export function SheetHost() {
   const sheet = useStore((s) => s.sheet);
@@ -143,7 +151,7 @@ function Composer() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
           <span className="field-label">Bilder og video</span>
           <span className="row-meta">
-            {dr.media.length ? dr.media.length + (dr.media.length === 1 ? ' fil' : ' filer') : 'Ingen bilder ennå'}
+            {dr.media.length ? mediaCount(dr.media) : 'Video maks 50 MB'}
           </span>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 4 }}>
@@ -151,14 +159,15 @@ function Composer() {
             <div key={m.id} style={{ position: 'relative', aspectRatio: '1', borderRadius: 4, overflow: 'hidden', background: stripe(m.hue ?? 20, dark) }}>
               {m.src && <MediaView src={m.src} kind={m.kind} />}
               {m.kind === 'video' && (
-                <span className="badge-dark" style={{ left: 4, bottom: 4 }}>
+                <span className="badge-dark" style={{ left: 4, bottom: 4, display: 'flex', alignItems: 'center', gap: 2, padding: '2px 6px 2px 2px' }}>
+                  <Icon name="play_arrow" size={16} filled />
                   {m.dur || 'video'}
                 </span>
               )}
               <button
                 type="button"
                 onClick={() => st.removeMedia(m.id)}
-                aria-label="Fjern bildet"
+                aria-label={m.kind === 'video' ? 'Fjern videoen' : 'Fjern bildet'}
                 style={{
                   position: 'absolute',
                   top: 0,
@@ -200,9 +209,9 @@ function Composer() {
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: 2,
+              gap: 4,
               cursor: 'pointer',
-              font: '500 13px var(--body)',
+              font: '600 12px/1.2 var(--body)',
               color: 'var(--accent-ink)',
               textAlign: 'center',
             }}
@@ -219,10 +228,11 @@ function Composer() {
               style={{ position: 'absolute', width: 1, height: 1, opacity: 0, overflow: 'hidden' }}
             />
             {dr.loading ? (
-              'Laster …'
+              <span style={{ animation: 'ic-fade 600ms ease-in-out infinite alternate' }}>Laster opp …</span>
             ) : (
               <>
-                <span style={{ font: '400 26px/1 var(--body)' }}>+</span>Legg til
+                <Icon name="add_a_photo" size={24} />
+                Bilde eller video
               </>
             )}
           </label>
