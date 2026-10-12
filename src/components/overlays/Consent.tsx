@@ -16,6 +16,14 @@ function Bullets({ items }: { items: string[] }) {
   );
 }
 
+const PARENT_POINTS = [
+  'Bildene og videoene vises kun til personer som er invitert av spillerne på laget, for eksempel besteforeldre og annen familie. De betaler et månedlig beløp for å følge laget, og pengene går til laget.',
+  'Ingen bilder eller videoer publiseres på åpne nettsider eller sosiale medier.',
+  'Det tas aldri bilder i garderoben eller dusjen.',
+  'Det er frivillig å samtykke. Spilleren kan si nei selv om foresatte har gitt tillatelse.',
+  'Samtykket kan trekkes tilbake når som helst ved å kontakte administratoren eller foreldrene. Dersom samtykket trekkes tilbake, slettes bilder og videoer av spilleren så langt det er mulig.',
+];
+
 /** Parent consent: four steps with a progress bar and per-item switches, all off by default. */
 export function ParentConsent() {
   const st = useStore();
@@ -34,6 +42,10 @@ export function ParentConsent() {
             <>
               <h1 className="h1">{team} er ansvarlig for bildene.</h1>
               <p className="lead">Laget tar bildene, bestemmer hva som legges ut og sletter bilder når noen ber om det.</p>
+              {kid?.consent?.playerSig && (
+                <p className="note">{kid.name} har signert sin del. Bildene kan brukes når du også har gitt samtykke.</p>
+              )}
+              <Bullets items={PARENT_POINTS} />
             </>
           )}
           {c.step === 2 && (
@@ -93,15 +105,8 @@ const PLAYER_POINTS = [
   'Sier du nei, er det helt greit. Du er like mye med på laget, og administratorene passer på at du ikke er med på bildene.',
 ];
 
-const PARENT_POINTS = [
-  'Bildene og videoene vises kun til personer som er invitert av spillerne på laget, for eksempel besteforeldre og annen familie. De betaler et månedlig beløp for å følge laget, og pengene går til laget.',
-  'Ingen bilder eller videoer publiseres på åpne nettsider eller sosiale medier.',
-  'Det tas aldri bilder i garderoben eller dusjen.',
-  'Det er frivillig å samtykke. Spilleren kan si nei selv om foresatte har gitt tillatelse.',
-  'Samtykket kan trekkes tilbake når som helst ved å kontakte administratoren eller foreldrene. Dersom samtykket trekkes tilbake, slettes bilder og videoer av spilleren så langt det er mulig.',
-];
 
-/** Player consent. Over 15: one signed page. Under 15: part 1 for the player, part 2 for a parent. */
+/** Player consent: one signed page. Under 15, a parent also says yes from their own login. */
 export function PlayerConsent() {
   const st = useStore();
   const c = st.pcons || { step: 1, p: null, ps: null, err: '' };
@@ -111,85 +116,44 @@ export function PlayerConsent() {
     ['Spiller', <span key="n" style={{ fontWeight: 600 }}>{player?.name || ''}</span>],
     ['Dato', <span key="d" className="tnum">{fmtToday()}</span>],
   ];
-  const last = c.step === 2 || !minor || c.p === 'no';
-  const incomplete = c.step === 1 ? !c.p || (c.p === 'yes' && !c.ps) : !c.g || (c.g === 'yes' && !c.gs);
-  const btn = last ? (c.step === 2 && c.g === 'yes' ? 'Send inn' : 'Fullfør') : 'Neste';
+  const incomplete = !c.p || (c.p === 'yes' && !c.ps);
 
   return (
     <div className="fullscreen">
       <div className="fullscreen-inner">
-        <TopBar label={minor ? 'Samtykke · del ' + c.step + ' av 2' : 'Samtykke'} onBack={st.pcBack} />
-        {minor && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
-            <span style={{ height: 3, background: 'var(--accent)' }} />
-            <span style={{ height: 3, background: c.step === 2 ? 'var(--accent)' : 'var(--line)' }} />
-          </div>
-        )}
+        <TopBar label="Samtykke" onBack={st.pcBack} />
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 18, paddingTop: 24 }}>
-          {c.step === 1 && (
-            <>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {minor && <span style={{ font: '600 13px var(--body)', color: 'var(--accent-ink)' }}>Del 1</span>}
-                <h1 className="h1">{minor ? 'Til deg som spiller' : 'Samtykke til bilder og video'}</h1>
-              </div>
-              <KeyValues rows={meta} />
-              <p className="body-text">
-                Laget ditt bruker InnerCircle. Det er en lukket app der familie og venner kan se bilder og korte videoer fra treninger og
-                kamper. Før vi tar bilder av deg og legger dem ut, spør vi deg. Du bestemmer selv.
-              </p>
-              <Bullets
-                items={[
-                  ...PLAYER_POINTS,
-                  minor
-                    ? 'Du kan ombestemme deg når som helst. Si fra til administratoren eller foreldrene dine, så slettes bildene der du er med.'
-                    : 'Du kan ombestemme deg når som helst. Si fra til administratoren, så slettes bildene der du er med.',
-                ]}
-              />
-              {minor && (
-                <p className="note">
-                  Skjemaet har to deler. Du fyller ut del 1, og en foresatt fyller ut del 2. Sier du nei, gjelder det selv om foresatte sier ja.
-                </p>
-              )}
-              <div style={{ borderTop: '1px solid var(--line)', paddingTop: 18 }}>
-                <RadioOptions
-                  value={c.p}
-                  onChange={(v) => st.setPC({ p: v })}
-                  options={[
-                    { value: 'yes', label: 'Ja, jeg vil gjerne være med på bilder og video' },
-                    { value: 'no', label: 'Nei, jeg vil ikke være med' },
-                  ]}
-                />
-              </div>
-              {c.p === 'yes' && <SignaturePad key="p" label="Signatur, spiller" value={c.ps} onChange={(v) => st.setPC({ ps: v })} />}
-            </>
+          <h1 className="h1">{minor ? 'Til deg som spiller' : 'Samtykke til bilder og video'}</h1>
+          <KeyValues rows={meta} />
+          <p className="body-text">
+            Laget ditt bruker InnerCircle. Det er en lukket app der familie og venner kan se bilder og korte videoer fra treninger og
+            kamper. Før vi tar bilder av deg og legger dem ut, spør vi deg. Du bestemmer selv.
+          </p>
+          <Bullets
+            items={[
+              ...PLAYER_POINTS,
+              minor
+                ? 'Du kan ombestemme deg når som helst. Si fra til administratoren eller foreldrene dine, så slettes bildene der du er med.'
+                : 'Du kan ombestemme deg når som helst. Si fra til administratoren, så slettes bildene der du er med.',
+            ]}
+          />
+          {minor && (
+            <p className="note">
+              Er du under 15, må en foresatt også si ja før du kan være med på bilder. Foresatte gjør det på sin egen telefon: de åpner
+              appen med lagkoden og velger «Jeg er foresatt». Sier du nei, gjelder det selv om foresatte sier ja.
+            </p>
           )}
-          {c.step === 2 && (
-            <>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <span style={{ font: '600 13px var(--body)', color: 'var(--accent-ink)' }}>Del 2</span>
-                <h1 className="h1">Informasjon til foresatte</h1>
-              </div>
-              <KeyValues rows={meta} />
-              <p className="body-text">
-                Laget ditt bruker InnerCircle, en lukket app der familie og venner kan se bilder og korte videoer fra treninger og kamper. Vi
-                ønsker å ta bilder og videoer av spillerne og publisere dem i appen. Før dette gjøres, trenger vi samtykke fra både spilleren og
-                foresatte.
-              </p>
-              <Bullets items={PARENT_POINTS} />
-              <p className="body-text">Vennligst les informasjonen og velg ett av alternativene nedenfor.</p>
-              <div style={{ borderTop: '1px solid var(--line)', paddingTop: 18 }}>
-                <RadioOptions
-                  value={c.g}
-                  onChange={(v) => st.setPC({ g: v })}
-                  options={[
-                    { value: 'yes', label: 'Ja, jeg godkjenner at barnet mitt er med på bilder og videoer' },
-                    { value: 'no', label: 'Nei, jeg godkjenner ikke at barnet mitt er med på bilder og videoer' },
-                  ]}
-                />
-              </div>
-              {c.g === 'yes' && <SignaturePad key="g" label="Signatur, foresatt" value={c.gs} onChange={(v) => st.setPC({ gs: v })} />}
-            </>
-          )}
+          <div style={{ borderTop: '1px solid var(--line)', paddingTop: 18 }}>
+            <RadioOptions
+              value={c.p}
+              onChange={(v) => st.setPC({ p: v })}
+              options={[
+                { value: 'yes', label: 'Ja, jeg vil gjerne være med på bilder og video' },
+                { value: 'no', label: 'Nei, jeg vil ikke være med' },
+              ]}
+            />
+          </div>
+          {c.p === 'yes' && <SignaturePad key="p" label="Signatur, spiller" value={c.ps} onChange={(v) => st.setPC({ ps: v })} />}
           {c.err && (
             <p role="alert" className="error">
               {c.err}
@@ -198,7 +162,7 @@ export function PlayerConsent() {
         </div>
         <div className="sticky-action">
           <button type="button" className={'btn btn-primary btn-block' + (incomplete || c.busy ? ' btn-dim' : '')} onClick={() => !c.busy && st.pcNext()}>
-            {c.busy ? 'Lagrer …' : btn}
+            {c.busy ? 'Lagrer …' : c.p === 'yes' ? 'Send inn' : 'Fullfør'}
           </button>
         </div>
       </div>

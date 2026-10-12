@@ -1,6 +1,7 @@
 -- InnerCircle database setup, version 5 (accounts, approval of players and parents, list of coaches,
 -- team name and codes, reports, notifications for one match or some players,
--- leaving a team, deleting your account and deleting files, removing coaches and deleting a team).
+-- leaving a team, deleting your account and deleting files, removing coaches and deleting a team,
+-- parents say yes to under-15 consent from their own login).
 -- Paste all of this into Supabase: SQL Editor -> New query -> Run.
 -- Safe to run more than once, and safe to run on top of version 1, 2, 3 and 4.
 
@@ -103,6 +104,23 @@ $$;
 create or replace function public.ic_without(p_arr jsonb, p_value text) returns jsonb
 language sql immutable set search_path = public as $$
   select coalesce(jsonb_agg(x), '[]'::jsonb) from jsonb_array_elements(coalesce(p_arr, '[]'::jsonb)) x where x #>> '{}' <> p_value
+$$;
+
+-- A consent saved by a player or parent. Under 15 a parent must say yes from their own login, so
+-- parentBy is set here, never taken from the app: a parent who saves a new parentAt is recorded as the
+-- parent who said yes. Otherwise the parent's yes (and the choices they made) is kept as it was.
+create or replace function public.ic_consent(p_role text, p_uid text, p_prev jsonb, p_next jsonb) returns jsonb
+language sql immutable set search_path = public as $$
+  select case
+    when coalesce(jsonb_typeof(p_next), 'null') <> 'object' then p_next
+    when p_role = 'parent' and p_next -> 'parentAt' is not null and jsonb_typeof(p_next -> 'parentAt') <> 'null'
+         and (p_next -> 'parentAt') is distinct from (p_prev -> 'parentAt')
+      then p_next || jsonb_build_object('parentBy', p_uid)
+    when coalesce(jsonb_typeof(p_prev -> 'parentBy'), 'null') = 'string'
+      then p_next || jsonb_build_object('parentBy', p_prev -> 'parentBy', 'parentAt', p_prev -> 'parentAt',
+             'photo', p_prev -> 'photo', 'video', p_prev -> 'video', 'name', p_prev -> 'name', 'tag', p_prev -> 'tag')
+    else p_next - 'parentBy' - 'parentAt'
+  end
 $$;
 
 -- What a member gets back. Coaches see everything; others don't see the coach code,
@@ -316,7 +334,9 @@ begin
       select jsonb_agg(
         case when op.v ->> 'id' = m.player_id and np.v is not null
              then op.v || coalesce((
-               select jsonb_object_agg(e.key, e.value) from jsonb_each(np.v) e
+               select jsonb_object_agg(e.key,
+                 case when e.key = 'consent' then ic_consent(p_role, uid, op.v -> 'consent', e.value) else e.value end)
+               from jsonb_each(np.v) e
                where e.key in ('consent', 'declined', 'selfLogin')), '{}'::jsonb)
              else op.v end
         order by op.ord)
@@ -595,6 +615,7 @@ revoke all on function public.ic_member(uuid, text) from public, anon, authentic
 revoke all on function public.ic_norm(text) from public, anon, authenticated;
 revoke all on function public.ic_uid() from public, anon, authenticated;
 revoke all on function public.ic_without(jsonb, text) from public, anon, authenticated;
+revoke all on function public.ic_consent(text, text, jsonb, jsonb) from public, anon, authenticated;
 revoke all on function public.ic_payload(public.teams, text) from public, anon, authenticated;
 revoke all on function public.ic_forget(jsonb, text) from public, anon, authenticated;
 revoke all on function public.ic_last_coach(uuid, uuid) from public, anon, authenticated;

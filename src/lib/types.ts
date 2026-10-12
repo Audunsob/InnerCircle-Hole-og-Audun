@@ -35,7 +35,12 @@ export interface Consent {
   by?: 'self';
   adult?: boolean;
   playerSig?: string | null;
+  /** Older forms only: a parent signed on the player's phone. No longer counts on its own. */
   parentSig?: string | null;
+  /** When a parent gave consent from their own login. */
+  parentAt?: number | null;
+  /** The parent's account. Set by the database, so a player can't fill it in. */
+  parentBy?: string | null;
 }
 
 export interface Player {
