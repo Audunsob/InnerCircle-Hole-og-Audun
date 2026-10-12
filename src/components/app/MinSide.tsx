@@ -88,7 +88,7 @@ export function MinSide() {
     role === 'coach' ? coachName(st) : role === 'player' ? me?.name || 'Spiller' : role === 'parent' ? child?.parent.name || 'Foresatt' : prof.sub.name || 'Abonnent';
   const subtitle =
     role === 'coach'
-      ? 'Trener · ' + team
+      ? 'Administrator · ' + team
       : role === 'player'
         ? 'Spiller · ' + team
         : role === 'parent'
@@ -166,7 +166,7 @@ function CoachSections() {
   const coaches = st.coaches || [];
   const linked = (id: string) => links.filter((l) => l.playerId === id && l.status === 'active');
   const codeRows = [
-    { key: 'coach', label: 'Trenerkode', code: C.coach, hint: 'Kun for trenere. Andre trenere logger inn med denne.', copyLabel: 'Trenerkoden' },
+    { key: 'coach', label: 'Administratorkode', code: C.coach, hint: 'Kun for administratorer. Andre administratorer logger inn med denne.', copyLabel: 'Administratorkoden' },
     { key: 'team', label: 'Lagkode', code: C.team, hint: 'For spillere, foresatte og abonnenter.', copyLabel: 'Lagkoden' },
   ];
   return (
@@ -198,7 +198,7 @@ function CoachSections() {
         </Section>
       )}
       {coaches.length > 0 && (
-        <Section title="Trenere" aside={<span className="note">{coaches.length}</span>}>
+        <Section title="Administratorer" aside={<span className="note">{coaches.length}</span>}>
           <div className="list">
             {coaches.map((c) => (
               <div key={c.userId} className="row" style={{ alignItems: 'flex-start', padding: '12px 0' }}>
@@ -210,7 +210,7 @@ function CoachSections() {
                     {c.email || 'Ukjent e-post'}
                   </span>
                   <span className="row-meta">
-                    {'Trener siden ' + fmtDate(Date.parse(c.at)) + (c.signedAt ? ' · Har signert trenerreglene' : ' · Har ikke signert trenerreglene')}
+                    {'Administrator siden ' + fmtDate(Date.parse(c.at)) + (c.signedAt ? ' · Har signert administratorreglene' : ' · Har ikke signert administratorreglene')}
                   </span>
                 </span>
               </div>
@@ -354,8 +354,8 @@ function PlayerSections({ me }: { me: Player }) {
   const text = c
     ? 'Du har signert samtykket' + (c.adult === false ? ', og en foresatt har også signert' : '') + '. Du kan ombestemme deg når som helst.'
     : me.declined === 'parent'
-      ? 'En foresatt har ikke godkjent bilder. Trenerne passer på at du ikke er med på bildene.'
-      : 'Du er ikke med på bilder. Trenerne passer på at du ikke er med på bildene.';
+      ? 'En foresatt har ikke godkjent bilder. Administratorene passer på at du ikke er med på bildene.'
+      : 'Du er ikke med på bilder. Administratorene passer på at du ikke er med på bildene.';
   return (
     <>
       <Section title="Samtykke">
@@ -570,7 +570,7 @@ function PushSection() {
         </p>
       ) : (
         <div>
-          <SwitchRow label="Varsler på denne mobilen" sub="Du får beskjed når treneren legger ut noe" on={on} onToggle={toggle} disabled={busy} />
+          <SwitchRow label="Varsler på denne mobilen" sub="Du får beskjed når administratoren legger ut noe" on={on} onToggle={toggle} disabled={busy} />
           {on && (
             <>
               <SwitchRow label="Nye innlegg" sub="Bilder, video og beskjeder" on={nf.posts} onToggle={setPref('posts')} />

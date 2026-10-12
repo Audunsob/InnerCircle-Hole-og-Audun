@@ -90,7 +90,7 @@ const PLAYER_POINTS = [
   'Bildene vises bare for folk som er invitert av spillerne på laget, som besteforeldre og annen familie. De betaler litt hver måned for å følge laget, og pengene går til laget.',
   'Ingen bilder legges ut på åpne nettsider eller sosiale medier.',
   'Vi tar aldri bilder i garderoben eller dusjen.',
-  'Sier du nei, er det helt greit. Du er like mye med på laget, og trenerne passer på at du ikke er med på bildene.',
+  'Sier du nei, er det helt greit. Du er like mye med på laget, og administratorene passer på at du ikke er med på bildene.',
 ];
 
 const PARENT_POINTS = [
@@ -98,7 +98,7 @@ const PARENT_POINTS = [
   'Ingen bilder eller videoer publiseres på åpne nettsider eller sosiale medier.',
   'Det tas aldri bilder i garderoben eller dusjen.',
   'Det er frivillig å samtykke. Spilleren kan si nei selv om foresatte har gitt tillatelse.',
-  'Samtykket kan trekkes tilbake når som helst ved å kontakte treneren eller foreldrene. Dersom samtykket trekkes tilbake, slettes bilder og videoer av spilleren så langt det er mulig.',
+  'Samtykket kan trekkes tilbake når som helst ved å kontakte administratoren eller foreldrene. Dersom samtykket trekkes tilbake, slettes bilder og videoer av spilleren så langt det er mulig.',
 ];
 
 /** Player consent. Over 15: one signed page. Under 15: part 1 for the player, part 2 for a parent. */
@@ -141,8 +141,8 @@ export function PlayerConsent() {
                 items={[
                   ...PLAYER_POINTS,
                   minor
-                    ? 'Du kan ombestemme deg når som helst. Si fra til treneren eller foreldrene dine, så slettes bildene der du er med.'
-                    : 'Du kan ombestemme deg når som helst. Si fra til treneren, så slettes bildene der du er med.',
+                    ? 'Du kan ombestemme deg når som helst. Si fra til administratoren eller foreldrene dine, så slettes bildene der du er med.'
+                    : 'Du kan ombestemme deg når som helst. Si fra til administratoren, så slettes bildene der du er med.',
                 ]}
               />
               {minor && (
@@ -213,7 +213,7 @@ const COACH_RULES = [
   'Bildene og videoene vises kun til personer som er invitert av spillerne på laget, og du sletter stygge kommentarer.',
   'Ingen bilder eller videoer publiseres på åpne nettsider eller sosiale medier.',
   'Hvis en spiller eller foresatt trekker samtykket, sletter du bildene av spilleren snarest mulig.',
-  'Når du slutter som trener, sier du fra til klubben og gir beskjed til den nye treneren om hvem som har sagt nei.',
+  'Når du slutter som administrator, sier du fra til klubben og gir beskjed til den nye administratoren om hvem som har sagt nei.',
   'Oppretter du laget, bekrefter du også at klubben har godkjent at laget bruker InnerCircle, og at samtykke er samlet inn før det første bildet legges ut.',
   'Det er klubben som er ansvarlig for bildene, men du står ansvarlig for at reglene blir fulgt på laget ditt. Brudd på reglene kan føre til at du mister tilgangen.',
 ];
@@ -228,19 +228,19 @@ export function CoachConsent() {
   return (
     <div className="fullscreen">
       <div className="fullscreen-inner">
-        <TopBar label="Trener · Samtykke" onBack={st.ccBack} />
+        <TopBar label="Administrator · Samtykke" onBack={st.ccBack} />
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 18, paddingTop: 16 }}>
-          <h1 className="h1">Samtykke og ansvar for trenere</h1>
+          <h1 className="h1">Samtykke og ansvar for administratorer</h1>
           <KeyValues
             rows={[
-              ['Trener', name],
+              ['Administrator', name],
               ['Lag', team],
               ['Dato', fmtToday()],
             ]}
           />
           <p className="body-text">
-            Laget ditt bruker InnerCircle, en lukket app der familie og venner kan se bilder og korte videoer fra treninger og kamper. Som trener
-            eller lagleder er det du som legger ut bildene, og du står ansvarlig for at reglene under blir fulgt. Alle trenere og lagledere må
+            Laget ditt bruker InnerCircle, en lukket app der familie og venner kan se bilder og korte videoer fra treninger og kamper. Som administrator
+            er det du som legger ut bildene, og du står ansvarlig for at reglene under blir fulgt. Alle administratorer må
             godkjenne dette, både den som oppretter laget og alle som logger inn senere.
           </p>
           <Bullets items={COACH_RULES} />
@@ -255,7 +255,7 @@ export function CoachConsent() {
               ]}
             />
           </div>
-          {c.p === 'yes' && <SignaturePad label="Signatur, trener" value={c.ps} onChange={(v) => st.setPC({ ps: v })} />}
+          {c.p === 'yes' && <SignaturePad label="Signatur, administrator" value={c.ps} onChange={(v) => st.setPC({ ps: v })} />}
           {c.err && (
             <p role="alert" className="error">
               {c.err}

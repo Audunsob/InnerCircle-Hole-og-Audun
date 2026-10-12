@@ -347,7 +347,7 @@ export const useStore = create<Store>()((set, get) => {
   const sendError = (e: unknown) => {
     const msg = e instanceof Error ? e.message : '';
     if (/rate|seconds|many/i.test(msg)) return 'Du har bedt om mange koder. Vent litt og prøv igjen.';
-    if (/email|mail|smtp/i.test(msg)) return 'Vi fikk ikke sendt e-posten akkurat nå. Prøv igjen om litt, eller kontakt treneren.';
+    if (/email|mail|smtp/i.test(msg)) return 'Vi fikk ikke sendt e-posten akkurat nå. Prøv igjen om litt, eller kontakt administratoren.';
     return netError;
   };
 
@@ -544,9 +544,9 @@ export const useStore = create<Store>()((set, get) => {
       const name = peek.players.find((x) => x.id === playerId)?.name || 'Spilleren';
       const err =
         e instanceof PlayerTakenError
-          ? name + ' er allerede koblet til en annen konto. Si fra til treneren, så kan treneren koble den fra.'
+          ? name + ' er allerede koblet til en annen konto. Si fra til administratoren, så kan administratoren koble den fra.'
           : e instanceof ParentLimitError
-            ? 'To foresatte er allerede koblet til ' + firstName(name) + '. Si fra til treneren hvis det er feil.'
+            ? 'To foresatte er allerede koblet til ' + firstName(name) + '. Si fra til administratoren hvis det er feil.'
             : netError;
       setFlow({ busy: false, err });
       return false;
@@ -580,15 +580,15 @@ export const useStore = create<Store>()((set, get) => {
       const m = (await myTeams()).find((x) => x.teamId === pt.id && x.role === pt.role);
       if (s().screen !== 'pending') return;
       if (!m || m.playerId !== pt.playerId) {
-        setFlow({ pendingTeam: null, err: 'Treneren godkjente ikke forespørselen. Sjekk at du valgte riktig, eller snakk med treneren.' });
+        setFlow({ pendingTeam: null, err: 'Administratoren godkjente ikke forespørselen. Sjekk at du valgte riktig, eller snakk med administratoren.' });
         return go('teamCode');
       }
       if (m.status === 'pending') {
-        if (manual) toast('Treneren har ikke godkjent ennå');
+        if (manual) toast('Administratoren har ikke godkjent ennå');
         return;
       }
       continueApproved(await getTeam(pt.id, pt.role), pt.role, pt.playerId);
-      toast('Treneren har godkjent deg!');
+      toast('Administratoren har godkjent deg!');
     } catch {
       if (manual) toast(netError);
     } finally {
@@ -672,10 +672,10 @@ export const useStore = create<Store>()((set, get) => {
     const f = s().flow;
     const c = f.coachCode.replace(/\s/g, '').toUpperCase();
     if (!hasFullName(f.coachName)) return setFlow({ err: 'Skriv inn fornavn og etternavn.' });
-    if (c.length < 4) return setFlow({ err: 'Skriv inn trenerkoden.' });
+    if (c.length < 4) return setFlow({ err: 'Skriv inn administratorkoden.' });
     const p = await lookup(c);
     if (s().flow.err) return;
-    if (!p || !p.isCoachCode) return setFlow({ err: 'Koden stemmer ikke. Spør en annen trener på laget.' });
+    if (!p || !p.isCoachCode) return setFlow({ err: 'Koden stemmer ikke. Spør en annen administrator på laget.' });
     // Already a coach on this team: the code was right, so go straight in without signing again.
     let returning = false;
     try {
@@ -702,9 +702,9 @@ export const useStore = create<Store>()((set, get) => {
     const tc = (f.newTeamCode || '').trim().toUpperCase();
     if (!hasFullName(f.coachName)) return setFlow({ err: 'Skriv inn ditt fornavn og etternavn.' });
     if (n.length < 2) return setFlow({ err: 'Skriv inn navnet på laget.' });
-    if (cc.length < 6) return setFlow({ err: 'Trenerkoden må ha minst 6 tegn.' });
+    if (cc.length < 6) return setFlow({ err: 'Administratorkoden må ha minst 6 tegn.' });
     if (tc.length < 6) return setFlow({ err: 'Lagkoden må ha minst 6 tegn.' });
-    if (cc === tc) return setFlow({ err: 'Trenerkoden og lagkoden må være forskjellige.' });
+    if (cc === tc) return setFlow({ err: 'Administratorkoden og lagkoden må være forskjellige.' });
     set({ pcons: { step: 1, coach: true, mode: 'create', pending: { n, cc, tc }, p: null, ps: null, err: '' } });
     setFlow({ err: '' });
     go('cconsent');
@@ -861,7 +861,7 @@ export const useStore = create<Store>()((set, get) => {
         .replace(/[^A-Z0-9 ]/g, '');
       const w = base.split(' ').filter(Boolean);
       const r = () => String(10 + Math.floor(Math.random() * 90));
-      setFlow({ newCoachCode: (w[0] || 'LAG').slice(0, 10) + '-TRENER' + r(), newTeamCode: w.join('').slice(0, 10) + r(), err: '' });
+      setFlow({ newCoachCode: (w[0] || 'LAG').slice(0, 10) + '-ADMIN' + r(), newTeamCode: w.join('').slice(0, 10) + r(), err: '' });
     },
     back: () => {
       const st = s();
@@ -1062,7 +1062,7 @@ export const useStore = create<Store>()((set, get) => {
       setData((d) => ({ ...d, coachConsents: [...(d.coachConsents || []), { ...rec, sig }] }));
       set({ pcons: null });
       enterApp('coach');
-      toast('Velkommen, trener!');
+      toast('Velkommen, administrator!');
     },
     ccBack: () => {
       const m = s().pcons?.mode;
@@ -1330,7 +1330,7 @@ export const useStore = create<Store>()((set, get) => {
         type: dr.type,
         authorId: 'coach',
         author,
-        authorRole: 'Trener',
+        authorRole: 'Administrator',
         ts: now,
         matchId,
         media: dr.media,

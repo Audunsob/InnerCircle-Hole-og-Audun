@@ -14,8 +14,8 @@ const STEP_LABELS: Partial<Record<Screen, string>> = {
   pickPlayer: 'Steg 2 av 3',
   invite: 'Steg 1 av 3',
   terms: 'Steg 2 av 3',
-  coachCode: 'Trener · Logg inn',
-  createTeam: 'Trener · Opprett lag',
+  coachCode: 'Administrator · Logg inn',
+  createTeam: 'Administrator · Opprett lag',
   pending: 'Venter på godkjenning',
 };
 
@@ -247,7 +247,7 @@ function Otp() {
 function TeamCode() {
   return (
     <>
-      <Intro title="Lagkode" text="Lagkoden får du av treneren." />
+      <Intro title="Lagkode" text="Lagkoden får du av administratoren." />
       <Field label="Lagkode">
         <FlowInput field="teamCode" format={upper} autoFocus autoCapitalize="characters" placeholder="F.eks. SOLBERG12" />
       </Field>
@@ -282,7 +282,7 @@ function PickPlayer() {
               onClick={() =>
                 setFlow(
                   taken
-                    ? { pickId: null, err: p.name + ' er allerede koblet til en annen konto. Er det deg, si fra til treneren, så kan treneren koble den fra.' }
+                    ? { pickId: null, err: p.name + ' er allerede koblet til en annen konto. Er det deg, si fra til administratoren, så kan administratoren koble den fra.' }
                     : { pickId: p.id, err: '' },
                 )
               }
@@ -298,7 +298,7 @@ function PickPlayer() {
           );
         })}
       </div>
-      <p className="note">Treneren godkjenner deg før du kommer inn.</p>
+      <p className="note">Administratoren godkjenner deg før du kommer inn.</p>
       {list.length === 0 && <p className="note">Fant ingen med det navnet.</p>}
     </>
   );
@@ -309,14 +309,14 @@ function Pending() {
   const who = pt?.playerName || '';
   const text =
     pt?.role === 'parent'
-      ? `Treneren på ${pt.name} må godkjenne at du er foresatt${who ? ' til ' + who : ''}.`
-      : `Treneren på ${pt?.name || 'laget'} må godkjenne at du er ${who || 'spilleren du valgte'}.`;
+      ? `Administratoren på ${pt.name} må godkjenne at du er foresatt${who ? ' til ' + who : ''}.`
+      : `Administratoren på ${pt?.name || 'laget'} må godkjenne at du er ${who || 'spilleren du valgte'}.`;
   return (
     <>
-      <Intro title="Venter på treneren" text={text} />
+      <Intro title="Venter på administratoren" text={text} />
       <p className="note">
-        Du kommer videre av deg selv når treneren har godkjent. Du kan lukke appen så lenge; vi husker hvor du var. Det kan hjelpe å si fra til
-        treneren at du venter.
+        Du kommer videre av deg selv når administratoren har godkjent. Du kan lukke appen så lenge; vi husker hvor du var. Det kan hjelpe å si fra til
+        administratoren at du venter.
       </p>
     </>
   );
@@ -325,7 +325,7 @@ function Pending() {
 function Invite() {
   return (
     <>
-      <Intro title="Lagkode" text="Lagkoden får du av en spiller på laget eller av treneren." />
+      <Intro title="Lagkode" text="Lagkoden får du av en spiller på laget eller av administratoren." />
       <Field label="Lagkode">
         <FlowInput field="invite" format={upper} autoFocus autoCapitalize="characters" placeholder="F.eks. SOLBERG12" />
       </Field>
@@ -343,7 +343,7 @@ function Terms() {
     <>
       <p style={{ margin: 0, font: '500 14px var(--body)', color: 'var(--ok)' }}>Lagkode godkjent · {name}</p>
       <h1 className="h1">Før du starter</h1>
-      <Field label="Ditt navn" hint="Treneren og familien ser navnet ditt i lista over dem som følger laget.">
+      <Field label="Ditt navn" hint="Administratoren og familien ser navnet ditt i lista over dem som følger laget.">
         <FlowInput field="subName" autoComplete="name" placeholder="Fornavn og etternavn" />
       </Field>
       <Field label="Hvem ble du vervet av?" hint="Spilleren som inviterte deg. Du ser fortsatt hele laget.">
@@ -373,9 +373,9 @@ function CoachChoice() {
   const choose = useStore((s) => s.chooseCoachMode);
   return (
     <>
-      <Intro title="Trener" text="Er laget allerede på InnerCircle? Logg inn med trenerkoden. Ellers oppretter du laget her." />
+      <Intro title="Administrator" text="Er laget allerede på InnerCircle? Logg inn med administratorkoden. Ellers oppretter du laget her." />
       <div className="stagger" style={{ marginTop: 8 }}>
-        <ChevronRow title="Logg inn" sub="Jeg har en trenerkode" onClick={() => choose('join')} />
+        <ChevronRow title="Logg inn" sub="Jeg har en administratorkode" onClick={() => choose('join')} />
         <ChevronRow title="Opprett lag" sub="Laget er ikke på InnerCircle ennå" onClick={() => choose('create')} />
       </div>
     </>
@@ -393,10 +393,10 @@ function CoachNameField() {
 function CoachCode() {
   return (
     <>
-      <Intro title="Trenerkode" text="Trenerkoden får du av en annen trener på laget." />
+      <Intro title="Administratorkode" text="Administratorkoden får du av en annen administrator på laget." />
       <CoachNameField />
-      <Field label="Trenerkode">
-        <FlowInput field="coachCode" format={upper} autoFocus autoCapitalize="characters" placeholder="F.eks. SOLBERG-TRENER" />
+      <Field label="Administratorkode">
+        <FlowInput field="coachCode" format={upper} autoFocus autoCapitalize="characters" placeholder="F.eks. SOLBERG-ADMIN" />
       </Field>
     </>
   );
@@ -411,8 +411,8 @@ function CreateTeam() {
       <Field label="Lagets navn">
         <FlowInput field="teamName" autoFocus placeholder="F.eks. Solberg IL G12" />
       </Field>
-      <Field label="Trenerkode" hint="Bare for trenere. Del den med de andre trenerne, så kan de logge inn.">
-        <FlowInput field="newCoachCode" format={codeChars} autoCapitalize="characters" placeholder="F.eks. SOLBERG-TRENER" />
+      <Field label="Administratorkode" hint="Bare for administratorer. Del den med de andre administratorene, så kan de logge inn.">
+        <FlowInput field="newCoachCode" format={codeChars} autoCapitalize="characters" placeholder="F.eks. SOLBERG-ADMIN" />
       </Field>
       <Field label="Lagkode" hint="For spillere, foresatte og abonnenter.">
         <FlowInput field="newTeamCode" format={codeChars} autoCapitalize="characters" placeholder="F.eks. SOLBERG12" />
