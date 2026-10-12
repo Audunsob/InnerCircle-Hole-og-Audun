@@ -33,8 +33,15 @@ import {
   createTeam,
   currentSession,
   decideLink,
+  deleteMe,
+  deleteMedia,
+  deleteTeam,
+  deleteTeamFiles,
+  removeCoach,
   getTeam,
   joinTeam,
+  LastCoachError,
+  leaveTeam,
   myTeams,
   ParentLimitError,
   peekTeam,
@@ -158,6 +165,10 @@ export interface Actions {
   back: () => void;
   enterApp: (r: Role) => void;
   logout: () => void;
+  /** Leaves the current team (after asking) and goes back to the start screen. */
+  leaveTeam: () => void;
+  /** Deletes the account everywhere (after asking) and signs out. */
+  deleteAccount: () => void;
   /** Back to the start screen without signing out. */
   /** Signed in from somewhere other than the code box, e.g. the link in the email. */
   linkSignedIn: (id: string, email: string) => void;
@@ -253,6 +264,10 @@ export interface Actions {
   switchTeam: (teamId: string, role: MemberRole) => void;
   /** From the switchTeam sheet: checks the coach code and switches. */
   submitSwitchCode: () => Promise<void>;
+  /** Coach: removes another coach from the team (after asking). */
+  removeCoach: (userId: string) => void;
+  /** Coach: deletes the team for everyone, after typing its name in the deleteTeam sheet. */
+  deleteTeam: () => Promise<void>;
   /** Coach: approves a waiting player or parent, or removes the link. */
   decide: (userId: string, role: 'player' | 'parent', approve: boolean) => void;
 
@@ -423,6 +438,35 @@ export const useStore = create<Store>()((set, get) => {
     set((st) => ({ pcons: { ...(st.pcons || { step: 1, p: null, ps: null, err: '' }), ...p, err: p.err || '' } }));
   const setCons = (p: Partial<ParentConsentDraft>) => set((st) => ({ cons: { ...(st.cons || defCons()), ...p } }));
   const setPay = (p: Partial<PayForm>) => set((st) => ({ pay: { ...(st.pay || newPay()), ...p } }));
+
+  /** Files among these that no post uses (uploaded for a draft that wasn't published). */
+  const unpublished = (media: Media[]) => {
+    const used = new Set(s().data.posts.flatMap((p) => p.media.map((m) => m.src)));
+    return media.map((m) => m.src).filter((src) => !used.has(src));
+  };
+
+  /** Back to the start screen with nothing from the team left in memory. Does not sign out. */
+  const resetToStart = () => {
+    pending = [];
+    server = null;
+    set({
+      role: null,
+      team: null,
+      onboarded: {},
+      data: emptyTeam(),
+      version: 0,
+      screen: 'role',
+      flow: blankFlow(),
+      sheet: null,
+      payCtx: null,
+      pay: null,
+      tab: 'lag',
+      openMatch: null,
+      links: null,
+      coaches: null,
+    });
+    scrollTop();
+  };
 
   const enterApp = (r: Role) => {
     set((st) => ({
@@ -1000,26 +1044,49 @@ export const useStore = create<Store>()((set, get) => {
       go(map[st.screen] || 'role');
     },
     logout: () => {
-      pending = [];
-      server = null;
       void signOut();
-      set({
-        role: null,
-        team: null,
-        onboarded: {},
-        data: emptyTeam(),
-        version: 0,
-        screen: 'role',
-        flow: blankFlow(),
-        sheet: null,
-        payCtx: null,
-        pay: null,
-        tab: 'lag',
-        openMatch: null,
-        links: null,
-        coaches: null,
+      resetToStart();
+    },
+    leaveTeam: () => {
+      const st = s();
+      const team = st.team;
+      if (!team) return;
+      const name = teamName(st);
+      const body =
+        team.role === 'coach'
+          ? 'Du mister tilgangen som administrator. Laget og innleggene blir liggende for de andre.'
+          : team.role === 'sub'
+            ? 'Abonnementet stopper, og du ser ikke bildene mer. Det du allerede har betalt, går fortsatt til laget.'
+            : 'Du ser ikke bildene mer. Hjertene dine fjernes. Du kan bli med igjen senere med lagkoden.';
+      ask('Forlate ' + name + '?', body, 'Forlat laget', async () => {
+        try {
+          await leaveTeam(team.id, team.role);
+        } catch (e) {
+          if (e instanceof LastCoachError) return toast('Du er eneste administrator. Gi administratorkoden til en annen først.');
+          return toast(netError);
+        }
+        resetToStart();
+        toast('Du har forlatt ' + name);
       });
-      scrollTop();
+    },
+    deleteAccount: () => {
+      ask(
+        'Slette kontoen din?',
+        'Kontoen din, hjertene dine og koblingen til alle lag slettes for godt. Abonnementer stopper. Betalinger blir stående i lagets regnskap. Dette kan ikke angres.',
+        'Slett kontoen',
+        async () => {
+          try {
+            await deleteMe();
+          } catch (e) {
+            if (e instanceof LastCoachError)
+              return toast('Du er eneste administrator' + (e.team ? ' på ' + e.team : '') + '. Gi administratorkoden til en annen først.');
+            return toast(netError);
+          }
+          void signOut();
+          resetToStart();
+          toast('Kontoen din er slettet');
+        },
+      );
     },
     resendCode,
     checkPending,
@@ -1264,8 +1331,11 @@ export const useStore = create<Store>()((set, get) => {
     },
     openSheet: (sheet) => set({ sheet }),
     closeSheet: () => {
-      if (s().sheet === 'notifs') set({ seenNotifsAt: Date.now() });
-      set({ sheet: null, confirm: null, menuPost: null });
+      const st = s();
+      if (st.sheet === 'notifs') set({ seenNotifsAt: Date.now() });
+      // Closing the composer without publishing: drop the files uploaded for it.
+      if (st.sheet === 'composer' && st.draft) void deleteMedia(unpublished(st.draft.media));
+      set({ sheet: null, confirm: null, menuPost: null, ...(st.sheet === 'composer' ? { draft: null } : {}) });
     },
     doConfirm: () => {
       const c = s().confirm;
@@ -1493,7 +1563,12 @@ export const useStore = create<Store>()((set, get) => {
       }
       set((st) => ({ draft: st.draft ? { ...st.draft, loading: false, media: [...st.draft.media, ...out] } : st.draft }));
     },
-    removeMedia: (id) => set((st) => ({ draft: st.draft && { ...st.draft, media: st.draft.media.filter((m) => m.id !== id) } })),
+    removeMedia: (id) => {
+      const m = s().draft?.media.find((x) => x.id === id);
+      set((st) => ({ draft: st.draft && { ...st.draft, media: st.draft.media.filter((x) => x.id !== id) } }));
+      // Uploaded for this draft only: delete it now. Files already in a post go when the change is published.
+      if (m) void deleteMedia(unpublished([m]));
+    },
     publish: () => {
       const st = s();
       const dr = st.draft;
@@ -1502,6 +1577,9 @@ export const useStore = create<Store>()((set, get) => {
       if (!dr.text.trim() && !dr.media.length) return toast('Legg til tekst, bilder eller video først');
       const matchId = dr.type === 'kamp' && dr.matchId ? dr.matchId : null;
       if (dr.id) {
+        const kept = new Set(dr.media.map((m) => m.src));
+        const dropped = (st.data.posts.find((p) => p.id === dr.id)?.media || []).filter((m) => !kept.has(m.src));
+        void deleteMedia(dropped.map((m) => m.src));
         setData((d) => ({
           ...d,
           posts: d.posts.map((p) =>
@@ -1542,6 +1620,7 @@ export const useStore = create<Store>()((set, get) => {
     },
     deletePost: (id) =>
       ask('Slette innlegget?', 'Innlegget og bildene forsvinner for alle. Dette kan ikke angres.', 'Slett', () => {
+        void deleteMedia((s().data.posts.find((p) => p.id === id)?.media || []).map((m) => m.src));
         setData((d) => ({ ...d, posts: d.posts.filter((p) => p.id !== id) }));
         toast('Innlegget er slettet');
       }),
@@ -1730,6 +1809,39 @@ export const useStore = create<Store>()((set, get) => {
         return setForm({ busy: false, err: 'Koden stemmer ikke. Spør en annen administrator på laget.' });
       await openTeam(teamId, 'coach');
       setForm({ busy: false });
+    },
+    removeCoach: (userId) => {
+      const team = s().team;
+      const c = s().coaches?.find((x) => x.userId === userId);
+      if (!team || !c) return;
+      const who = c.name || c.email || 'Administratoren';
+      ask('Fjerne ' + who + '?', who + ' mister tilgangen som administrator på laget. Innleggene blir liggende.', 'Fjern', async () => {
+        set((st) => ({ coaches: (st.coaches || []).filter((x) => x.userId !== userId) }));
+        try {
+          await removeCoach(team.id, userId);
+          toast(who + ' er fjernet');
+        } catch {
+          toast(netError);
+        }
+        void loadLinks();
+      });
+    },
+    deleteTeam: async () => {
+      const st = s();
+      const team = st.team;
+      if (!team || team.role !== 'coach' || st.form.busy) return;
+      const name = teamName(st);
+      if (String(st.form.confirm || '').trim().toLowerCase() !== name.trim().toLowerCase())
+        return setForm({ err: 'Skriv navnet på laget nøyaktig som det står.' });
+      setForm({ busy: true, err: '' });
+      await deleteTeamFiles(team.id);
+      try {
+        await deleteTeam(team.id, name);
+      } catch {
+        return setForm({ busy: false, err: netError });
+      }
+      resetToStart();
+      toast(name + ' er slettet');
     },
     decide: (userId, role, approve) => {
       const team = s().team;

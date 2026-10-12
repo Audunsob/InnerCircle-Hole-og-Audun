@@ -29,6 +29,7 @@ const TITLES: Record<Exclude<SheetName, 'confirm'>, string> = {
   help: 'Vanlige spørsmål',
   editPlayer: 'Endre spiller',
   switchTeam: 'Administratorkode',
+  deleteTeam: 'Slett laget',
 };
 
 /** "2 bilder", "1 video", "2 bilder og 1 video". */
@@ -86,6 +87,7 @@ export function SheetHost() {
           {sheet === 'help' && <Help />}
           {sheet === 'editPlayer' && <EditPlayer />}
           {sheet === 'switchTeam' && <SwitchTeam />}
+          {sheet === 'deleteTeam' && <DeleteTeam />}
         </div>
       </div>
     </div>
@@ -1064,6 +1066,36 @@ function EditPlayer() {
       <FormError text={f.err} />
       <button type="submit" className="btn btn-primary btn-block">
         Lagre
+      </button>
+    </form>
+  );
+}
+
+/** Coach: delete the team for everyone, after typing its name. */
+function DeleteTeam() {
+  const st = useStore();
+  const f = st.form as Record<string, string | boolean | undefined>;
+  const name = teamName(st);
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    void st.deleteTeam();
+  };
+  return (
+    <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <p className="lead">
+        Alt på {name} slettes for alle: spillerlista, kamper, innlegg, bilder, videoer og samtykker. Alle mister tilgangen. Dette kan ikke angres.
+      </p>
+      <Field label={'Skriv «' + name + '» for å bekrefte'}>
+        <input
+          className="input"
+          value={String(f.confirm ?? '')}
+          onChange={(e) => st.setForm({ confirm: e.target.value, err: '' })}
+          autoComplete="off"
+        />
+      </Field>
+      <FormError text={f.err} />
+      <button type="submit" className="btn btn-primary btn-block" disabled={!!f.busy}>
+        {f.busy ? 'Sletter …' : 'Slett laget for alle'}
       </button>
     </form>
   );

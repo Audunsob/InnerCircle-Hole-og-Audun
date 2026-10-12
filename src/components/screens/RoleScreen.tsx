@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useStore } from '@/lib/store';
 import { ChevronRow, Icon } from '../ui';
 
@@ -80,6 +81,9 @@ export function RoleScreen() {
       <p className="note" style={{ position: 'relative', marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
         <Icon name="lock" size={16} style={{ color: 'var(--gold)' }} />
         Ingenting er offentlig. Bare de som er invitert, ser bildene.
+      </p>
+      <p className="note" style={{ position: 'relative', marginTop: 4, fontSize: 13 }}>
+        <Link href="/personvern">Personvern</Link> · <Link href="/vilkar">Vilkår</Link>
       </p>
     </div>
   );

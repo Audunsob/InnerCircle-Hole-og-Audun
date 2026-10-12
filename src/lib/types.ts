@@ -259,7 +259,8 @@ export type SheetName =
   | 'switchTeam'
   | 'teamSettings'
   | 'report'
-  | 'help';
+  | 'help'
+  | 'deleteTeam';
 
 export interface Draft {
   id: string | null;

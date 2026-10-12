@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { CKEYS, TYPES } from '@/lib/seed';
 import { firstName, fmtDate, fmtShort, initials, inviteLink, nextChargeText, rel, stripe } from '@/lib/format';
@@ -144,7 +145,45 @@ export function MinSide() {
       <button type="button" className="btn btn-secondary btn-block" style={{ marginTop: 24 }} onClick={st.logout}>
         Logg ut
       </button>
+
+      <AccountSection />
     </>
+  );
+}
+
+/** Privacy policy, terms, leaving the team and deleting the account. */
+function AccountSection() {
+  const leaveTeam = useStore((s) => s.leaveTeam);
+  const deleteAccount = useStore((s) => s.deleteAccount);
+  return (
+    <Section title="Konto og personvern">
+      <div className="list">
+        <Link href="/personvern" className="row-btn choice-row" style={{ color: 'inherit', textDecoration: 'none' }}>
+          <span className="row-text">
+            <span className="row-title">Personvern</span>
+          </span>
+          <span className="choice-arrow">
+            <Icon name="chevron_right" size={20} />
+          </span>
+        </Link>
+        <Link href="/vilkar" className="row-btn choice-row" style={{ color: 'inherit', textDecoration: 'none' }}>
+          <span className="row-text">
+            <span className="row-title">Vilkår</span>
+          </span>
+          <span className="choice-arrow">
+            <Icon name="chevron_right" size={20} />
+          </span>
+        </Link>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginTop: 8 }}>
+        <button type="button" className="link-btn quiet" style={{ padding: 0 }} onClick={leaveTeam}>
+          Forlat laget
+        </button>
+        <button type="button" className="link-btn quiet" style={{ padding: 0, color: 'var(--loss)' }} onClick={deleteAccount}>
+          Slett kontoen
+        </button>
+      </div>
+    </Section>
   );
 }
 
@@ -258,6 +297,11 @@ function CoachSections() {
                     {'Administrator siden ' + fmtDate(Date.parse(c.at)) + (c.signedAt ? ' · Har signert administratorreglene' : ' · Har ikke signert administratorreglene')}
                   </span>
                 </span>
+                {!c.me && (
+                  <button type="button" className="link-btn quiet" onClick={() => st.removeCoach(c.userId)}>
+                    Fjern
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -387,6 +431,19 @@ function CoachSections() {
             )}
           </>
         )}
+      </Section>
+      <Section title="Slett laget">
+        <p className="note">
+          Laget slettes for alle: spillerlista, kamper, innlegg, bilder og videoer. Alle mister tilgangen. Dette kan ikke angres.
+        </p>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          style={{ alignSelf: 'flex-start', color: 'var(--accent-ink)' }}
+          onClick={() => useStore.setState({ sheet: 'deleteTeam', form: { confirm: '', err: '' } })}
+        >
+          Slett laget
+        </button>
       </Section>
     </>
   );
