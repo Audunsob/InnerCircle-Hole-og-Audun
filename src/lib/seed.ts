@@ -131,4 +131,5 @@ export const ephemeral = (): EphemeralState => ({
   subView: 'all',
   pf: { name: '', err: '' },
   links: null,
+  coaches: null,
 });

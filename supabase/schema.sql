@@ -1,6 +1,6 @@
--- InnerCircle database setup, version 3 (accounts, approval of players and parents).
+-- InnerCircle database setup, version 4 (accounts, approval of players and parents, list of coaches).
 -- Paste all of this into Supabase: SQL Editor -> New query -> Run.
--- Safe to run more than once, and safe to run on top of version 1 and 2.
+-- Safe to run more than once, and safe to run on top of version 1, 2 and 3.
 
 create extension if not exists pgcrypto;
 
@@ -395,6 +395,33 @@ begin
   end if;
 end $$;
 
+-- ---------- Coaches ----------
+
+-- Everyone who is a coach on the team, with email, when they joined, and the name and time
+-- from the coach rules they signed (matched on email). Coaches only.
+create or replace function public.team_coaches(p_team uuid) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  t teams;
+begin
+  perform ic_uid();
+  if (ic_member(p_team, 'coach')).team_id is null then raise exception 'not_coach'; end if;
+  t := (select x from teams x where x.id = p_team);
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'userId', m.user_id, 'email', u.email, 'at', m.created_at, 'me', m.user_id = auth.uid(),
+      'name', c ->> 'name', 'signedAt', (c ->> 'at')::bigint) order by m.created_at)
+    from team_members m
+    left join auth.users u on u.id = m.user_id
+    left join lateral (
+      select x from jsonb_array_elements(coalesce(t.data -> 'coachConsents', '[]'::jsonb)) x
+      where u.email is not null and lower(x ->> 'contact') = lower(u.email)
+      order by (x ->> 'at')::bigint desc nulls last limit 1
+    ) cc(c) on true
+    where m.team_id = p_team and m.role = 'coach' and m.status = 'active'
+  ), '[]'::jsonb);
+end $$;
+
 -- ---------- Who may call what ----------
 
 revoke all on function public.ic_member(uuid, text) from public, anon, authenticated;
@@ -415,8 +442,10 @@ revoke all on function public.save_push(uuid, text, text, text, jsonb) from publ
 revoke all on function public.notify_targets(uuid, text) from public, anon;
 revoke all on function public.team_links(uuid) from public, anon;
 revoke all on function public.decide_link(uuid, uuid, text, boolean) from public, anon;
+revoke all on function public.team_coaches(uuid) from public, anon;
 grant execute on function public.team_links(uuid) to authenticated;
 grant execute on function public.decide_link(uuid, uuid, text, boolean) to authenticated;
+grant execute on function public.team_coaches(uuid) to authenticated;
 grant execute on function public.peek_team(text) to authenticated;
 grant execute on function public.join_team(text, text, text) to authenticated;
 grant execute on function public.create_team(text, text, text, jsonb) to authenticated;

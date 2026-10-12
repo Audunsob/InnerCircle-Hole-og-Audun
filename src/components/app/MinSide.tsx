@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { CKEYS, TYPES } from '@/lib/seed';
-import { firstName, fmtShort, initials, inviteLink, nextChargeText, rel, stripe } from '@/lib/format';
+import { firstName, fmtDate, fmtShort, initials, inviteLink, nextChargeText, rel, stripe } from '@/lib/format';
 import { codes, coachName, matchTitle, playerMap, priceText, teamName } from '@/lib/selectors';
 import { useStore } from '@/lib/store';
 import { disablePush, enablePush, needsHomeScreen, updatePushPrefs } from '@/lib/push';
@@ -163,6 +163,7 @@ function CoachSections() {
   useEffect(() => {
     void loadLinks();
   }, [loadLinks]);
+  const coaches = st.coaches || [];
   const linked = (id: string) => links.filter((l) => l.playerId === id && l.status === 'active');
   const codeRows = [
     { key: 'coach', label: 'Trenerkode', code: C.coach, hint: 'Kun for trenere. Andre trenere logger inn med denne.', copyLabel: 'Trenerkoden' },
@@ -193,6 +194,27 @@ function CoachSections() {
                 </div>
               );
             })}
+          </div>
+        </Section>
+      )}
+      {coaches.length > 0 && (
+        <Section title="Trenere" aside={<span className="note">{coaches.length}</span>}>
+          <div className="list">
+            {coaches.map((c) => (
+              <div key={c.userId} className="row" style={{ alignItems: 'flex-start', padding: '12px 0' }}>
+                <span className="row-text" style={{ gap: 2 }}>
+                  <span style={{ font: '500 16px var(--body)' }}>
+                    {(c.name || 'Navn mangler') + (c.me ? ' (deg)' : '')}
+                  </span>
+                  <span className="row-meta" style={{ wordBreak: 'break-all' }}>
+                    {c.email || 'Ukjent e-post'}
+                  </span>
+                  <span className="row-meta">
+                    {'Trener siden ' + fmtDate(Date.parse(c.at)) + (c.signedAt ? ' · Har signert trenerreglene' : ' · Har ikke signert trenerreglene')}
+                  </span>
+                </span>
+              </div>
+            ))}
           </div>
         </Section>
       )}

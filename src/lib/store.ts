@@ -42,6 +42,7 @@ import {
   saveTeam,
   sendCode,
   signOut,
+  teamCoaches,
   teamLinks,
   teamVersion,
   uploadMedia,
@@ -228,7 +229,7 @@ export interface Actions {
   removeSub: (id: string) => void;
   addPlayer: () => void;
   removePlayer: (id: string) => void;
-  /** Coach: loads the accounts linked to players. */
+  /** Coach: loads the accounts linked to players, and the other coaches. */
   loadLinks: () => Promise<void>;
   /** Coach: approves a waiting player or parent, or removes the link. */
   decide: (userId: string, role: 'player' | 'parent', approve: boolean) => void;
@@ -606,11 +607,10 @@ export const useStore = create<Store>()((set, get) => {
     const team = s().team;
     if (!team || team.role !== 'coach') return;
     linksAt = Date.now();
-    try {
-      set({ links: await teamLinks(team.id) });
-    } catch {
-      // Older database without approvals, or offline: leave the list as it was.
-    }
+    const [links, coaches] = await Promise.allSettled([teamLinks(team.id), teamCoaches(team.id)]);
+    // Older database without approvals or the coach list, or offline: leave the lists as they were.
+    if (links.status === 'fulfilled') set({ links: links.value });
+    if (coaches.status === 'fulfilled') set({ coaches: coaches.value });
   };
 
   const submitTeam = async () => {
@@ -903,6 +903,7 @@ export const useStore = create<Store>()((set, get) => {
         tab: 'lag',
         openMatch: null,
         links: null,
+        coaches: null,
       });
       scrollTop();
     },
