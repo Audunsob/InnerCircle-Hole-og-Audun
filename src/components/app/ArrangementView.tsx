@@ -23,7 +23,7 @@ export function ArrangementView() {
     <>
       <header className="app-header">
         <div className="app-title" style={{ flex: 1, minWidth: 0 }}>
-          Hendelser
+          Annet
         </div>
         {isCoach && (
           <button type="button" className="btn-outline" onClick={() => st.openAddEvent()}>
@@ -162,13 +162,13 @@ export function EventDetail({ id }: { id: string }) {
           }}
         >
           <Icon name="arrow_back" />
-          Hendelser
+          Annet
         </button>
       </header>
       <section className="card" style={{ padding: '18px 16px', display: 'flex', flexDirection: 'column', gap: 12, animation: 'ic-rise 320ms var(--ease-out) both' }}>
         <div className="eyebrow" style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--accent-ink)', textTransform: 'uppercase' }}>
           <Icon name={e.icon || 'event'} size={18} />
-          {e.kind}
+          {e.kind !== e.title ? e.kind : training ? 'Trening' : 'Hendelse'}
         </div>
         <h1 className="h1" style={{ margin: 0, overflowWrap: 'anywhere', ...(training?.cancelled ? { textDecoration: 'line-through' } : {}) }}>
           {e.title}
