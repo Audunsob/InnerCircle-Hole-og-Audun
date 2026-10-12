@@ -24,6 +24,7 @@ const TITLES: Record<Exclude<SheetName, 'confirm'>, string> = {
   method: 'Betalingsmåte',
   receipts: 'Kvitteringer',
   consentView: 'Samtykke',
+  switchTeam: 'Administratorkode',
 };
 
 /** "2 bilder", "1 video", "2 bilder og 1 video". */
@@ -74,6 +75,7 @@ export function SheetHost() {
           {sheet === 'method' && <Method />}
           {sheet === 'receipts' && <Receipts />}
           {sheet === 'consentView' && <ConsentView />}
+          {sheet === 'switchTeam' && <SwitchTeam />}
         </div>
       </div>
     </div>
@@ -851,5 +853,34 @@ function ConsentView() {
         </p>
       )}
     </>
+  );
+}
+
+/** Switching to a team where this account is a coach: the coach code is needed, as when logging in. */
+function SwitchTeam() {
+  const st = useStore();
+  const f = st.form as Record<string, string | boolean | undefined>;
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    void st.submitSwitchCode();
+  };
+  return (
+    <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <p className="note">Skriv administratorkoden for {String(f.teamName || 'laget')} for å gå inn som administrator.</p>
+      <Field label="Administratorkode">
+        <input
+          className="input"
+          value={String(f.code ?? '')}
+          onChange={(e) => st.setForm({ code: e.target.value, err: '' })}
+          autoCapitalize="characters"
+          autoComplete="off"
+          autoFocus
+        />
+      </Field>
+      <FormError text={f.err} />
+      <button type="submit" className="btn btn-primary btn-block" disabled={!!f.busy}>
+        Gå inn
+      </button>
+    </form>
   );
 }
