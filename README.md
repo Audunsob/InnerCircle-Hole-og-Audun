@@ -75,4 +75,3 @@ The app renders only in the browser (`next/dynamic` with `ssr: false`). Which te
 - Bricolage Grotesque (headings) and DM Sans (text) load through `next/font`. Icons use the Material Symbols Rounded stylesheet from Google Fonts.
 - The parent QR code on Min side comes from `api.qrserver.com`, so it only shows when online.
 - The parent role ("Foresatt") is still in the code, but the design no longer offers it on the start screen, so it can't be reached in the UI.
-- "Last inn eksempeldata" on a coach's Min side fills the team with 40 example players, posts and matches, replacing what is there for everyone.
