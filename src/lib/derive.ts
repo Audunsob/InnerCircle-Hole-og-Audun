@@ -1,6 +1,6 @@
 import { isPlayed, matchTime } from './format';
 import { postAllowed, shortTeam } from './selectors';
-import type { AppState, Match, Player, Post } from './types';
+import type { AppState, Match, Player, Post, TeamEvent } from './types';
 
 export type Outcome = 'S' | 'U' | 'T';
 
@@ -43,3 +43,19 @@ export function visiblePosts(s: Pick<AppState, 'role' | 'prof'>, posts: Post[], 
 
 export const matchPhotoCount = (allowed: Post[], matchId: string) =>
   allowed.filter((p) => p.matchId === matchId).reduce((n, p) => n + p.media.length, 0);
+
+export const eventTime = (e: TeamEvent) => new Date(e.date + 'T' + (e.time || '12:00')).getTime();
+
+/** When it's over: the end time if there is one, else two hours after the start. */
+const eventOver = (e: TeamEvent) =>
+  e.end && e.end > e.time ? new Date(e.date + 'T' + e.end).getTime() : eventTime(e) + 2 * 3600e3;
+
+/** Coming events soonest first, and past ones newest first. An event under way still counts as coming. */
+export function splitEvents(events: TeamEvent[] | undefined) {
+  const now = Date.now();
+  const sorted = [...(events || [])].sort((a, b) => eventTime(a) - eventTime(b));
+  return { upcoming: sorted.filter((e) => eventOver(e) >= now), past: sorted.filter((e) => eventOver(e) < now).reverse() };
+}
+
+/** "18:00" or "18:00–20:00". */
+export const eventHours = (e: TeamEvent) => (e.end ? e.time + '–' + e.end : e.time);
