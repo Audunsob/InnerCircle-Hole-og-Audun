@@ -173,7 +173,7 @@ function Composer() {
 
       {(dr.type === 'kamp' || !coach) && (
         <Field label="Kamp">
-          <select className="input" value={dr.matchId} onChange={(e) => st.setDraft({ matchId: e.target.value })}>
+          <select className="input" value={dr.matchId} onChange={(e) => st.setDraft(coach ? { matchId: e.target.value } : { matchId: e.target.value, eventId: '' })}>
             <option value="">{coach ? 'Ingen kamp valgt' : 'Velg kamp'}</option>
             {matches.map((m) => (
               <option key={m.id} value={m.id}>
@@ -186,8 +186,12 @@ function Composer() {
 
       {(dr.type !== 'kamp' || !coach) && events.length > 0 && (
         <Field label="Hendelse">
-          <select className="input" value={dr.eventId || ''} onChange={(e) => st.setDraft({ eventId: e.target.value })}>
-            <option value="">Ikke knyttet til en hendelse</option>
+          <select
+            className="input"
+            value={dr.eventId || ''}
+            onChange={(e) => st.setDraft(coach ? { eventId: e.target.value } : { eventId: e.target.value, matchId: '' })}
+          >
+            <option value="">{coach ? 'Ikke knyttet til en hendelse' : 'Velg hendelse'}</option>
             {events.map((ev) => (
               <option key={ev.id} value={ev.id}>
                 {ev.title + ' · ' + fmtDay(ev.date)}
