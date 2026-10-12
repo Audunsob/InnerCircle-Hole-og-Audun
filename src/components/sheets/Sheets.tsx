@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { download, firstName, fmtAcct, fmtDate, fmtDay, fmtShort, iso, krd, matchTime, NB, rel, stripe } from '@/lib/format';
+import { download, firstName, fmtAcct, fmtDate, fmtDay, fmtLong, fmtShort, iso, krd, matchTime, NB, rel, stripe } from '@/lib/format';
 import { CKEYS, TYPES } from '@/lib/seed';
 import { WEEK_ORDER, WEEKDAYS } from '@/lib/trainings';
 import { CONSENT_INK, CONSENT_LABEL, consentStatus, waitsForParent, matchTitle, playerMap, price, shortTeam, teamName } from '@/lib/selectors';
