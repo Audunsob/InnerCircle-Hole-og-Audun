@@ -17,7 +17,7 @@ import {
   waitsForParent,
 } from '@/lib/selectors';
 import { useStore } from '@/lib/store';
-import { disablePush, enablePush, needsHomeScreen, updatePushPrefs } from '@/lib/push';
+import { disablePush, enablePush, isStandalone, needsHomeScreen, phoneKind, updatePushPrefs } from '@/lib/push';
 import type { Consent, Player } from '@/lib/types';
 import { Icon, SwitchRow } from '../ui';
 import { MediaView } from '../MediaView';
@@ -570,6 +570,7 @@ function PushSection() {
   const on = !!st.pushOn;
   const nf = st.prof.sub.notify || { posts: true, matches: true, results: true };
   const homeScreen = needsHomeScreen();
+  const guide = !!phoneKind() && !isStandalone();
   if (!team) return null;
 
   const toggle = async () => {
@@ -597,10 +598,7 @@ function PushSection() {
   return (
     <Section title="Varsler">
       {homeScreen ? (
-        <p className="note">
-          På iPhone må appen ligge på Hjem-skjermen for å få varsler. Trykk på Del-knappen i Safari, velg «Legg til på Hjem-skjerm», og åpne
-          appen derfra.
-        </p>
+        <p className="note">På iPhone må appen ligge på Hjem-skjermen for å få varsler. Legg den til, og åpne appen derfra.</p>
       ) : (
         <div>
           <SwitchRow label="Varsler på denne mobilen" sub="Du får beskjed når administratoren legger ut noe" on={on} onToggle={toggle} disabled={busy} />
@@ -612,6 +610,11 @@ function PushSection() {
             </>
           )}
         </div>
+      )}
+      {guide && (
+        <button type="button" className="btn btn-secondary btn-block" style={{ marginTop: 12 }} onClick={() => st.openSheet('homeScreen')}>
+          Slik legger du appen på Hjem-skjermen
+        </button>
       )}
     </Section>
   );
