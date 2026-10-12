@@ -255,6 +255,7 @@ export type SheetName =
   | 'method'
   | 'receipts'
   | 'consentView'
+  | 'editPlayer'
   | 'switchTeam'
   | 'teamSettings'
   | 'report'
