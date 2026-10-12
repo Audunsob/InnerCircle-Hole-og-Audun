@@ -51,7 +51,7 @@ import {
   type TeamPayload,
 } from './supabase';
 import { scoreTitle } from './derive';
-import { disablePush, needsHomeScreen } from './push';
+import { disablePush, isStandalone, phoneKind } from './push';
 import { coachName, matchTitle, price, shortTeam, teamName } from './selectors';
 
 const MAX_VIDEO = 50 * 1024 * 1024;
@@ -432,14 +432,9 @@ export const useStore = create<Store>()((set, get) => {
       onboarded: { ...st.onboarded, [r]: true },
     }));
     scrollTop();
-    // iPhone only gives notifications to apps on the home screen. Say so once, the first time in.
-    if (!s().homeTip && needsHomeScreen()) {
-      set({ homeTip: true });
-      inform(
-        'Få varsler på iPhone',
-        'For å få beskjed når det kommer nye bilder, må appen ligge på Hjem-skjermen. Trykk på Del-knappen i Safari, velg «Legg til på Hjem-skjerm», og åpne appen derfra.',
-      );
-    }
+    // Everyone on a phone gets the home screen guide once, the first time in. iPhone only gives
+    // notifications to apps on the home screen.
+    if (!s().homeTip && phoneKind() && !isStandalone()) set({ homeTip: true, sheet: 'homeScreen' });
   };
 
   // ---------- Onboarding steps ----------
