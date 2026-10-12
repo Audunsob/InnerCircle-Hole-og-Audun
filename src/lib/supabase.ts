@@ -73,6 +73,13 @@ export interface Membership {
   status?: 'pending' | 'active';
 }
 
+/** Thrown when the only coach on a team tries to leave it or delete their account. team: the team's name, when known. */
+export class LastCoachError extends Error {
+  constructor(message: string, public team: string | null) {
+    super(message);
+  }
+}
+
 /** Thrown when a code is already used by another team. */
 export class CodeTakenError extends Error {}
 
@@ -82,6 +89,8 @@ async function rpc<T>(fn: string, args: Record<string, unknown> = {}): Promise<T
     if (/code_taken/.test(error.message)) throw new CodeTakenError(error.message);
     if (/player_taken/.test(error.message)) throw new PlayerTakenError(error.message);
     if (/parent_limit/.test(error.message)) throw new ParentLimitError(error.message);
+    const last = /last_coach(?::(.*))?/.exec(error.message);
+    if (last) throw new LastCoachError(error.message, last[1]?.trim() || null);
     throw new Error(error.message);
   }
   return data as T;
@@ -180,6 +189,11 @@ export const teamCoaches = (teamId: string) => rpc<TeamCoach[]>('team_coaches', 
 export const decideLink = (teamId: string, userId: string, role: 'player' | 'parent', approve: boolean) =>
   rpc<void>('decide_link', { p_team: teamId, p_user: userId, p_role: role, p_approve: approve });
 
+/** Leaves the team in this role. The only coach can't (LastCoachError). */
+export const leaveTeam = (teamId: string, role: MemberRole) => rpc<void>('leave_team', { p_team: teamId, p_role: role });
+/** Deletes the signed-in account everywhere. Not while it is the only coach on a team (LastCoachError). */
+export const deleteMe = () => rpc<void>('delete_me');
+
 /** Saves if `version` is still current; otherwise returns ok=false and the newer document. */
 export const saveTeam = (teamId: string, role: MemberRole, version: number, data: TeamData) =>
   rpc<TeamPayload>('save_team', { p_team: teamId, p_role: role, p_version: version, p_data: data });
@@ -259,6 +273,16 @@ export function cachedMediaUrl(src: string): string | null {
   if (!src.startsWith(STORAGE_PREFIX)) return src;
   const hit = signed.get(src.slice(STORAGE_PREFIX.length));
   return hit && hit.exp > Date.now() ? hit.url : null;
+}
+
+/** Deletes stored files (coaches only). Plain URLs and data URLs are ignored. Never throws. */
+export async function deleteMedia(srcs: (string | undefined)[]) {
+  const paths = srcs.filter((x): x is string => !!x && x.startsWith(STORAGE_PREFIX)).map((x) => x.slice(STORAGE_PREFIX.length));
+  if (!paths.length) return;
+  for (const p of paths) signed.delete(p);
+  try {
+    await db().storage.from('media').remove(paths);
+  } catch {}
 }
 
 // ---------- Push notifications ----------
