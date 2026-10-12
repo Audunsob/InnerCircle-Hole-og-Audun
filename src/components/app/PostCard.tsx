@@ -66,7 +66,7 @@ export function PostCard({ post, P }: { post: Post; P: Record<string, Player> })
         </span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ font: '600 15px/1.3 var(--body)' }}>
-            {post.author} <span style={{ fontWeight: 400, color: 'var(--muted)' }}>{post.authorRole}</span>
+            {post.author} <span style={{ fontWeight: 400, color: 'var(--muted)' }}>{post.authorRole === 'Trener' ? 'Administrator' : post.authorRole}</span>
           </div>
           <div style={{ font: '400 13px/1.3 var(--body)', color: 'var(--muted)' }}>
             {typeLabel} · {rel(post.ts)}

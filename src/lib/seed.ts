@@ -12,7 +12,7 @@ import type {
 
 export const LS_KEY = 'innercircle.v3';
 export const DEFAULT_TEAM = 'Laget';
-export const COACH = 'Trener';
+export const COACH = 'Administrator';
 export const DEFAULT_PRICE = 20;
 
 export const TYPES: Record<PostType, { label: string }> = {
@@ -20,12 +20,12 @@ export const TYPES: Record<PostType, { label: string }> = {
   trening: { label: 'Trening' },
   beskjed: { label: 'Beskjed' },
 };
-export const ROLES: Record<Role, string> = { player: 'Spiller', parent: 'Foresatt', sub: 'Abonnent', coach: 'Trener' };
+export const ROLES: Record<Role, string> = { player: 'Spiller', parent: 'Foresatt', sub: 'Abonnent', coach: 'Administrator' };
 export const CKEYS: [ConsentKey, string, string][] = [
   ['photo', 'Bilder', 'Bilder fra kamper og treninger'],
   ['video', 'Videoklipp', 'Korte klipp fra kamp og trening'],
   ['name', 'Fornavn i tekst', 'Fornavnet kan stå i teksten til et innlegg'],
-  ['tag', 'Merking i innlegg', 'Treneren kan merke barnet, så dere finner bildene'],
+  ['tag', 'Merking i innlegg', 'Administratoren kan merke barnet, så dere finner bildene'],
 ];
 
 /** A new team with nothing in it yet. */
@@ -131,5 +131,6 @@ export const ephemeral = (): EphemeralState => ({
   subView: 'all',
   pf: { name: '', err: '' },
   links: null,
+  coaches: null,
   consentPlayer: null,
 });

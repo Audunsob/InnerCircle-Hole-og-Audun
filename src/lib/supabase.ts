@@ -49,6 +49,16 @@ export interface TeamLink {
   at: string;
 }
 
+/** A coach on the team, for the other coaches. name and signedAt come from the coach rules they signed. */
+export interface TeamCoach {
+  userId: string;
+  email: string | null;
+  at: string;
+  me: boolean;
+  name: string | null;
+  signedAt: number | null;
+}
+
 /** Thrown when the player is already linked to another account. */
 export class PlayerTakenError extends Error {}
 /** Thrown when the player already has two parents linked. */
@@ -166,6 +176,7 @@ export const getTeam = (teamId: string, role: MemberRole) => rpc<TeamPayload>('g
 export const teamVersion = (teamId: string) => rpc<number | null>('team_version', { p_team: teamId });
 
 export const teamLinks = (teamId: string) => rpc<TeamLink[]>('team_links', { p_team: teamId });
+export const teamCoaches = (teamId: string) => rpc<TeamCoach[]>('team_coaches', { p_team: teamId });
 export const decideLink = (teamId: string, userId: string, role: 'player' | 'parent', approve: boolean) =>
   rpc<void>('decide_link', { p_team: teamId, p_user: userId, p_role: role, p_approve: approve });
 

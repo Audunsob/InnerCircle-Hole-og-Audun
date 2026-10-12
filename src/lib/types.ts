@@ -1,4 +1,4 @@
-import type { TeamLink } from './supabase';
+import type { TeamCoach, TeamLink } from './supabase';
 
 export type Role = 'player' | 'parent' | 'sub' | 'coach';
 export type Theme = 'light' | 'dark';
@@ -310,6 +310,8 @@ export interface EphemeralState {
   pf: { name: string; err: string };
   /** Coach: accounts linked to players, waiting or approved. Null until loaded. */
   links: TeamLink[] | null;
+  /** Coach: all coaches on the team. Null until loaded. */
+  coaches: TeamCoach[] | null;
   /** Coach: the player whose consent form is open. */
   consentPlayer: string | null;
 }

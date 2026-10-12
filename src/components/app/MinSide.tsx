@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { CKEYS, TYPES } from '@/lib/seed';
-import { firstName, fmtShort, initials, inviteLink, nextChargeText, rel, stripe } from '@/lib/format';
+import { firstName, fmtDate, fmtShort, initials, inviteLink, nextChargeText, rel, stripe } from '@/lib/format';
 import { CONSENT_INK, CONSENT_LABEL, codes, coachName, consentStatus, matchTitle, playerMap, priceText, teamName } from '@/lib/selectors';
 import { useStore } from '@/lib/store';
 import { disablePush, enablePush, needsHomeScreen, updatePushPrefs } from '@/lib/push';
@@ -88,7 +88,7 @@ export function MinSide() {
     role === 'coach' ? coachName(st) : role === 'player' ? me?.name || 'Spiller' : role === 'parent' ? child?.parent.name || 'Foresatt' : prof.sub.name || 'Abonnent';
   const subtitle =
     role === 'coach'
-      ? 'Trener · ' + team
+      ? 'Administrator · ' + team
       : role === 'player'
         ? 'Spiller · ' + team
         : role === 'parent'
@@ -165,9 +165,10 @@ function CoachSections() {
   useEffect(() => {
     void loadLinks();
   }, [loadLinks]);
+  const coaches = st.coaches || [];
   const linked = (id: string) => links.filter((l) => l.playerId === id && l.status === 'active');
   const codeRows = [
-    { key: 'coach', label: 'Trenerkode', code: C.coach, hint: 'Kun for trenere. Andre trenere logger inn med denne.', copyLabel: 'Trenerkoden' },
+    { key: 'coach', label: 'Administratorkode', code: C.coach, hint: 'Kun for administratorer. Andre administratorer logger inn med denne.', copyLabel: 'Administratorkoden' },
     { key: 'team', label: 'Lagkode', code: C.team, hint: 'For spillere, foresatte og abonnenter.', copyLabel: 'Lagkoden' },
   ];
   return (
@@ -195,6 +196,27 @@ function CoachSections() {
                 </div>
               );
             })}
+          </div>
+        </Section>
+      )}
+      {coaches.length > 0 && (
+        <Section title="Administratorer" aside={<span className="note">{coaches.length}</span>}>
+          <div className="list">
+            {coaches.map((c) => (
+              <div key={c.userId} className="row" style={{ alignItems: 'flex-start', padding: '12px 0' }}>
+                <span className="row-text" style={{ gap: 2 }}>
+                  <span style={{ font: '500 16px var(--body)' }}>
+                    {(c.name || 'Navn mangler') + (c.me ? ' (deg)' : '')}
+                  </span>
+                  <span className="row-meta" style={{ wordBreak: 'break-all' }}>
+                    {c.email || 'Ukjent e-post'}
+                  </span>
+                  <span className="row-meta">
+                    {'Administrator siden ' + fmtDate(Date.parse(c.at)) + (c.signedAt ? ' · Har signert administratorreglene' : ' · Har ikke signert administratorreglene')}
+                  </span>
+                </span>
+              </div>
+            ))}
           </div>
         </Section>
       )}
@@ -347,8 +369,8 @@ function PlayerSections({ me }: { me: Player }) {
   const text = c
     ? 'Du har signert samtykket' + (c.adult === false ? ', og en foresatt har også signert' : '') + '. Du kan ombestemme deg når som helst.'
     : me.declined === 'parent'
-      ? 'En foresatt har ikke godkjent bilder. Trenerne passer på at du ikke er med på bildene.'
-      : 'Du er ikke med på bilder. Trenerne passer på at du ikke er med på bildene.';
+      ? 'En foresatt har ikke godkjent bilder. Administratorene passer på at du ikke er med på bildene.'
+      : 'Du er ikke med på bilder. Administratorene passer på at du ikke er med på bildene.';
   return (
     <>
       <Section title="Samtykke">
@@ -563,7 +585,7 @@ function PushSection() {
         </p>
       ) : (
         <div>
-          <SwitchRow label="Varsler på denne mobilen" sub="Du får beskjed når treneren legger ut noe" on={on} onToggle={toggle} disabled={busy} />
+          <SwitchRow label="Varsler på denne mobilen" sub="Du får beskjed når administratoren legger ut noe" on={on} onToggle={toggle} disabled={busy} />
           {on && (
             <>
               <SwitchRow label="Nye innlegg" sub="Bilder, video og beskjeder" on={nf.posts} onToggle={setPref('posts')} />
