@@ -240,7 +240,8 @@ export type SheetName =
   | 'subscribers'
   | 'method'
   | 'receipts'
-  | 'consentView';
+  | 'consentView'
+  | 'editPlayer';
 
 export interface Draft {
   id: string | null;

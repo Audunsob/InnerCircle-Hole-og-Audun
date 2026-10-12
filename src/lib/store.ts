@@ -211,8 +211,10 @@ export interface Actions {
   showMap: (m: Match) => void;
 
   // Coach
-  openAddMatch: () => void;
+  /** Opens the match form, empty or with an existing match to change. */
+  openAddMatch: (id?: string) => void;
   saveMatch: () => void;
+  deleteMatch: (id: string) => void;
   openResult: (id: string) => void;
   stepResult: (k: 'us' | 'them', dir: number) => void;
   saveResult: () => void;
@@ -230,6 +232,8 @@ export interface Actions {
   savePayout: () => void;
   removeSub: (id: string) => void;
   addPlayer: () => void;
+  openEditPlayer: (id: string) => void;
+  savePlayer: () => void;
   removePlayer: (id: string) => void;
   /** Coach: loads the accounts linked to players, and the other coaches. */
   loadLinks: () => Promise<void>;
@@ -365,6 +369,12 @@ export const useStore = create<Store>()((set, get) => {
         body: JSON.stringify({ teamId: team.id, kind, title, body }),
       });
     } catch {}
+  };
+
+  /** Adds a line to the team's list of notifications (the bell). */
+  const addNotif = (text: string) => {
+    const now = Date.now();
+    setData((d) => ({ ...d, notifs: [{ id: 'n' + now, text, ts: now, read: false, from: 'coach' as const }, ...d.notifs].slice(0, 100) }));
   };
 
   const setForm = (p: AppState['form']) => set((st) => ({ form: { ...st.form, ...p } }));
@@ -1228,7 +1238,26 @@ export const useStore = create<Store>()((set, get) => {
 
     // ---------- Coach ----------
 
-    openAddMatch: () =>
+    openAddMatch: (id) => {
+      const m = id ? s().data.matches.find((x) => x.id === id) : undefined;
+      if (m)
+        return set({
+          sheet: 'addMatch',
+          form: {
+            matchId: m.id,
+            note: m.note || '',
+            title: m.title || '',
+            opp: m.opp,
+            date: m.date,
+            meet: m.meet || '',
+            time: m.time,
+            venue: m.venue,
+            home: m.home,
+            kind: m.kind,
+            featured: !!m.featured,
+            err: '',
+          },
+        });
       set({
         sheet: 'addMatch',
         form: {
@@ -1244,7 +1273,8 @@ export const useStore = create<Store>()((set, get) => {
           featured: false,
           err: '',
         },
-      }),
+      });
+    },
     saveMatch: () => {
       const f = s().form as Record<string, string | boolean>;
       const title = String(f.title || '').trim();
@@ -1254,8 +1284,9 @@ export const useStore = create<Store>()((set, get) => {
       if (!f.date) return setForm({ err: 'Velg dato for kampen.' });
       if (!f.meet && !f.time) return setForm({ err: 'Legg inn oppmøtetid.' });
       if (!venue) return setForm({ err: 'Skriv inn hvor kampen spilles.' });
+      const old = f.matchId ? s().data.matches.find((x) => x.id === f.matchId) : undefined;
       const m: Match = {
-        id: 'm' + Date.now(),
+        id: old?.id || 'm' + Date.now(),
         title,
         opp,
         date: String(f.date),
@@ -1266,14 +1297,48 @@ export const useStore = create<Store>()((set, get) => {
         kind: f.kind === 'Cup' ? 'Cup' : 'Serie',
         featured: !!f.featured,
         note: String(f.note || '').trim(),
-        us: null,
-        them: null,
+        us: old ? old.us : null,
+        them: old ? old.them : null,
       };
-      setData((d) => ({ ...d, matches: [...d.matches.map((x) => (m.featured ? { ...x, featured: false } : x)), m] }));
+      const unfeature = (x: Match) => (m.featured && x.id !== m.id ? { ...x, featured: false } : x);
+      if (old) {
+        setData((d) => ({ ...d, matches: d.matches.map((x) => (x.id === m.id ? m : unfeature(x))) }));
+        set({ sheet: null });
+        toast('Kampen er endret');
+        // Only a new time or place is worth a notification; a typo fix is not.
+        if (old.date !== m.date || old.time !== m.time || (old.meet || '') !== m.meet || old.venue !== m.venue) {
+          const text = 'Endret kamp: ' + matchTitle(s(), m) + ', ' + fmtDay(m.date) + ' kl. ' + m.time + ', ' + m.venue;
+          addNotif(text);
+          void notify('matches', teamName(s()), text);
+        }
+        return;
+      }
+      setData((d) => ({ ...d, matches: [...d.matches.map(unfeature), m] }));
       set({ sheet: null, tab: 'kamper', kampTab: isPlayed(m) ? 'played' : 'upcoming', openMatch: null });
       scrollTop();
       toast(matchTitle(s(), m) + ' er lagt til');
-      void notify('matches', teamName(s()), 'Ny kamp: ' + matchTitle(s(), m) + ', ' + fmtDay(m.date) + ' kl. ' + m.time);
+      const text = 'Ny kamp: ' + matchTitle(s(), m) + ', ' + fmtDay(m.date) + ' kl. ' + m.time;
+      addNotif(text);
+      void notify('matches', teamName(s()), text);
+    },
+    deleteMatch: (id) => {
+      const m = s().data.matches.find((x) => x.id === id);
+      if (!m) return;
+      const n = s().data.posts.filter((p) => p.matchId === id).length;
+      ask(
+        'Slette kampen?',
+        matchTitle(s(), m) + ' forsvinner fra kamplista for alle.' + (n ? ' Innleggene fra kampen blir liggende i bildestrømmen.' : ''),
+        'Slett kamp',
+        () => {
+          setData((d) => ({
+            ...d,
+            matches: d.matches.filter((x) => x.id !== id),
+            posts: d.posts.map((p) => (p.matchId === id ? { ...p, matchId: null } : p)),
+          }));
+          set({ openMatch: null });
+          toast('Kampen er slettet');
+        },
+      );
     },
     openResult: (id) => {
       const m = s().data.matches.find((x) => x.id === id);
@@ -1293,7 +1358,10 @@ export const useStore = create<Store>()((set, get) => {
       set({ sheet: null });
       toast('Resultatet er lagret');
       const rm = s().data.matches.find((m) => m.id === f.matchId);
-      if (rm) void notify('results', teamName(s()), 'Resultat: ' + scoreTitle(s(), rm));
+      if (rm) {
+        addNotif('Resultat: ' + scoreTitle(s(), rm));
+        void notify('results', teamName(s()), 'Resultat: ' + scoreTitle(s(), rm));
+      }
     },
     openComposer: (postId) => {
       const st = s();
@@ -1428,6 +1496,52 @@ export const useStore = create<Store>()((set, get) => {
       setData((d) => ({ ...d, players: [...d.players, mkPlayer(d.players, name)] }));
       setPf({ name: '', err: '' });
       toast(name + ' er lagt til');
+    },
+    openEditPlayer: (id) => {
+      const p = s().data.players.find((x) => x.id === id);
+      if (!p) return;
+      set({
+        sheet: 'editPlayer',
+        form: {
+          playerId: id,
+          name: p.name,
+          num: p.num ? String(p.num) : '',
+          born: p.born ? String(p.born) : '',
+          parentName: p.parent?.name || '',
+          parentPhone: p.parent?.phone || '',
+          parentEmail: p.parent?.email || '',
+          err: '',
+        },
+      });
+    },
+    savePlayer: () => {
+      const f = s().form;
+      const id = String(f.playerId || '');
+      const p = s().data.players.find((x) => x.id === id);
+      if (!p) return set({ sheet: null });
+      const name = String(f.name || '').trim().replace(/\s+/g, ' ');
+      const numText = String(f.num || '').trim();
+      const bornText = String(f.born || '').trim();
+      const num = numText ? parseInt(numText, 10) : 0;
+      const born = bornText ? parseInt(bornText, 10) : null;
+      const year = new Date().getFullYear();
+      const parentEmail = String(f.parentEmail || '').trim().toLowerCase();
+      if (name.split(' ').length < 2) return setForm({ err: 'Skriv inn fornavn og etternavn.' });
+      if (s().data.players.some((x) => x.id !== id && x.name.toLowerCase() === name.toLowerCase()))
+        return setForm({ err: name + ' står allerede på lista.' });
+      if (numText && (!/^\d+$/.test(numText) || num > 99)) return setForm({ err: 'Draktnummeret må være mellom 0 og 99.' });
+      if (bornText && (!/^\d{4}$/.test(bornText) || born! < year - 30 || born! > year - 3))
+        return setForm({ err: 'Skriv fødselsåret med fire sifre, for eksempel ' + (year - 12) + '.' });
+      if (parentEmail && !isEmail(parentEmail)) return setForm({ err: 'E-posten til foresatt ser ikke riktig ut.' });
+      const taken = numText ? s().data.players.find((x) => x.id !== id && x.num === num) : undefined;
+      updPlayer(id, {
+        name,
+        num,
+        born,
+        parent: { name: String(f.parentName || '').trim(), phone: String(f.parentPhone || '').trim(), email: parentEmail },
+      });
+      set({ sheet: null });
+      toast(taken ? 'Lagret. Obs: ' + firstName(taken.name) + ' har også nummer ' + num + '.' : 'Endringene er lagret');
     },
     removePlayer: (id) => {
       const p = s().data.players.find((x) => x.id === id);

@@ -24,6 +24,7 @@ const TITLES: Record<Exclude<SheetName, 'confirm'>, string> = {
   method: 'Betalingsmåte',
   receipts: 'Kvitteringer',
   consentView: 'Samtykke',
+  editPlayer: 'Endre spiller',
 };
 
 /** "2 bilder", "1 video", "2 bilder og 1 video". */
@@ -38,6 +39,7 @@ export function SheetHost() {
   const sheet = useStore((s) => s.sheet);
   const confirm = useStore((s) => s.confirm);
   const editing = useStore((s) => !!s.draft?.id);
+  const editingMatch = useStore((s) => s.sheet === 'addMatch' && !!s.form.matchId);
   const closeSheet = useStore((s) => s.closeSheet);
 
   useEffect(() => {
@@ -48,7 +50,7 @@ export function SheetHost() {
   }, [sheet, closeSheet]);
 
   if (!sheet) return null;
-  const title = sheet === 'confirm' ? confirm?.title || '' : sheet === 'composer' && editing ? 'Rediger innlegg' : TITLES[sheet];
+  const title = sheet === 'confirm' ? confirm?.title || '' : sheet === 'composer' && editing ? 'Rediger innlegg' : editingMatch ? 'Endre kamp' : TITLES[sheet];
 
   return (
     <div className="sheet-wrap">
@@ -74,6 +76,7 @@ export function SheetHost() {
           {sheet === 'method' && <Method />}
           {sheet === 'receipts' && <Receipts />}
           {sheet === 'consentView' && <ConsentView />}
+          {sheet === 'editPlayer' && <EditPlayer />}
         </div>
       </div>
     </div>
@@ -366,6 +369,7 @@ function AddMatch() {
   const form = useStore((s) => s.form);
   const setForm = useStore((s) => s.setForm);
   const saveMatch = useStore((s) => s.saveMatch);
+  const deleteMatch = useStore((s) => s.deleteMatch);
   const f = form as Record<string, string | boolean | undefined>;
   const bind = (k: string) => ({
     value: String(f[k] ?? ''),
@@ -415,8 +419,13 @@ function AddMatch() {
       </Field>
       <FormError text={f.err} />
       <button type="submit" className="btn btn-primary btn-block">
-        Legg til kamp
+        {f.matchId ? 'Lagre endringer' : 'Legg til kamp'}
       </button>
+      {f.matchId && (
+        <button type="button" className="link-btn" style={{ color: 'var(--accent-ink)' }} onClick={() => deleteMatch(String(f.matchId))}>
+          Slett kampen
+        </button>
+      )}
     </form>
   );
 }
@@ -846,5 +855,52 @@ function ConsentView() {
         </p>
       )}
     </>
+  );
+}
+
+/** Coach: change a player's name, shirt number, birth year and the parent's contact details. */
+function EditPlayer() {
+  const form = useStore((s) => s.form);
+  const setForm = useStore((s) => s.setForm);
+  const savePlayer = useStore((s) => s.savePlayer);
+  const f = form as Record<string, string | undefined>;
+  const bind = (k: string) => ({
+    value: String(f[k] ?? ''),
+    onChange: (e: { target: { value: string } }) => setForm({ [k]: e.target.value, err: '' }),
+  });
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    savePlayer();
+  };
+  return (
+    <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <Field label="Navn">
+        <input className="input" {...bind('name')} autoComplete="off" />
+      </Field>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <Field label="Draktnummer">
+          <input className="input" inputMode="numeric" {...bind('num')} placeholder="F.eks. 7" />
+        </Field>
+        <Field label="Fødselsår" hint="Spillere fra 13 år kan logge inn selv.">
+          <input className="input" inputMode="numeric" {...bind('born')} placeholder={'F.eks. ' + (new Date().getFullYear() - 12)} />
+        </Field>
+      </div>
+      <h3 className="field-label" style={{ margin: '4px 0 -8px' }}>
+        Foresatt
+      </h3>
+      <Field label="Navn">
+        <input className="input" {...bind('parentName')} autoComplete="off" />
+      </Field>
+      <Field label="Telefon">
+        <input className="input" type="tel" inputMode="tel" {...bind('parentPhone')} autoComplete="off" />
+      </Field>
+      <Field label="E-post">
+        <input className="input" type="email" inputMode="email" {...bind('parentEmail')} autoComplete="off" />
+      </Field>
+      <FormError text={f.err} />
+      <button type="submit" className="btn btn-primary btn-block">
+        Lagre
+      </button>
+    </form>
   );
 }

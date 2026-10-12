@@ -294,6 +294,9 @@ function CoachSections() {
                       </span>
                     ))}
                   </span>
+                  <button type="button" className="link-btn quiet" onClick={() => st.openEditPlayer(p.id)}>
+                    Endre
+                  </button>
                   <button type="button" className="link-btn quiet" onClick={() => st.removePlayer(p.id)}>
                     Fjern
                   </button>
