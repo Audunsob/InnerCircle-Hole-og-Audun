@@ -3,7 +3,19 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { CKEYS, TYPES } from '@/lib/seed';
 import { firstName, fmtDate, fmtShort, initials, inviteLink, nextChargeText, rel, stripe } from '@/lib/format';
-import { CONSENT_INK, CONSENT_LABEL, codes, coachName, consentStatus, matchTitle, playerMap, priceText, teamName } from '@/lib/selectors';
+import {
+  CONSENT_INK,
+  CONSENT_LABEL,
+  codes,
+  coachName,
+  consentStatus,
+  hasConsent,
+  matchTitle,
+  playerMap,
+  priceText,
+  teamName,
+  waitsForParent,
+} from '@/lib/selectors';
 import { useStore } from '@/lib/store';
 import { disablePush, enablePush, isStandalone, needsHomeScreen, phoneKind, updatePushPrefs } from '@/lib/push';
 import type { Consent, Player } from '@/lib/types';
@@ -367,9 +379,11 @@ function PlayerSections({ me }: { me: Player }) {
   const c = me.consent;
   const link = inviteLink(codes(st).team, me);
   const nVia = st.data.subs.filter((x) => x.via === me.id).length;
-  const text = c
-    ? 'Du har signert samtykket' + (c.adult === false ? ', og en foresatt har også signert' : '') + '. Du kan ombestemme deg når som helst.'
-    : me.declined === 'parent'
+  const text = waitsForParent(me)
+    ? 'Du har signert. En foresatt må også si ja fra sin egen telefon: de åpner appen med lagkoden og velger «Jeg er foresatt». Til da er du ikke med på bilder.'
+    : c
+      ? 'Du har signert samtykket' + (c.adult === false ? ', og en foresatt har også sagt ja' : '') + '. Du kan ombestemme deg når som helst.'
+      : me.declined === 'parent'
       ? 'En foresatt har ikke godkjent bilder. Administratorene passer på at du ikke er med på bildene.'
       : 'Du er ikke med på bilder. Administratorene passer på at du ikke er med på bildene.';
   return (
@@ -400,6 +414,8 @@ function ParentSections({ child }: { child: Player }) {
   const { data, theme } = st;
   const kf = firstName(child.name);
   const cc = child.consent;
+  const waiting = waitsForParent(child);
+  const given = hasConsent(child);
   const nOn = CKEYS.filter(([k]) => cc?.[k]).length;
   const age = child.born ? new Date().getFullYear() - child.born : null;
   const link = inviteLink(codes(st).team, child);
@@ -412,13 +428,14 @@ function ParentSections({ child }: { child: Player }) {
       <Section
         title={'Samtykke for ' + kf}
         aside={
-          <span style={{ font: '600 14px var(--body)', color: cc ? 'var(--ok)' : 'var(--accent-ink)' }}>
-            {!cc ? 'Ikke gitt' : nOn === 4 ? 'Gitt' : 'Delvis'}
+          <span style={{ font: '600 14px var(--body)', color: given ? 'var(--ok)' : 'var(--accent-ink)' }}>
+            {waiting ? 'Venter på deg' : !given ? 'Ikke gitt' : nOn === 4 ? 'Gitt' : 'Delvis'}
           </span>
         }
       >
-        <ConsentRows consent={cc} />
-        {cc ? (
+        {waiting && <p className="note">{kf} har signert sin del. Bildene kan brukes når du også har gitt samtykke.</p>}
+        <ConsentRows consent={given ? cc : null} />
+        {given ? (
           <div className="btn-pair" style={{ marginTop: 8 }}>
             <button type="button" className="btn btn-secondary" onClick={st.editParentConsent}>
               Endre samtykke
