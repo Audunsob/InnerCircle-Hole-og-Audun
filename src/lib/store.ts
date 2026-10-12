@@ -32,16 +32,21 @@ import {
   CodeTakenError,
   createTeam,
   currentSession,
+  decideLink,
   getTeam,
   joinTeam,
   myTeams,
+  ParentLimitError,
   peekTeam,
+  PlayerTakenError,
   saveTeam,
   sendCode,
   signOut,
+  teamLinks,
   teamVersion,
   uploadMedia,
   verifyCode,
+  type Membership,
   type TeamPayload,
 } from './supabase';
 import { scoreTitle } from './derive';
@@ -154,6 +159,8 @@ export interface Actions {
   /** After the email link signed this browser in: continue where it makes sense. */
   resumeAfterLink: (email: string) => Promise<void>;
   resendCode: () => Promise<void>;
+  /** Waiting for a coach: checks whether the request was approved (or turned down). */
+  checkPending: (manual?: boolean) => Promise<void>;
 
   // Parent consent wizard
   setCons: (p: Partial<ParentConsentDraft>) => void;
@@ -221,6 +228,10 @@ export interface Actions {
   removeSub: (id: string) => void;
   addPlayer: () => void;
   removePlayer: (id: string) => void;
+  /** Coach: loads the accounts linked to players. */
+  loadLinks: () => Promise<void>;
+  /** Coach: approves a waiting player or parent, or removes the link. */
+  decide: (userId: string, role: 'player' | 'parent', approve: boolean) => void;
 
   // Subscriber / family
   cancelSub: () => void;
@@ -313,9 +324,12 @@ export const useStore = create<Store>()((set, get) => {
     set({ team: { id: p.teamId, role: p.role } });
     applyServer(p);
   };
+  let linksAt = 0;
   const refresh = async () => {
+    if (s().screen === 'pending') return void checkPending();
     const team = s().team;
     if (!team || saving) return;
+    if (team.role === 'coach' && s().screen === 'app' && Date.now() - linksAt > 30000) void loadLinks();
     // With unsaved changes, only fetch if we have never loaded the server copy (e.g. right after a reload).
     if (server && pending.length) return;
     try {
@@ -457,8 +471,10 @@ export const useStore = create<Store>()((set, get) => {
     if (r === 'coach' && !st.flow.coachName && st.prof.coach.name) setFlow({ coachName: st.prof.coach.name });
     if (r !== 'coach') {
       try {
-        const mine = (await myTeams()).filter((m) => m.role === wanted);
+        const all = (await myTeams()).filter((m) => m.role === wanted);
+        const mine = all.filter((m) => m.status !== 'pending');
         const pick = mine.find((m) => m.teamId === st.team?.id) || mine[0];
+        if (!pick && all[0]) return waitFor(all[0]);
         if (pick) {
           const p = await getTeam(pick.teamId, wanted);
           connect(p);
@@ -503,20 +519,97 @@ export const useStore = create<Store>()((set, get) => {
     }
   };
 
-  /** Joins the team in flow.peek with the given role. */
-  const join = async (role: MemberRole, playerId: string | null) => {
+  /**
+   * Joins the team in flow.peek with the given role. Players and parents usually have to wait
+   * for a coach: then this returns 'pending' and nothing is connected yet.
+   */
+  const join = async (role: MemberRole, playerId: string | null): Promise<'ok' | 'pending' | false> => {
     const peek = s().flow.peek;
     if (!peek) return false;
     setFlow({ busy: true, err: '' });
     try {
       const p = await joinTeam(peek.code, role, playerId);
       if (!p) throw new Error('not_found');
-      connect(p);
       setFlow({ busy: false });
-      return true;
-    } catch {
-      setFlow({ busy: false, err: netError });
+      if ('pending' in p) {
+        const name = peek.players.find((x) => x.id === playerId)?.name || '';
+        if (playerId && (role === 'player' || role === 'parent'))
+          setFlow({ pendingTeam: { id: p.teamId, name: p.teamName, role, playerId, playerName: name } });
+        return 'pending';
+      }
+      connect(p);
+      return 'ok';
+    } catch (e) {
+      const name = peek.players.find((x) => x.id === playerId)?.name || 'Spilleren';
+      const err =
+        e instanceof PlayerTakenError
+          ? name + ' er allerede koblet til en annen konto. Si fra til treneren, så kan treneren koble den fra.'
+          : e instanceof ParentLimitError
+            ? 'To foresatte er allerede koblet til ' + firstName(name) + '. Si fra til treneren hvis det er feil.'
+            : netError;
+      setFlow({ busy: false, err });
       return false;
+    }
+  };
+
+  /** Approved by the coach: show the team and sign the consent if it isn't signed yet. */
+  const continueApproved = (p: TeamPayload, role: 'player' | 'parent', playerId: string) => {
+    connect(p);
+    setFlow({ pendingTeam: null });
+    const player = p.data.players.find((x) => x.id === playerId);
+    if (role === 'player') {
+      setProf('player', { playerId });
+      if (player?.consent || player?.declined) return enterApp('player');
+      set({ pcons: { step: 1, adult: !!s().flow.adult, p: null, g: null, ps: null, gs: null, err: '' }, pcCtx: null });
+      return go('pconsent');
+    }
+    setProf('parent', { childId: playerId });
+    if (player?.consent) return enterApp('parent');
+    set({ cons: defCons(), consCtx: null });
+    go('consent');
+  };
+
+  let checking = false;
+  const checkPending = async (manual = false) => {
+    const pt = s().flow.pendingTeam;
+    if (!pt) return go('role');
+    if (checking) return;
+    checking = true;
+    try {
+      const m = (await myTeams()).find((x) => x.teamId === pt.id && x.role === pt.role);
+      if (s().screen !== 'pending') return;
+      if (!m || m.playerId !== pt.playerId) {
+        setFlow({ pendingTeam: null, err: 'Treneren godkjente ikke forespørselen. Sjekk at du valgte riktig, eller snakk med treneren.' });
+        return go('teamCode');
+      }
+      if (m.status === 'pending') {
+        if (manual) toast('Treneren har ikke godkjent ennå');
+        return;
+      }
+      continueApproved(await getTeam(pt.id, pt.role), pt.role, pt.playerId);
+      toast('Treneren har godkjent deg!');
+    } catch {
+      if (manual) toast(netError);
+    } finally {
+      checking = false;
+    }
+  };
+
+  /** Waiting for approval on a team found after login (for example on a new phone). */
+  const waitFor = (m: Membership) => {
+    if (m.role !== 'player' && m.role !== 'parent') return;
+    setFlow({ pendingTeam: { id: m.teamId, name: m.teamName, role: m.role, playerId: m.playerId || '', playerName: '' } });
+    go('pending');
+  };
+
+  const loadLinks = async () => {
+    const team = s().team;
+    if (!team || team.role !== 'coach') return;
+    linksAt = Date.now();
+    try {
+      set({ links: await teamLinks(team.id) });
+    } catch {
+      // Older database without approvals, or offline: leave the list as it was.
     }
   };
 
@@ -535,7 +628,9 @@ export const useStore = create<Store>()((set, get) => {
     const id = st.flow.pickId;
     if (!id) return setFlow({ err: st.flow.role === 'player' ? 'Velg deg selv fra lista.' : 'Velg barnet ditt fra lista.' });
     const role: MemberRole = st.flow.role === 'parent' ? 'parent' : 'player';
-    if (!(await join(role, id))) return;
+    const joined = await join(role, id);
+    if (!joined) return;
+    if (joined === 'pending') return go('pending');
     if (role === 'player') {
       setProf('player', { playerId: id });
       set({ pcons: { step: 1, adult: !!st.flow.adult, p: null, g: null, ps: null, gs: null, err: '' }, pcCtx: null });
@@ -747,6 +842,7 @@ export const useStore = create<Store>()((set, get) => {
         terms: submitTerms,
         coachCode: submitCoach,
         createTeam: submitCreateTeam,
+        pending: () => void checkPending(true),
       };
       handlers[s().screen]?.();
     },
@@ -784,6 +880,7 @@ export const useStore = create<Store>()((set, get) => {
         createTeam: 'login',
         pay: 'terms',
         consent: 'pickPlayer',
+        pending: 'teamCode',
       };
       setFlow({ err: '' });
       go(map[st.screen] || 'role');
@@ -805,10 +902,12 @@ export const useStore = create<Store>()((set, get) => {
         pay: null,
         tab: 'lag',
         openMatch: null,
+        links: null,
       });
       scrollTop();
     },
     resendCode,
+    checkPending,
     resumeAfterLink: async (email) => {
       const st = s();
       // Same browser that asked for the code: linkSignedIn already continues sign-up.
@@ -1315,6 +1414,36 @@ export const useStore = create<Store>()((set, get) => {
         },
       );
     },
+    loadLinks,
+    decide: (userId, role, approve) => {
+      const team = s().team;
+      if (!team) return;
+      const run = async () => {
+        set((st) => ({
+          links: approve
+            ? (st.links || []).map((l) => (l.userId === userId && l.role === role ? { ...l, status: 'active' as const } : l))
+            : (st.links || []).filter((l) => !(l.userId === userId && l.role === role)),
+        }));
+        try {
+          await decideLink(team.id, userId, role, approve);
+          toast(approve ? 'Godkjent' : 'Koblet fra');
+        } catch {
+          toast(netError);
+        }
+        void loadLinks();
+      };
+      if (approve) return void run();
+      const l = s().links?.find((x) => x.userId === userId && x.role === role);
+      const name = s().data.players.find((p) => p.id === l?.playerId)?.name || 'spilleren';
+      const who = l?.email || 'kontoen';
+      ask(
+        l?.status === 'pending' ? 'Avvise forespørselen?' : 'Koble fra kontoen?',
+        who + (role === 'parent' ? ' blir ikke foresatt til ' : ' blir ikke koblet til ') + name + ' og ser ikke laget. De kan prøve på nytt med lagkoden.',
+        l?.status === 'pending' ? 'Avvis' : 'Koble fra',
+        () => void run(),
+      );
+    },
+
     // ---------- Subscriber / family ----------
 
     cancelSub: () => {

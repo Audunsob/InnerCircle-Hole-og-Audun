@@ -27,14 +27,40 @@ export interface TeamPeek {
   teamId: string;
   teamName: string;
   isCoachCode: boolean;
-  players: { id: string; name: string }[];
+  /** taken: already linked to another account as the player. */
+  players: { id: string; name: string; taken?: boolean }[];
 }
+
+/** What joining as a player or parent returns while a coach hasn't approved it yet. */
+export interface PendingJoin {
+  pending: true;
+  teamId: string;
+  teamName: string;
+  role: MemberRole;
+}
+
+/** An account linked to a player on the team (as the player or a parent), for the coach. */
+export interface TeamLink {
+  userId: string;
+  role: 'player' | 'parent';
+  playerId: string;
+  status: 'pending' | 'active';
+  email: string | null;
+  at: string;
+}
+
+/** Thrown when the player is already linked to another account. */
+export class PlayerTakenError extends Error {}
+/** Thrown when the player already has two parents linked. */
+export class ParentLimitError extends Error {}
 
 export interface Membership {
   teamId: string;
   role: MemberRole;
   playerId: string | null;
   teamName: string;
+  /** Missing before the database had approvals; treat that as active. */
+  status?: 'pending' | 'active';
 }
 
 /** Thrown when a code is already used by another team. */
@@ -44,6 +70,8 @@ async function rpc<T>(fn: string, args: Record<string, unknown> = {}): Promise<T
   const { data, error } = await db().rpc(fn, args);
   if (error) {
     if (/code_taken/.test(error.message)) throw new CodeTakenError(error.message);
+    if (/player_taken/.test(error.message)) throw new PlayerTakenError(error.message);
+    if (/parent_limit/.test(error.message)) throw new ParentLimitError(error.message);
     throw new Error(error.message);
   }
   return data as T;
@@ -130,12 +158,16 @@ export async function accessToken(): Promise<string | null> {
 
 export const peekTeam = (code: string) => rpc<TeamPeek | null>('peek_team', { p_code: code });
 export const joinTeam = (code: string, role: MemberRole, playerId: string | null) =>
-  rpc<TeamPayload | null>('join_team', { p_code: code, p_role: role, p_player_id: playerId });
+  rpc<TeamPayload | PendingJoin | null>('join_team', { p_code: code, p_role: role, p_player_id: playerId });
 export const createTeam = (name: string, coachCode: string, teamCode: string, data: TeamData) =>
   rpc<TeamPayload>('create_team', { p_name: name, p_coach_code: coachCode, p_team_code: teamCode, p_data: data });
 export const myTeams = () => rpc<Membership[]>('my_teams');
 export const getTeam = (teamId: string, role: MemberRole) => rpc<TeamPayload>('get_team', { p_team: teamId, p_role: role });
 export const teamVersion = (teamId: string) => rpc<number | null>('team_version', { p_team: teamId });
+
+export const teamLinks = (teamId: string) => rpc<TeamLink[]>('team_links', { p_team: teamId });
+export const decideLink = (teamId: string, userId: string, role: 'player' | 'parent', approve: boolean) =>
+  rpc<void>('decide_link', { p_team: teamId, p_user: userId, p_role: role, p_approve: approve });
 
 /** Saves if `version` is still current; otherwise returns ok=false and the newer document. */
 export const saveTeam = (teamId: string, role: MemberRole, version: number, data: TeamData) =>

@@ -16,6 +16,7 @@ const STEP_LABELS: Partial<Record<Screen, string>> = {
   terms: 'Steg 2 av 3',
   coachCode: 'Trener · Logg inn',
   createTeam: 'Trener · Opprett lag',
+  pending: 'Venter på godkjenning',
 };
 
 const BUTTONS: Partial<Record<Screen, string>> = {
@@ -27,6 +28,7 @@ const BUTTONS: Partial<Record<Screen, string>> = {
   terms: 'Gå til betaling',
   coachCode: 'Fortsett',
   createTeam: 'Opprett lag',
+  pending: 'Sjekk igjen',
 };
 
 const upper = (v: string) => v.toUpperCase();
@@ -127,6 +129,8 @@ function FlowStep({ screen }: { screen: Screen }) {
       return <CoachCode />;
     case 'createTeam':
       return <CreateTeam />;
+    case 'pending':
+      return <Pending />;
     default:
       return null;
   }
@@ -268,21 +272,52 @@ function PickPlayer() {
       <div className="bleed list">
         {list.map((p) => {
           const on = flow.pickId === p.id;
+          // Already linked to someone else as the player. Parents can still pick their child.
+          const taken = flow.role === 'player' && !!p.taken;
           return (
             <button
               key={p.id}
               type="button"
               className="row-btn"
-              onClick={() => setFlow({ pickId: p.id, err: '' })}
+              onClick={() =>
+                setFlow(
+                  taken
+                    ? { pickId: null, err: p.name + ' er allerede koblet til en annen konto. Er det deg, si fra til treneren, så kan treneren koble den fra.' }
+                    : { pickId: p.id, err: '' },
+                )
+              }
+              aria-disabled={taken || undefined}
               style={{ minHeight: 52, padding: '8px 16px', background: on ? 'var(--accent-soft)' : 'var(--surface)' }}
             >
-              <span style={{ flex: 1, font: '500 16px var(--body)' }}>{p.name}</span>
+              <span className="row-text">
+                <span style={{ font: '500 16px var(--body)', color: taken ? 'var(--muted)' : undefined }}>{p.name}</span>
+                {taken && <span className="row-meta">Allerede koblet til en konto</span>}
+              </span>
               {on && <Icon name="check_circle" style={{ color: 'var(--accent-ink)' }} />}
             </button>
           );
         })}
       </div>
+      <p className="note">Treneren godkjenner deg før du kommer inn.</p>
       {list.length === 0 && <p className="note">Fant ingen med det navnet.</p>}
+    </>
+  );
+}
+
+function Pending() {
+  const pt = useStore((s) => s.flow.pendingTeam);
+  const who = pt?.playerName || '';
+  const text =
+    pt?.role === 'parent'
+      ? `Treneren på ${pt.name} må godkjenne at du er foresatt${who ? ' til ' + who : ''}.`
+      : `Treneren på ${pt?.name || 'laget'} må godkjenne at du er ${who || 'spilleren du valgte'}.`;
+  return (
+    <>
+      <Intro title="Venter på treneren" text={text} />
+      <p className="note">
+        Du kommer videre av deg selv når treneren har godkjent. Du kan lukke appen så lenge; vi husker hvor du var. Det kan hjelpe å si fra til
+        treneren at du venter.
+      </p>
     </>
   );
 }

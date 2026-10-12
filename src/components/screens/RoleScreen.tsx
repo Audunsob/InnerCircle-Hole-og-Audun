@@ -63,11 +63,19 @@ export function RoleScreen() {
           large
           num="02"
           arrow="arrow_forward"
+          title="Jeg er foresatt"
+          sub="Gratis: se bildene der barnet ditt er med"
+          onClick={() => chooseRole('parent')}
+        />
+        <ChevronRow
+          large
+          num="03"
+          arrow="arrow_forward"
           title="Jeg er abonnent"
           sub="Besteforeldre, tanter, onkler og andre som heier"
           onClick={() => chooseRole('sub')}
         />
-        <ChevronRow large num="03" arrow="arrow_forward" title="Jeg er trener" sub="Trener eller lagleder" onClick={() => chooseRole('coach')} />
+        <ChevronRow large num="04" arrow="arrow_forward" title="Jeg er trener" sub="Trener eller lagleder" onClick={() => chooseRole('coach')} />
       </nav>
       <p className="note" style={{ position: 'relative', marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
         <Icon name="lock" size={16} style={{ color: 'var(--gold)' }} />

@@ -1,11 +1,11 @@
 'use client';
 
 import { useEffect, type FormEvent } from 'react';
-import { download, fmtAcct, fmtDate, fmtDay, fmtShort, iso, krd, matchTime, NB, rel, stripe } from '@/lib/format';
+import { download, firstName, fmtAcct, fmtDate, fmtDay, fmtShort, iso, krd, matchTime, NB, rel, stripe } from '@/lib/format';
 import { TYPES } from '@/lib/seed';
 import { matchTitle, playerMap, price, shortTeam, teamName } from '@/lib/selectors';
 import { receiptText, useStore } from '@/lib/store';
-import type { Media, PayMethod, PostType, SheetName } from '@/lib/types';
+import type { Draft, Media, PayMethod, Player, PostType, SheetName } from '@/lib/types';
 import { economy } from '../app/OkonomiView';
 import { METHOD_NAMES } from '../app/MinSide';
 import { Field, Icon, SwitchRow, Tabs } from '../ui';
@@ -239,6 +239,8 @@ function Composer() {
         </div>
       </div>
 
+      <FocusPicker dr={dr} />
+
       <Field label="Tekst">
         <textarea
           className="input"
@@ -277,13 +279,15 @@ function Composer() {
   );
 }
 
-function Chip({ label, on, onClick }: { label: string; on: boolean; onClick: () => void }) {
+function Chip({ label, on, onClick, disabled }: { label: string; on: boolean; onClick: () => void; disabled?: boolean }) {
   return (
     <button
       type="button"
       aria-pressed={on}
       onClick={onClick}
+      disabled={disabled}
       style={{
+        opacity: disabled ? 0.45 : 1,
         minHeight: 44,
         padding: '0 14px',
         border: '1px solid ' + (on ? 'var(--ink)' : 'var(--line-strong)'),
@@ -291,11 +295,68 @@ function Chip({ label, on, onClick }: { label: string; on: boolean; onClick: () 
         background: on ? 'var(--ink)' : 'var(--surface)',
         color: on ? 'var(--bg)' : 'var(--ink)',
         font: '500 15px var(--body)',
-        cursor: 'pointer',
+        cursor: disabled ? 'not-allowed' : 'pointer',
       }}
     >
       {label}
     </button>
+  );
+}
+
+/** Why a player can't be in focus in this post, or null if they can. */
+function focusBlock(p: Player, hasVideo: boolean): string | null {
+  const c = p.consent;
+  if (!c || !c.photo) return 'mangler samtykke';
+  if (!c.tag) return 'kan ikke merkes';
+  if (hasVideo && !c.video) return 'ikke video';
+  return null;
+}
+
+/** "Ola N." — short enough for a row of chips. */
+const shortName = (name: string) => {
+  const w = name.trim().split(/\s+/);
+  return w.length > 1 ? w[0] + ' ' + w[w.length - 1][0] + '.' : w[0];
+};
+
+/** The players in focus in a post. Parents see posts with their child tagged here for free. */
+function FocusPicker({ dr }: { dr: Draft }) {
+  const players = useStore((s) => s.data.players);
+  const setDraft = useStore((s) => s.setDraft);
+  if (!players.length) return null;
+  const hasVideo = dr.media.some((m) => m.kind === 'video');
+  const sorted = [...players].sort((a, b) => a.name.localeCompare(b.name, NB));
+  const blocked = sorted.filter((p) => dr.tagged.includes(p.id) && focusBlock(p, hasVideo));
+  const toggle = (id: string) =>
+    setDraft({ tagged: dr.tagged.includes(id) ? dr.tagged.filter((x) => x !== id) : [...dr.tagged, id] });
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span className="field-label">I fokus</span>
+      <p className="note" style={{ fontSize: 13 }}>
+        Merk spillerne som er i fokus på bildene. Foresatte ser gratis bare innlegg der barnet deres er merket. Spillere uten samtykke skal ikke
+        være i fokus.
+      </p>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {sorted.map((p) => {
+          const on = dr.tagged.includes(p.id);
+          const why = focusBlock(p, hasVideo);
+          return (
+            <Chip
+              key={p.id}
+              label={shortName(p.name) + (why ? ' · ' + why : '')}
+              on={on}
+              disabled={!!why && !on}
+              onClick={() => toggle(p.id)}
+            />
+          );
+        })}
+      </div>
+      {blocked.length > 0 && (
+        <p role="alert" className="error">
+          {blocked.map((p) => firstName(p.name)).join(', ')} har ikke samtykket til dette. Innlegget blir skjult for alle så lenge{' '}
+          {blocked.length === 1 ? firstName(blocked[0].name) : 'de'} er merket.
+        </p>
+      )}
+    </div>
   );
 }
 

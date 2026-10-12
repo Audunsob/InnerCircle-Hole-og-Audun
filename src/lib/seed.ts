@@ -130,4 +130,5 @@ export const ephemeral = (): EphemeralState => ({
   menuPost: null,
   subView: 'all',
   pf: { name: '', err: '' },
+  links: null,
 });
