@@ -147,6 +147,15 @@ language sql immutable set search_path = public as $$
        jsonb_array_elements(case when jsonb_typeof(p_data -> k) = 'array' then p_data -> k else '[]'::jsonb end) x
 $$;
 
+-- Is this id something the coaches made? One training in a weekly series has the id "<series id>:<yyyy-mm-dd>".
+create or replace function public.ic_target_ok(p_data jsonb, p_id text) returns boolean
+language sql immutable set search_path = public as $$
+  select p_id = any (ic_targets(p_data))
+    or (p_id ~ '^[^:]+:\d{4}-\d{2}-\d{2}$' and split_part(p_id, ':', 1) = any (
+      select x ->> 'id' from jsonb_array_elements(
+        case when jsonb_typeof(p_data -> 'trainings') = 'array' then p_data -> 'trainings' else '[]'::jsonb end) x))
+$$;
+
 -- A post from a player or parent, as it may be saved: about something the coaches made, with photos and
 -- videos from the team's own folder, tagging players on the team. Who wrote it, when, and the hearts are
 -- set here, never taken from the app. Returns null if the post isn't allowed.
@@ -173,8 +182,8 @@ language sql stable set search_path = public as $$
       and c.id is not null and length(c.id) <= 80
       and c.type in ('kamp', 'trening', 'beskjed')
       and (c.match_id is not null or c.event_id is not null)
-      and (c.match_id is null or c.match_id = any (ic_targets(p_data)))
-      and (c.event_id is null or c.event_id = any (ic_targets(p_data)))
+      and (c.match_id is null or ic_target_ok(p_data, c.match_id))
+      and (c.event_id is null or ic_target_ok(p_data, c.event_id))
       and jsonb_array_length(c.media) <= 10
       and not exists (
         select 1 from jsonb_array_elements(c.media) x
@@ -743,6 +752,7 @@ revoke all on function public.ic_forget(jsonb, text) from public, anon, authenti
 revoke all on function public.ic_last_coach(uuid, uuid) from public, anon, authenticated;
 revoke all on function public.ic_can_post(jsonb, text, text) from public, anon, authenticated;
 revoke all on function public.ic_targets(jsonb) from public, anon, authenticated;
+revoke all on function public.ic_target_ok(jsonb, text) from public, anon, authenticated;
 revoke all on function public.ic_member_post(jsonb, jsonb, jsonb, uuid, text, text, text) from public, anon, authenticated;
 revoke all on function public.ic_is_member(text) from public, anon;
 revoke all on function public.ic_is_coach(text) from public, anon;
