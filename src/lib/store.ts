@@ -35,6 +35,9 @@ import {
   decideLink,
   deleteMe,
   deleteMedia,
+  deleteTeam,
+  deleteTeamFiles,
+  removeCoach,
   getTeam,
   joinTeam,
   LastCoachError,
@@ -248,6 +251,10 @@ export interface Actions {
   switchTeam: (teamId: string, role: MemberRole) => void;
   /** From the switchTeam sheet: checks the coach code and switches. */
   submitSwitchCode: () => Promise<void>;
+  /** Coach: removes another coach from the team (after asking). */
+  removeCoach: (userId: string) => void;
+  /** Coach: deletes the team for everyone, after typing its name in the deleteTeam sheet. */
+  deleteTeam: () => Promise<void>;
   /** Coach: approves a waiting player or parent, or removes the link. */
   decide: (userId: string, role: 'player' | 'parent', approve: boolean) => void;
 
@@ -1599,6 +1606,39 @@ export const useStore = create<Store>()((set, get) => {
         return setForm({ busy: false, err: 'Koden stemmer ikke. Spør en annen administrator på laget.' });
       await openTeam(teamId, 'coach');
       setForm({ busy: false });
+    },
+    removeCoach: (userId) => {
+      const team = s().team;
+      const c = s().coaches?.find((x) => x.userId === userId);
+      if (!team || !c) return;
+      const who = c.name || c.email || 'Administratoren';
+      ask('Fjerne ' + who + '?', who + ' mister tilgangen som administrator på laget. Innleggene blir liggende.', 'Fjern', async () => {
+        set((st) => ({ coaches: (st.coaches || []).filter((x) => x.userId !== userId) }));
+        try {
+          await removeCoach(team.id, userId);
+          toast(who + ' er fjernet');
+        } catch {
+          toast(netError);
+        }
+        void loadLinks();
+      });
+    },
+    deleteTeam: async () => {
+      const st = s();
+      const team = st.team;
+      if (!team || team.role !== 'coach' || st.form.busy) return;
+      const name = teamName(st);
+      if (String(st.form.confirm || '').trim().toLowerCase() !== name.trim().toLowerCase())
+        return setForm({ err: 'Skriv navnet på laget nøyaktig som det står.' });
+      setForm({ busy: true, err: '' });
+      await deleteTeamFiles(team.id);
+      try {
+        await deleteTeam(team.id, name);
+      } catch {
+        return setForm({ busy: false, err: netError });
+      }
+      resetToStart();
+      toast(name + ' er slettet');
     },
     decide: (userId, role, approve) => {
       const team = s().team;

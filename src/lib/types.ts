@@ -241,7 +241,8 @@ export type SheetName =
   | 'method'
   | 'receipts'
   | 'consentView'
-  | 'switchTeam';
+  | 'switchTeam'
+  | 'deleteTeam';
 
 export interface Draft {
   id: string | null;

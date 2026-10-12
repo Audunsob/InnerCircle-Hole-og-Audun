@@ -1,5 +1,5 @@
 -- InnerCircle database setup, version 5 (accounts, approval of players and parents, list of coaches,
--- leaving a team, deleting your account and deleting files).
+-- leaving a team, deleting your account and deleting files, removing coaches and deleting a team).
 -- Paste all of this into Supabase: SQL Editor -> New query -> Run.
 -- Safe to run more than once, and safe to run on top of version 1, 2, 3 and 4.
 
@@ -489,6 +489,35 @@ begin
   delete from auth.users where id = uid;
 end $$;
 
+-- ---------- Running the team ----------
+
+-- Removes another coach from the team. Any coach may do it; to remove yourself, leave the team.
+create or replace function public.remove_coach(p_team uuid, p_user uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  uid uuid := ic_uid();
+begin
+  if (ic_member(p_team, 'coach')).team_id is null then raise exception 'not_coach'; end if;
+  if p_user = uid then raise exception 'use_leave'; end if;
+  delete from team_members where team_id = p_team and user_id = p_user and role = 'coach';
+  delete from push_subscriptions s where s.team_id = p_team and s.user_id = p_user
+    and not exists (select 1 from team_members x where x.team_id = p_team and x.user_id = p_user);
+end $$;
+
+-- Deletes the team with everything in it: members, posts, matches and phones. Any coach may do it,
+-- but must type the team's name. The app deletes the team's files first, while it still may.
+create or replace function public.delete_team(p_team uuid, p_confirm text) returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  t teams;
+begin
+  perform ic_uid();
+  if (ic_member(p_team, 'coach')).team_id is null then raise exception 'not_coach'; end if;
+  t := (select x from teams x where x.id = p_team);
+  if lower(trim(coalesce(p_confirm, ''))) <> lower(trim(t.name)) then raise exception 'wrong_name'; end if;
+  delete from teams where id = p_team;
+end $$;
+
 -- ---------- Who may call what ----------
 
 revoke all on function public.ic_member(uuid, text) from public, anon, authenticated;
@@ -503,6 +532,10 @@ revoke all on function public.ic_is_member(text) from public, anon;
 revoke all on function public.ic_is_coach(text) from public, anon;
 revoke all on function public.leave_team(uuid, text) from public, anon;
 revoke all on function public.delete_me() from public, anon;
+revoke all on function public.remove_coach(uuid, uuid) from public, anon;
+revoke all on function public.delete_team(uuid, text) from public, anon;
+grant execute on function public.remove_coach(uuid, uuid) to authenticated;
+grant execute on function public.delete_team(uuid, text) to authenticated;
 revoke all on function public.peek_team(text) from public, anon;
 revoke all on function public.join_team(text, text, text) from public, anon;
 revoke all on function public.create_team(text, text, text, jsonb) from public, anon;
