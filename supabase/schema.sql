@@ -139,7 +139,7 @@ language sql stable set search_path = public as $$
   end
 $$;
 
--- What a post from a player or parent can be about: a match, training or event the coaches made.
+-- What a post from a player or parent can be about (its matchId or eventId): a match, training or event the coaches made.
 create or replace function public.ic_targets(p_data jsonb) returns text[]
 language sql immutable set search_path = public as $$
   select coalesce(array_agg(x ->> 'id') filter (where x ->> 'id' is not null), '{}')
@@ -156,7 +156,8 @@ language sql stable set search_path = public as $$
   with n as (
     select p_new ->> 'id' as id,
            coalesce(p_new ->> 'type', '') as type,
-           p_new ->> 'matchId' as match_id,
+           nullif(p_new ->> 'matchId', '') as match_id,
+           nullif(p_new ->> 'eventId', '') as event_id,
            case when jsonb_typeof(p_new -> 'media') = 'array' then p_new -> 'media' else '[]'::jsonb end as media,
            case when jsonb_typeof(p_new -> 'tagged') = 'array' then p_new -> 'tagged' else '[]'::jsonb end as tagged,
            trim(coalesce(p_new ->> 'text', '')) as text
@@ -171,7 +172,9 @@ language sql stable set search_path = public as $$
       jsonb_typeof(p_new) = 'object'
       and c.id is not null and length(c.id) <= 80
       and c.type in ('kamp', 'trening', 'beskjed')
-      and c.match_id = any (ic_targets(p_data))
+      and (c.match_id is not null or c.event_id is not null)
+      and (c.match_id is null or c.match_id = any (ic_targets(p_data)))
+      and (c.event_id is null or c.event_id = any (ic_targets(p_data)))
       and jsonb_array_length(c.media) <= 10
       and not exists (
         select 1 from jsonb_array_elements(c.media) x
@@ -186,13 +189,13 @@ language sql stable set search_path = public as $$
     then jsonb_build_object(
       'id', c.id, 'type', c.type, 'authorId', p_uid, 'author', p_author, 'authorRole', p_author_role,
       'ts', coalesce(p_old -> 'ts', to_jsonb((extract(epoch from now()) * 1000)::bigint)),
-      'matchId', c.match_id, 'media', c.clean_media, 'tagged', c.tagged, 'text', c.text,
+      'matchId', c.match_id, 'eventId', c.event_id, 'media', c.clean_media, 'tagged', c.tagged, 'text', c.text,
       'likes', coalesce(p_old -> 'likes', '0'::jsonb), 'likedBy', coalesce(p_old -> 'likedBy', '[]'::jsonb))
       || case
            when p_old is null then '{}'::jsonb
            when p_old -> 'edited' = 'true'::jsonb
-             or (p_old ->> 'type', p_old ->> 'matchId', p_old -> 'media', p_old -> 'tagged', p_old ->> 'text')
-                is distinct from (c.type, c.match_id, c.clean_media, c.tagged, c.text)
+             or (p_old ->> 'type', p_old ->> 'matchId', p_old ->> 'eventId', p_old -> 'media', p_old -> 'tagged', p_old ->> 'text')
+                is distinct from (c.type, c.match_id, c.event_id, c.clean_media, c.tagged, c.text)
              then '{"edited": true}'::jsonb
            else '{}'::jsonb
          end
