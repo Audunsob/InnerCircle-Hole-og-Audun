@@ -12,7 +12,7 @@ import { FlowScreen } from './screens/FlowScreen';
 import { RoleScreen } from './screens/RoleScreen';
 import { SheetHost } from './sheets/Sheets';
 
-const FLOW_SCREENS = ['playerKind', 'login', 'otp', 'teamCode', 'pickPlayer', 'invite', 'terms', 'coachCode', 'createTeam', 'coachChoice'];
+const FLOW_SCREENS = ['playerKind', 'login', 'otp', 'teamCode', 'pickPlayer', 'invite', 'terms', 'coachCode', 'createTeam', 'coachChoice', 'pending'];
 
 export default function InnerCircleApp() {
   const screen = useStore((s) => s.screen);

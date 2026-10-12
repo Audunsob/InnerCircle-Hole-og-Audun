@@ -43,6 +43,7 @@ export function LagView() {
   const unread = data.notifs.filter((n) => n.ts > st.seenNotifsAt && !(isCoach && n.from === 'coach')).length;
   const { next } = splitMatches(data.matches);
   const price = priceText(st);
+  const waiting = isCoach ? (st.links || []).filter((l) => l.status === 'pending').length : 0;
 
   let list = visiblePosts(st, data.posts, P);
   if (filter !== 'all') list = list.filter((p) => p.type === filter);
@@ -95,6 +96,18 @@ export function LagView() {
       </header>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {isCoach && waiting > 0 && (
+          <button type="button" className="card card-btn" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', color: 'var(--ink)', textAlign: 'left', cursor: 'pointer' }} onClick={() => st.setTab('min')}>
+            <span className="row-text">
+              <span style={{ font: '600 16px var(--body)', color: 'var(--accent-ink)' }}>
+                {waiting === 1 ? '1 venter på godkjenning' : waiting + ' venter på godkjenning'}
+              </span>
+              <span className="row-sub">Spillere og foresatte som vil inn på laget.</span>
+            </span>
+            <Icon name="arrow_forward" size={20} style={{ color: 'var(--accent-ink)' }} />
+          </button>
+        )}
+
         {isCoach && data.players.length === 0 && (
           <button type="button" className="card card-btn" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', color: 'var(--ink)', textAlign: 'left', cursor: 'pointer' }} onClick={() => st.setTab('min')}>
             <span className="row-text">

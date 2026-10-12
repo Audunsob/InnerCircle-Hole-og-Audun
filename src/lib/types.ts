@@ -1,3 +1,5 @@
+import type { TeamLink } from './supabase';
+
 export type Role = 'player' | 'parent' | 'sub' | 'coach';
 export type Theme = 'light' | 'dark';
 export type PostType = 'kamp' | 'trening' | 'beskjed';
@@ -15,6 +17,7 @@ export type Screen =
   | 'coachChoice'
   | 'coachCode'
   | 'createTeam'
+  | 'pending'
   | 'pay'
   | 'consent'
   | 'pconsent'
@@ -163,7 +166,9 @@ export interface Flow {
   subName?: string;
   busy?: boolean;
   /** Team found from a code, before joining it. */
-  peek?: { code: string; teamName: string; isCoachCode: boolean; players: { id: string; name: string }[] } | null;
+  peek?: { code: string; teamName: string; isCoachCode: boolean; players: { id: string; name: string; taken?: boolean }[] } | null;
+  /** Joined as a player or parent, waiting for a coach to approve it. */
+  pendingTeam?: { id: string; name: string; role: 'player' | 'parent'; playerId: string; playerName: string } | null;
   err: string;
 }
 
@@ -300,6 +305,8 @@ export interface EphemeralState {
   menuPost: string | null;
   subView: 'all' | 'player';
   pf: { name: string; err: string };
+  /** Coach: accounts linked to players, waiting or approved. Null until loaded. */
+  links: TeamLink[] | null;
 }
 
 export type AppState = PersistedState & EphemeralState;

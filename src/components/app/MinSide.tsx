@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { CKEYS, TYPES } from '@/lib/seed';
 import { firstName, fmtShort, initials, inviteLink, nextChargeText, rel, stripe } from '@/lib/format';
 import { codes, coachName, matchTitle, playerMap, priceText, teamName } from '@/lib/selectors';
@@ -156,12 +156,46 @@ function CoachSections() {
     e.preventDefault();
     st.addPlayer();
   };
+  const links = st.links || [];
+  const waiting = links.filter((l) => l.status === 'pending');
+  const P = playerMap(st.data.players);
+  const loadLinks = st.loadLinks;
+  useEffect(() => {
+    void loadLinks();
+  }, [loadLinks]);
+  const linked = (id: string) => links.filter((l) => l.playerId === id && l.status === 'active');
   const codeRows = [
     { key: 'coach', label: 'Trenerkode', code: C.coach, hint: 'Kun for trenere. Andre trenere logger inn med denne.', copyLabel: 'Trenerkoden' },
     { key: 'team', label: 'Lagkode', code: C.team, hint: 'For spillere, foresatte og abonnenter.', copyLabel: 'Lagkoden' },
   ];
   return (
     <>
+      {waiting.length > 0 && (
+        <Section title="Venter på godkjenning" aside={<span className="note">{waiting.length}</span>}>
+          <p className="note">Godkjenn bare dem du vet hvem er. Spør hvis du ikke kjenner igjen e-posten.</p>
+          <div className="list">
+            {waiting.map((l) => {
+              const pn = P[l.playerId]?.name || 'Ukjent spiller';
+              return (
+                <div key={l.userId + l.role} className="row" style={{ alignItems: 'flex-start', padding: '12px 0', gap: 8 }}>
+                  <span className="row-text" style={{ gap: 2 }}>
+                    <span style={{ font: '500 16px var(--body)' }}>{l.role === 'parent' ? 'Foresatt til ' + pn : pn}</span>
+                    <span className="row-meta" style={{ wordBreak: 'break-all' }}>
+                      {l.email || 'Ukjent e-post'}
+                    </span>
+                  </span>
+                  <button type="button" className="link-btn quiet" onClick={() => st.decide(l.userId, l.role, false)}>
+                    Avvis
+                  </button>
+                  <button type="button" className="btn btn-primary" style={{ minHeight: 40, padding: '0 14px' }} onClick={() => st.decide(l.userId, l.role, true)}>
+                    Godkjenn
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </Section>
+      )}
       <Section title="Lagets koder">
         <div>
           {codeRows.map((c) => (
@@ -204,8 +238,25 @@ function CoachSections() {
           <>
             <div className="list" style={{ marginTop: 4 }}>
               {shown.map((p) => (
-                <div key={p.id} className="row" style={{ padding: '4px 0' }}>
-                  <span style={{ flex: 1, minWidth: 0, font: '400 16px var(--body)' }}>{p.name}</span>
+                <div key={p.id} className="row" style={{ padding: '4px 0', alignItems: 'flex-start' }}>
+                  <span className="row-text" style={{ paddingTop: 10 }}>
+                    <span style={{ font: '400 16px var(--body)' }}>{p.name}</span>
+                    {linked(p.id).map((l) => (
+                      <span key={l.userId + l.role} className="row-meta" style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {(l.role === 'parent' ? 'Foresatt: ' : 'Spiller: ') + (l.email || 'ukjent e-post')}
+                        </span>
+                        <button
+                          type="button"
+                          className="link-btn quiet"
+                          style={{ minHeight: 0, padding: 0, fontSize: 13 }}
+                          onClick={() => st.decide(l.userId, l.role, false)}
+                        >
+                          Koble fra
+                        </button>
+                      </span>
+                    ))}
+                  </span>
                   <button type="button" className="link-btn quiet" onClick={() => st.removePlayer(p.id)}>
                     Fjern
                   </button>

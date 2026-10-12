@@ -1,6 +1,6 @@
--- InnerCircle database setup, version 2 (accounts).
+-- InnerCircle database setup, version 3 (accounts, approval of players and parents).
 -- Paste all of this into Supabase: SQL Editor -> New query -> Run.
--- Safe to run more than once, and safe to run on top of version 1.
+-- Safe to run more than once, and safe to run on top of version 1 and 2.
 
 create extension if not exists pgcrypto;
 
@@ -26,9 +26,17 @@ create table if not exists public.team_members (
   user_id uuid not null,
   role text not null check (role in ('coach', 'player', 'parent', 'sub')),
   player_id text,
+  -- Players and parents wait for a coach to approve them before they see anything.
+  status text not null default 'active' check (status in ('pending', 'active')),
   created_at timestamptz not null default now(),
   primary key (team_id, user_id, role)
 );
+-- Version 2 had no status column.
+alter table public.team_members add column if not exists status text not null default 'active';
+do $$ begin
+  alter table public.team_members add constraint team_members_status_check check (status in ('pending', 'active'));
+exception when duplicate_object then null; end $$;
+create index if not exists team_members_player_idx on public.team_members (team_id, player_id) where player_id is not null;
 
 -- Phones and browsers that want push notifications.
 create table if not exists public.push_subscriptions (
@@ -71,15 +79,16 @@ begin
   return auth.uid();
 end $$;
 
+-- Approved members only: someone waiting for a coach's approval is not a member yet.
 create or replace function public.ic_member(p_team uuid, p_role text) returns public.team_members
 language sql stable security definer set search_path = public as $$
-  select m from team_members m where m.team_id = p_team and m.user_id = auth.uid() and m.role = p_role
+  select m from team_members m where m.team_id = p_team and m.user_id = auth.uid() and m.role = p_role and m.status = 'active'
 $$;
 
 -- Used by the photo storage rules: is the signed-in account on the team whose folder this is?
 create or replace function public.ic_is_member(p_folder text) returns boolean
 language sql stable security definer set search_path = public as $$
-  select exists (select 1 from team_members m where m.team_id::text = p_folder and m.user_id = auth.uid())
+  select exists (select 1 from team_members m where m.team_id::text = p_folder and m.user_id = auth.uid() and m.status = 'active')
 $$;
 
 -- Removes array items whose text equals p_value.
@@ -129,19 +138,29 @@ begin
     'teamName', t.name,
     'isCoachCode', t.coach_code = c,
     'players', coalesce((
-      select jsonb_agg(jsonb_build_object('id', p ->> 'id', 'name', p ->> 'name'))
+      select jsonb_agg(jsonb_build_object(
+        'id', p ->> 'id',
+        'name', p ->> 'name',
+        -- Linked to another account as the player. The sign-up shows it so a player can tell the coach.
+        'taken', exists (
+          select 1 from team_members m
+          where m.team_id = t.id and m.role = 'player' and m.player_id = p ->> 'id' and m.user_id <> auth.uid()
+        )))
       from jsonb_array_elements(coalesce(t.data -> 'players', '[]'::jsonb)) p
     ), '[]'::jsonb)
   );
 end $$;
 
 -- Joins a team. Coaches need the coach code; everyone else uses the team code.
+-- A player can be linked to one account, and to at most two parents. Players and parents
+-- wait for a coach to approve them; until then this returns {pending: true} instead of the team.
 create or replace function public.join_team(p_code text, p_role text, p_player_id text) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare
   c text := ic_norm(p_code);
   uid uuid := ic_uid();
   t teams;
+  m team_members;
 begin
   if p_role not in ('coach', 'player', 'parent', 'sub') then raise exception 'invalid_role'; end if;
   if p_role = 'coach' then
@@ -155,9 +174,30 @@ begin
   ) then
     raise exception 'unknown_player';
   end if;
-  insert into team_members (team_id, user_id, role, player_id)
-  values (t.id, uid, p_role, case when p_role in ('player', 'parent') then p_player_id end)
-  on conflict (team_id, user_id, role) do update set player_id = excluded.player_id;
+  if p_role = 'player' and exists (
+    select 1 from team_members x
+    where x.team_id = t.id and x.role = 'player' and x.player_id = p_player_id and x.user_id <> uid
+  ) then
+    raise exception 'player_taken';
+  end if;
+  if p_role = 'parent' and (
+    select count(*) from team_members x
+    where x.team_id = t.id and x.role = 'parent' and x.player_id = p_player_id and x.user_id <> uid
+  ) >= 2 then
+    raise exception 'parent_limit';
+  end if;
+  -- Picking another player (or child) than before starts a new approval.
+  insert into team_members (team_id, user_id, role, player_id, status)
+  values (t.id, uid, p_role, case when p_role in ('player', 'parent') then p_player_id end,
+          case when p_role in ('player', 'parent') then 'pending' else 'active' end)
+  on conflict (team_id, user_id, role) do update
+    set player_id = excluded.player_id,
+        status = case when team_members.player_id is not distinct from excluded.player_id
+                      then team_members.status else excluded.status end
+  returning * into m;
+  if m.status = 'pending' then
+    return jsonb_build_object('pending', true, 'teamId', t.id, 'teamName', t.name, 'role', p_role);
+  end if;
   return ic_payload(t, p_role);
 end $$;
 
@@ -184,7 +224,8 @@ end $$;
 create or replace function public.my_teams() returns jsonb
 language sql stable security definer set search_path = public as $$
   select coalesce(jsonb_agg(jsonb_build_object(
-    'teamId', m.team_id, 'role', m.role, 'playerId', m.player_id, 'teamName', t.name) order by m.created_at desc), '[]'::jsonb)
+    'teamId', m.team_id, 'role', m.role, 'playerId', m.player_id, 'teamName', t.name, 'status', m.status)
+    order by m.created_at desc), '[]'::jsonb)
   from team_members m join teams t on t.id = m.team_id
   where m.user_id = auth.uid()
 $$;
@@ -202,7 +243,7 @@ end $$;
 create or replace function public.team_version(p_team uuid) returns integer
 language sql stable security definer set search_path = public as $$
   select t.version from teams t
-  where t.id = p_team and exists (select 1 from team_members m where m.team_id = p_team and m.user_id = auth.uid())
+  where t.id = p_team and exists (select 1 from team_members m where m.team_id = p_team and m.user_id = auth.uid() and m.status = 'active')
 $$;
 
 -- Saves a new version of the team document.
@@ -228,6 +269,12 @@ begin
 
   if p_role = 'coach' then
     merged := coalesce(p_data, '{}'::jsonb) - 'coachCode' - 'teamCode' - 'teamName';
+    -- A player removed from the list takes the accounts linked to them (player and parents) along.
+    delete from team_members x
+    where x.team_id = p_team and x.role in ('player', 'parent') and x.player_id is not null
+      and not exists (
+        select 1 from jsonb_array_elements(coalesce(merged -> 'players', '[]'::jsonb)) p where p ->> 'id' = x.player_id
+      );
   else
     prev := t.data;
     merged := prev;
@@ -283,7 +330,7 @@ language plpgsql security definer set search_path = public as $$
 declare
   uid uuid := ic_uid();
 begin
-  if not exists (select 1 from team_members m where m.team_id = p_team and m.user_id = uid) then
+  if not exists (select 1 from team_members m where m.team_id = p_team and m.user_id = uid and m.status = 'active') then
     raise exception 'not_member';
   end if;
   insert into push_subscriptions (endpoint, user_id, team_id, p256dh, auth_key, prefs)
@@ -314,6 +361,40 @@ begin
   ), '[]'::jsonb);
 end $$;
 
+-- ---------- Approving players and parents ----------
+
+-- The accounts linked to players on the team, waiting or approved, with their email. Coaches only.
+create or replace function public.team_links(p_team uuid) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  perform ic_uid();
+  if (ic_member(p_team, 'coach')).team_id is null then raise exception 'not_coach'; end if;
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'userId', m.user_id, 'role', m.role, 'playerId', m.player_id, 'status', m.status,
+      'email', u.email, 'at', m.created_at) order by m.created_at)
+    from team_members m left join auth.users u on u.id = m.user_id
+    where m.team_id = p_team and m.role in ('player', 'parent')
+  ), '[]'::jsonb);
+end $$;
+
+-- Approves a waiting player or parent, or removes the link (rejecting a request, or unlinking
+-- someone who picked the wrong player). Coaches only.
+create or replace function public.decide_link(p_team uuid, p_user uuid, p_role text, p_approve boolean) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  perform ic_uid();
+  if (ic_member(p_team, 'coach')).team_id is null then raise exception 'not_coach'; end if;
+  if p_role not in ('player', 'parent') then raise exception 'invalid_role'; end if;
+  if p_approve then
+    update team_members set status = 'active' where team_id = p_team and user_id = p_user and role = p_role;
+  else
+    delete from team_members where team_id = p_team and user_id = p_user and role = p_role;
+    delete from push_subscriptions s where s.team_id = p_team and s.user_id = p_user
+      and not exists (select 1 from team_members x where x.team_id = p_team and x.user_id = p_user);
+  end if;
+end $$;
+
 -- ---------- Who may call what ----------
 
 revoke all on function public.ic_member(uuid, text) from public, anon, authenticated;
@@ -332,6 +413,10 @@ revoke all on function public.team_version(uuid) from public, anon;
 revoke all on function public.save_team(uuid, text, integer, jsonb) from public, anon;
 revoke all on function public.save_push(uuid, text, text, text, jsonb) from public, anon;
 revoke all on function public.notify_targets(uuid, text) from public, anon;
+revoke all on function public.team_links(uuid) from public, anon;
+revoke all on function public.decide_link(uuid, uuid, text, boolean) from public, anon;
+grant execute on function public.team_links(uuid) to authenticated;
+grant execute on function public.decide_link(uuid, uuid, text, boolean) to authenticated;
 grant execute on function public.peek_team(text) to authenticated;
 grant execute on function public.join_team(text, text, text) to authenticated;
 grant execute on function public.create_team(text, text, text, jsonb) to authenticated;
