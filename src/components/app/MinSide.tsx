@@ -254,6 +254,11 @@ function CoachSections() {
                     {'Administrator siden ' + fmtDate(Date.parse(c.at)) + (c.signedAt ? ' · Har signert administratorreglene' : ' · Har ikke signert administratorreglene')}
                   </span>
                 </span>
+                {!c.me && (
+                  <button type="button" className="link-btn quiet" onClick={() => st.removeCoach(c.userId)}>
+                    Fjern
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -346,6 +351,19 @@ function CoachSections() {
             )}
           </>
         )}
+      </Section>
+      <Section title="Slett laget">
+        <p className="note">
+          Laget slettes for alle: spillerlista, kamper, innlegg, bilder og videoer. Alle mister tilgangen. Dette kan ikke angres.
+        </p>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          style={{ alignSelf: 'flex-start', color: 'var(--accent-ink)' }}
+          onClick={() => useStore.setState({ sheet: 'deleteTeam', form: { confirm: '', err: '' } })}
+        >
+          Slett laget
+        </button>
       </Section>
     </>
   );

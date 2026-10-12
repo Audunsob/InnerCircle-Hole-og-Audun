@@ -193,6 +193,23 @@ export const decideLink = (teamId: string, userId: string, role: 'player' | 'par
 export const leaveTeam = (teamId: string, role: MemberRole) => rpc<void>('leave_team', { p_team: teamId, p_role: role });
 /** Deletes the signed-in account everywhere. Not while it is the only coach on a team (LastCoachError). */
 export const deleteMe = () => rpc<void>('delete_me');
+/** Coach: removes another coach from the team. */
+export const removeCoach = (teamId: string, userId: string) => rpc<void>('remove_coach', { p_team: teamId, p_user: userId });
+/** Coach: deletes the team for everyone. `confirm` must be the team's name. */
+export const deleteTeam = (teamId: string, confirm: string) => rpc<void>('delete_team', { p_team: teamId, p_confirm: confirm });
+
+/** Coach: deletes every file in the team's folder. Best effort; never throws. */
+export async function deleteTeamFiles(teamId: string) {
+  const bucket = db().storage.from('media');
+  try {
+    for (let round = 0; round < 100; round++) {
+      const { data, error } = await bucket.list(teamId, { limit: 100 });
+      if (error || !data?.length) return;
+      const { error: rmError } = await bucket.remove(data.map((f) => teamId + '/' + f.name));
+      if (rmError) return;
+    }
+  } catch {}
+}
 
 /** Saves if `version` is still current; otherwise returns ok=false and the newer document. */
 export const saveTeam = (teamId: string, role: MemberRole, version: number, data: TeamData) =>
