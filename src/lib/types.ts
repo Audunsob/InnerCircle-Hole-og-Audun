@@ -160,6 +160,8 @@ export interface Flow {
   inviteVia: string | null;
   terms: boolean;
   coachCode: string;
+  /** Teams this account already coaches, found after login. They log in with the code, not sign up again. */
+  coachTeams?: { id: string; name: string }[];
   teamName?: string;
   newCoachCode: string;
   newTeamCode: string;
