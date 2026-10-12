@@ -496,14 +496,20 @@ function Confirm() {
   return (
     <>
       <p className="lead">{c?.body}</p>
-      <div className="btn-pair">
-        <button type="button" className="btn btn-secondary" onClick={closeSheet}>
-          Avbryt
+      {c?.info ? (
+        <button type="button" className="btn btn-primary btn-block" onClick={doConfirm}>
+          {c.label || 'OK'}
         </button>
-        <button type="button" className="btn btn-primary" onClick={doConfirm}>
-          {c?.label || 'OK'}
-        </button>
-      </div>
+      ) : (
+        <div className="btn-pair">
+          <button type="button" className="btn btn-secondary" onClick={closeSheet}>
+            Avbryt
+          </button>
+          <button type="button" className="btn btn-primary" onClick={doConfirm}>
+            {c?.label || 'OK'}
+          </button>
+        </div>
+      )}
     </>
   );
 }
