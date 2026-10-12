@@ -125,7 +125,9 @@ import type {
   SignedForm,
   Tab,
   TeamData,
+  TrainingSeries,
 } from './types';
+import { firstOn, isRunning, repeatText, seriesIcs, timeText, WEEKDAYS, yesterday } from './trainings';
 
 const EPHEMERAL_KEYS = Object.keys(ephemeral()) as (keyof EphemeralState)[];
 
@@ -228,6 +230,17 @@ export interface Actions {
   openAddMatch: (id?: string) => void;
   saveMatch: () => void;
   deleteMatch: (id: string) => void;
+  /** Opens the form for a training that repeats, empty or with an existing series. */
+  openTraining: (id?: string) => void;
+  saveTraining: () => void;
+  /** Stops a series after today; the trainings already held stay. */
+  endTraining: (id: string) => void;
+  /** Opens one training in a series, to move or cancel just that day. */
+  openTrainingDay: (seriesId: string, date: string) => void;
+  saveTrainingDay: () => void;
+  /** Cancels one training, or brings a cancelled one back. */
+  cancelTrainingDay: (cancel: boolean) => void;
+  trainingToCal: (id: string) => void;
   openResult: (id: string) => void;
   stepResult: (k: 'us' | 'them', dir: number) => void;
   saveResult: () => void;
@@ -442,6 +455,19 @@ export const useStore = create<Store>()((set, get) => {
     const now = Date.now();
     setData((d) => ({ ...d, notifs: [{ id: 'n' + now, text, ts: now, read: false, from: 'coach' as const }, ...d.notifs].slice(0, 100) }));
   };
+
+  /** Saves the change to one training in a series; an empty change removes it. */
+  const putChange = (seriesId: string, date: string, c: TrainingSeries['changes'][string]) =>
+    setData((d) => ({
+      ...d,
+      trainings: (d.trainings || []).map((x) => {
+        if (x.id !== seriesId) return x;
+        const changes = { ...x.changes };
+        if (Object.keys(c).length) changes[date] = c;
+        else delete changes[date];
+        return { ...x, changes };
+      }),
+    }));
 
   const setForm = (p: AppState['form']) => set((st) => ({ form: { ...st.form, ...p } }));
   const setProf = <R extends keyof Profiles>(r: R, patch: Partial<Profiles[R]>) =>
@@ -1544,6 +1570,150 @@ export const useStore = create<Store>()((set, get) => {
           toast('Kampen er slettet');
         },
       );
+    },
+    openTraining: (id) => {
+      const t = id ? (s().data.trainings || []).find((x) => x.id === id) : undefined;
+      set({
+        sheet: 'training',
+        form: t
+          ? {
+              trainingId: t.id,
+              title: t.title,
+              weekday: t.weekday,
+              every: t.every,
+              time: t.time,
+              end: t.end,
+              venue: t.venue,
+              note: t.note || '',
+              from: t.from,
+              until: t.until || '',
+              err: '',
+            }
+          : { title: 'Trening', weekday: 3, every: 1, time: '18:00', end: '19:30', venue: '', note: '', from: iso(new Date()), until: '', err: '' },
+      });
+    },
+    saveTraining: () => {
+      const f = s().form as Record<string, string | number | boolean>;
+      const title = String(f.title || '').trim() || 'Trening';
+      const venue = String(f.venue || '').trim();
+      const weekday = Number(f.weekday);
+      if (!(weekday >= 0 && weekday <= 6)) return setForm({ err: 'Velg hvilken dag treningen er.' });
+      if (!f.time) return setForm({ err: 'Legg inn når treningen starter.' });
+      if (f.end && String(f.end) <= String(f.time)) return setForm({ err: 'Slutt må være etter start.' });
+      if (!venue) return setForm({ err: 'Skriv inn hvor dere trener.' });
+      if (!f.from) return setForm({ err: 'Velg når den første treningen er.' });
+      const until = String(f.until || '');
+      if (until && until < firstOn(String(f.from), weekday)) return setForm({ err: 'Siste dag må være etter den første treningen.' });
+      const old = f.trainingId ? (s().data.trainings || []).find((x) => x.id === f.trainingId) : undefined;
+      const t: TrainingSeries = {
+        id: old?.id || 't' + Date.now(),
+        title,
+        weekday,
+        every: Number(f.every) === 2 ? 2 : 1,
+        time: String(f.time),
+        end: String(f.end || ''),
+        venue,
+        note: String(f.note || '').trim(),
+        from: String(f.from),
+        until: until || null,
+        // Changes to single days only fit while the day of the week stays the same.
+        changes: old && old.weekday === weekday ? old.changes : {},
+      };
+      setData((d) => ({ ...d, trainings: old ? (d.trainings || []).map((x) => (x.id === t.id ? t : x)) : [...(d.trainings || []), t] }));
+      set({ sheet: null, tab: 'kamper', kampTab: 'trening', openMatch: null });
+      const when = repeatText(t).toLowerCase() + ' kl. ' + timeText(t) + ', ' + t.venue;
+      if (old) {
+        toast('Treningen er endret');
+        if (old.weekday === t.weekday && old.every === t.every && old.time === t.time && old.end === t.end && old.venue === t.venue) return;
+        const text = 'Endret trening: ' + t.title + ' ' + when;
+        addNotif(text);
+        void notify('matches', teamName(s()), text);
+        return;
+      }
+      scrollTop();
+      toast(t.title + ' er lagt inn ' + repeatText(t).toLowerCase());
+      const text = 'Ny fast trening: ' + t.title + ' ' + when;
+      addNotif(text);
+      void notify('matches', teamName(s()), text);
+    },
+    endTraining: (id) => {
+      const t = (s().data.trainings || []).find((x) => x.id === id);
+      if (!t) return;
+      const stop = yesterday();
+      // Nothing held yet: no need to keep it around.
+      const never = firstOn(t.from, t.weekday) > stop;
+      ask(
+        never ? 'Slette treningen?' : 'Avslutte treningen?',
+        never
+          ? t.title + ' ' + repeatText(t).toLowerCase() + ' forsvinner for alle.'
+          : 'Det blir ingen flere ' + t.title.toLowerCase() + ' ' + repeatText(t).toLowerCase() + ' fra og med i dag.',
+        never ? 'Slett' : 'Avslutt',
+        () => {
+          setData((d) => ({
+            ...d,
+            trainings: never ? (d.trainings || []).filter((x) => x.id !== id) : (d.trainings || []).map((x) => (x.id === id ? { ...x, until: stop } : x)),
+          }));
+          toast(never ? 'Treningen er slettet' : 'Treningen er avsluttet');
+          const text = 'Ingen flere ' + t.title.toLowerCase() + ' ' + repeatText(t).toLowerCase();
+          addNotif(text);
+          void notify('matches', teamName(s()), text);
+        },
+      );
+    },
+    openTrainingDay: (seriesId, date) => {
+      const t = (s().data.trainings || []).find((x) => x.id === seriesId);
+      if (!t) return;
+      const c = t.changes?.[date] || {};
+      set({
+        sheet: 'trainingDay',
+        form: { seriesId, date, time: c.time || t.time, end: c.end ?? t.end, venue: c.venue || t.venue, note: c.note ?? t.note ?? '', cancelled: !!c.cancelled, err: '' },
+      });
+    },
+    saveTrainingDay: () => {
+      const f = s().form as Record<string, string | boolean>;
+      const t = (s().data.trainings || []).find((x) => x.id === f.seriesId);
+      if (!t) return set({ sheet: null });
+      const date = String(f.date);
+      const venue = String(f.venue || '').trim();
+      if (!f.time) return setForm({ err: 'Legg inn når treningen starter.' });
+      if (f.end && String(f.end) <= String(f.time)) return setForm({ err: 'Slutt må være etter start.' });
+      if (!venue) return setForm({ err: 'Skriv inn hvor dere trener.' });
+      const prev = t.changes?.[date] || {};
+      const c = {
+        ...(prev.cancelled ? { cancelled: true } : {}),
+        ...(String(f.time) !== t.time ? { time: String(f.time) } : {}),
+        ...(String(f.end || '') !== t.end ? { end: String(f.end || '') } : {}),
+        ...(venue !== t.venue ? { venue } : {}),
+        ...(String(f.note || '').trim() !== (t.note || '') ? { note: String(f.note || '').trim() } : {}),
+      };
+      const moved = (c.time || t.time) !== (prev.time || t.time) || (c.end ?? t.end) !== (prev.end ?? t.end) || (c.venue || t.venue) !== (prev.venue || t.venue);
+      putChange(t.id, date, c);
+      set({ sheet: null });
+      toast('Treningen ' + fmtDay(date) + ' er endret');
+      if (!moved) return;
+      const text = 'Endret trening ' + fmtDay(date) + ': kl. ' + timeText({ time: c.time || t.time, end: c.end ?? t.end }) + ', ' + (c.venue || t.venue);
+      addNotif(text);
+      void notify('matches', teamName(s()), text);
+    },
+    cancelTrainingDay: (cancel) => {
+      const f = s().form as Record<string, string | boolean>;
+      const t = (s().data.trainings || []).find((x) => x.id === f.seriesId);
+      if (!t) return set({ sheet: null });
+      const date = String(f.date);
+      const rest = { ...t.changes?.[date] };
+      delete rest.cancelled;
+      putChange(t.id, date, cancel ? { ...rest, cancelled: true } : rest);
+      set({ sheet: null });
+      toast(cancel ? 'Treningen ' + fmtDay(date) + ' er avlyst' : 'Treningen ' + fmtDay(date) + ' blir likevel');
+      const text = (cancel ? 'Avlyst: ' : 'Blir likevel: ') + t.title.toLowerCase() + ' ' + fmtDay(date) + ' kl. ' + t.time;
+      addNotif(text);
+      void notify('matches', teamName(s()), text);
+    },
+    trainingToCal: (id) => {
+      const t = (s().data.trainings || []).find((x) => x.id === id);
+      if (!t) return;
+      download('trening-' + WEEKDAYS[t.weekday].replace('ø', 'o') + '.ics', seriesIcs(t, shortTeam(s())), 'text/calendar');
+      toast(isRunning(t) ? 'Treningene er lagt i kalenderen' : 'Treningen er lagt i kalenderen');
     },
     openResult: (id) => {
       const m = s().data.matches.find((x) => x.id === id);

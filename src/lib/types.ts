@@ -71,6 +71,35 @@ export interface Match {
   them: number | null;
 }
 
+/** A change to one training in a series: moved, or cancelled. Keyed by its date. */
+export interface TrainingChange {
+  cancelled?: boolean;
+  time?: string;
+  end?: string;
+  venue?: string;
+  note?: string;
+}
+
+/** A training that repeats every week (or every other week) on the same day. */
+export interface TrainingSeries {
+  id: string;
+  title: string;
+  /** 0 = Sunday … 6 = Saturday, like Date.getDay(). */
+  weekday: number;
+  /** 1 = every week, 2 = every other week. */
+  every: 1 | 2;
+  time: string; // hh:mm
+  end: string; // hh:mm
+  venue: string;
+  note?: string;
+  /** First training, yyyy-mm-dd. */
+  from: string;
+  /** Last day of the series, yyyy-mm-dd. Missing while it goes on. */
+  until?: string | null;
+  /** Single trainings that were moved or cancelled. */
+  changes: Record<string, TrainingChange>;
+}
+
 export interface Media {
   id: string;
   kind: 'photo' | 'video';
@@ -149,6 +178,8 @@ export interface CoachConsentRecord {
 export interface TeamData {
   players: Player[];
   matches: Match[];
+  /** Missing on teams made before there were trainings. */
+  trainings?: TrainingSeries[];
   posts: Post[];
   subs: Subscriber[];
   notifs: Notif[];
@@ -249,6 +280,8 @@ export interface PayForm {
 export type SheetName =
   | 'composer'
   | 'addMatch'
+  | 'training'
+  | 'trainingDay'
   | 'result'
   | 'postMenu'
   | 'confirm'
@@ -317,7 +350,7 @@ export interface PersistedState {
   prof: Profiles;
   tab: Tab;
   filter: 'all' | PostType;
-  kampTab: 'upcoming' | 'played';
+  kampTab: 'upcoming' | 'played' | 'trening';
   openMatch: string | null;
   notifyMatch: Record<string, boolean>;
   data: TeamData;

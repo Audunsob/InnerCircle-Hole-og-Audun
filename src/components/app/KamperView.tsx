@@ -19,6 +19,7 @@ import type { Match } from '@/lib/types';
 import { DateCol, Icon, SwitchRow, Tabs } from '../ui';
 import { Rings } from '../screens/RoleScreen';
 import { Feed } from './LagView';
+import { TreningerView } from './TreningerView';
 
 function NotifyToggle({ id }: { id: string }) {
   const on = useStore((s) => !!s.notifyMatch[id]);
@@ -43,17 +44,23 @@ export function KamperView() {
         <div className="app-title" style={{ flex: 1, minWidth: 0 }}>
           Kamper
         </div>
-        {isCoach && (
-          <button type="button" className="btn-outline" onClick={() => st.openAddMatch()}>
-            + Legg til kamp
-          </button>
-        )}
+        {isCoach &&
+          (kampTab === 'trening' ? (
+            <button type="button" className="btn-outline" onClick={() => st.openTraining()}>
+              + Fast trening
+            </button>
+          ) : (
+            <button type="button" className="btn-outline" onClick={() => st.openAddMatch()}>
+              + Legg til kamp
+            </button>
+          ))}
       </header>
       <Tabs
         value={kampTab}
         items={[
           ['upcoming', 'Kommende'],
           ['played', 'Spilt'],
+          ['trening', 'Trening'],
         ]}
         onChange={st.setKampTab}
       />
@@ -104,6 +111,8 @@ export function KamperView() {
           )}
         </>
       )}
+
+      {kampTab === 'trening' && <TreningerView />}
 
       {kampTab === 'played' && (
         <>
