@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { download, firstName, fmtAcct, fmtDate, fmtDay, fmtShort, iso, krd, matchTime, NB, rel, stripe } from '@/lib/format';
 import { CKEYS, TYPES } from '@/lib/seed';
 import { CONSENT_INK, CONSENT_LABEL, consentStatus, matchTitle, playerMap, price, shortTeam, teamName } from '@/lib/selectors';
+import { canInstall, installApp, phoneKind } from '@/lib/push';
 import { receiptText, useStore } from '@/lib/store';
 import type { Draft, Media, PayMethod, Player, PostType, SheetName } from '@/lib/types';
 import { economy } from '../app/OkonomiView';
@@ -28,6 +29,7 @@ const TITLES: Record<Exclude<SheetName, 'confirm'>, string> = {
   report: 'Meld fra',
   help: 'Vanlige spørsmål',
   editPlayer: 'Endre spiller',
+  homeScreen: 'Legg appen på Hjem-skjermen',
   switchTeam: 'Administratorkode',
   deleteTeam: 'Slett laget',
 };
@@ -86,6 +88,7 @@ export function SheetHost() {
           {sheet === 'report' && <Report />}
           {sheet === 'help' && <Help />}
           {sheet === 'editPlayer' && <EditPlayer />}
+          {sheet === 'homeScreen' && <HomeScreenGuide />}
           {sheet === 'switchTeam' && <SwitchTeam />}
           {sheet === 'deleteTeam' && <DeleteTeam />}
         </div>
@@ -516,14 +519,20 @@ function Confirm() {
   return (
     <>
       <p className="lead">{c?.body}</p>
-      <div className="btn-pair">
-        <button type="button" className="btn btn-secondary" onClick={closeSheet}>
-          Avbryt
+      {c?.info ? (
+        <button type="button" className="btn btn-primary btn-block" onClick={doConfirm}>
+          {c.label || 'OK'}
         </button>
-        <button type="button" className="btn btn-primary" onClick={doConfirm}>
-          {c?.label || 'OK'}
-        </button>
-      </div>
+      ) : (
+        <div className="btn-pair">
+          <button type="button" className="btn btn-secondary" onClick={closeSheet}>
+            Avbryt
+          </button>
+          <button type="button" className="btn btn-primary" onClick={doConfirm}>
+            {c?.label || 'OK'}
+          </button>
+        </div>
+      )}
     </>
   );
 }
@@ -992,6 +1001,114 @@ function Help() {
         </div>
       ))}
     </div>
+  );
+}
+
+/** Opened inside Facebook, Instagram, Gmail and similar apps, which can't add to the home screen. */
+const inAppBrowser = () => typeof navigator !== 'undefined' && /FBAN|FBAV|Instagram|Snapchat|LinkedInApp|GSA\/|Line\//i.test(navigator.userAgent);
+
+function Step({ n, icon, children }: { n: number; icon: string; children: ReactNode }) {
+  return (
+    <li style={{ display: 'flex', gap: 14, alignItems: 'flex-start', padding: '12px 0', borderTop: n > 1 ? '1px solid var(--line)' : undefined }}>
+      <span
+        aria-hidden="true"
+        style={{
+          flex: '0 0 32px',
+          height: 32,
+          borderRadius: '50%',
+          border: '1px solid var(--gold)',
+          display: 'grid',
+          placeItems: 'center',
+          font: '600 15px var(--body)',
+          color: 'var(--gold)',
+        }}
+      >
+        {n}
+      </span>
+      <div className="body-text" style={{ flex: 1, paddingTop: 4 }}>
+        {children}
+      </div>
+      <Icon name={icon} size={26} style={{ color: 'var(--accent-ink)', paddingTop: 2 }} />
+    </li>
+  );
+}
+
+/** Step by step: put the app on the home screen, for iPhone and Android. Shown to everyone the first time in. */
+function HomeScreenGuide() {
+  const closeSheet = useStore((s) => s.closeSheet);
+  const toast = useStore((s) => s.toast);
+  const [kind, setKind] = useState<'ios' | 'android'>(() => phoneKind() || 'ios');
+  const [oneTap, setOneTap] = useState(() => canInstall());
+  const install = async () => {
+    const ok = await installApp();
+    setOneTap(false);
+    if (ok) {
+      closeSheet();
+      toast('InnerCircle ligger nå på Hjem-skjermen');
+    }
+  };
+  return (
+    <>
+      <p className="lead">
+        Da åpner du InnerCircle med ett trykk, som en vanlig app, og du kan få varsel når det kommer nye bilder.
+      </p>
+      {inAppBrowser() && (
+        <p className="note" style={{ marginTop: 12, color: 'var(--accent-ink)' }}>
+          Du har åpnet lenken inne i en annen app. Åpne den i {kind === 'ios' ? 'Safari' : 'Chrome'} først: trykk på de tre prikkene eller
+          Del-knappen og velg «Åpne i {kind === 'ios' ? 'Safari' : 'nettleser'}».
+        </p>
+      )}
+      <Tabs
+        value={kind}
+        items={[
+          ['ios', 'iPhone'],
+          ['android', 'Android'],
+        ]}
+        onChange={setKind}
+        style={{ margin: '16px 0 4px' }}
+      />
+      {kind === 'ios' ? (
+        <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+          <Step n={1} icon="ios_share">
+            Trykk på <b>Del-knappen</b> nederst på skjermen i Safari (firkanten med pil opp). På iPad er den øverst.
+          </Step>
+          <Step n={2} icon="add_box">
+            Bla litt ned og trykk på <b>«Legg til på Hjem-skjerm»</b>.
+          </Step>
+          <Step n={3} icon="check_circle">
+            Trykk <b>«Legg til»</b> øverst til høyre.
+          </Step>
+          <Step n={4} icon="home">
+            Åpne <b>InnerCircle</b> fra ikonet på Hjem-skjermen. Første gang logger du inn med e-posten din igjen.
+          </Step>
+        </ol>
+      ) : (
+        <>
+          {oneTap && (
+            <button type="button" className="btn btn-primary btn-block" style={{ margin: '12px 0 4px' }} onClick={() => void install()}>
+              Legg til nå
+            </button>
+          )}
+          <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+            <Step n={1} icon="more_vert">
+              Trykk på <b>de tre prikkene</b> øverst til høyre i Chrome.
+            </Step>
+            <Step n={2} icon="install_mobile">
+              Trykk på <b>«Legg til på startskjermen»</b> eller <b>«Installer app»</b>.
+            </Step>
+            <Step n={3} icon="check_circle">
+              Trykk <b>«Installer»</b> eller <b>«Legg til»</b>.
+            </Step>
+            <Step n={4} icon="home">
+              Åpne <b>InnerCircle</b> fra ikonet på startskjermen.
+            </Step>
+          </ol>
+        </>
+      )}
+      <button type="button" className="btn btn-secondary btn-block" style={{ marginTop: 12 }} onClick={closeSheet}>
+        Ferdig
+      </button>
+    </>
   );
 }
 
