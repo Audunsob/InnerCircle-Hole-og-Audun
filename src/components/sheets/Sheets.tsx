@@ -3,7 +3,7 @@
 import { useEffect, type FormEvent } from 'react';
 import { download, firstName, fmtAcct, fmtDate, fmtDay, fmtShort, iso, krd, matchTime, NB, rel, stripe } from '@/lib/format';
 import { CKEYS, TYPES } from '@/lib/seed';
-import { CONSENT_INK, CONSENT_LABEL, consentStatus, matchTitle, playerMap, price, shortTeam, teamName } from '@/lib/selectors';
+import { CONSENT_INK, CONSENT_LABEL, consentStatus, waitsForParent, matchTitle, playerMap, price, shortTeam, teamName } from '@/lib/selectors';
 import { receiptText, useStore } from '@/lib/store';
 import type { Draft, Media, PayMethod, Player, PostType, SheetName } from '@/lib/types';
 import { economy } from '../app/OkonomiView';
@@ -308,6 +308,7 @@ function Chip({ label, on, onClick, disabled }: { label: string; on: boolean; on
 /** Why a player can't be in focus in this post, or null if they can. */
 function focusBlock(p: Player, hasVideo: boolean): string | null {
   const c = p.consent;
+  if (waitsForParent(p)) return 'venter på foresatt';
   if (!c || !c.photo) return 'mangler samtykke';
   if (!c.tag) return 'kan ikke merkes';
   if (hasVideo && !c.video) return 'ikke video';
@@ -814,7 +815,11 @@ function ConsentView() {
     : signedForm
       ? c.adult
         ? 'Signert av spilleren (over 15 år)'
-        : 'Signert av spilleren og en foresatt (under 15 år)'
+        : c.parentBy
+          ? 'Signert av spilleren (under 15 år) og godkjent av en foresatt fra egen innlogging'
+          : c.parentSig
+            ? 'Signert av spilleren og en foresatt på spillerens telefon (under 15 år). En foresatt må godkjenne fra egen innlogging'
+            : 'Signert av spilleren (under 15 år). Venter på at en foresatt godkjenner fra egen innlogging'
       : 'Gitt av en foresatt i appen';
   const no =
     p.declined === 'parent' ? 'En foresatt sa nei til bilder.' : p.declined === 'player' ? 'Spilleren sa nei til bilder.' : null;

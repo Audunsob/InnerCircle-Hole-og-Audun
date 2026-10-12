@@ -51,7 +51,7 @@ import {
   type TeamPayload,
 } from './supabase';
 import { scoreTitle } from './derive';
-import { coachName, matchTitle, price, shortTeam, teamName } from './selectors';
+import { coachName, hasConsent, matchTitle, price, shortTeam, teamName } from './selectors';
 
 const MAX_VIDEO = 50 * 1024 * 1024;
 
@@ -582,7 +582,7 @@ export const useStore = create<Store>()((set, get) => {
       return go('pconsent');
     }
     setProf('parent', { childId: playerId });
-    if (player?.consent) return enterApp('parent');
+    if (hasConsent(player)) return enterApp('parent');
     set({ cons: defCons(), consCtx: null });
     go('consent');
   };
@@ -752,20 +752,28 @@ export const useStore = create<Store>()((set, get) => {
     const c = st.pcons || ({} as SignedForm);
     const id = st.prof.player.playerId;
     setPC({ busy: true });
-    const [playerSig, parentSig] = ok ? await Promise.all([storeSignature(c.ps), c.adult ? null : storeSignature(c.gs)]) : [null, null];
+    const playerSig = ok ? await storeSignature(c.ps) : null;
+    // A parent who already said yes from their own login keeps their approval and their choices.
+    const prev = st.data.players.find((p) => p.id === id)?.consent;
+    const base = prev?.parentBy ? prev : { photo: true, video: true, name: true, tag: true };
     if (id)
       updPlayer(id, {
-        consent: ok
-          ? { photo: true, video: true, name: true, tag: true, at: Date.now(), adult: !!c.adult, playerSig, parentSig }
-          : null,
+        consent: ok ? { ...base, at: Date.now(), adult: !!c.adult, playerSig } : null,
         declined: ok ? null : by,
       });
+    const needParent = ok && !c.adult && !prev?.parentBy;
     const inApp = st.pcCtx === 'app';
     set({ pcons: null, pcCtx: null });
-    if (inApp) return toast(ok ? 'Samtykket er lagret' : 'Du er ikke med på bilder');
+    if (inApp) return toast(!ok ? 'Du er ikke med på bilder' : needParent ? 'Lagret. En foresatt må også godkjenne.' : 'Samtykket er lagret');
     enterApp('player');
     toast(
-      ok ? 'Takk! Samtykket er signert.' : by === 'parent' ? 'Lagret. Foresatt har ikke godkjent bilder.' : 'Lagret. Du er ikke med på bilder.',
+      !ok
+        ? by === 'parent'
+          ? 'Lagret. Foresatt har ikke godkjent bilder.'
+          : 'Lagret. Du er ikke med på bilder.'
+        : needParent
+          ? 'Takk! Nå må en foresatt godkjenne fra sin egen innlogging.'
+          : 'Takk! Samtykket er signert.',
     );
   };
 
@@ -985,7 +993,12 @@ export const useStore = create<Store>()((set, get) => {
       const inApp = st.consCtx === 'app';
       if (!c.check) return toast('Kryss av for at du er foresatt først');
       const any = Object.values(c.draft).some(Boolean);
-      if (st.prof.parent.childId) updPlayer(st.prof.parent.childId, { consent: any ? { ...c.draft, at: Date.now() } : null });
+      const childId = st.prof.parent.childId;
+      const prev = st.data.players.find((p) => p.id === childId)?.consent;
+      const now = Date.now();
+      // Keeps the player's own signature. The database records which parent account said yes.
+      if (childId)
+        updPlayer(childId, { consent: any ? { ...prev, ...c.draft, at: now, parentAt: now, parentBy: st.uid } : null });
       if (inApp) {
         set({ consCtx: null, cons: null });
         toast('Samtykket er oppdatert');
@@ -1001,7 +1014,9 @@ export const useStore = create<Store>()((set, get) => {
     },
     editParentConsent: () => {
       const st = s();
-      const cc = st.data.players.find((p) => p.id === st.prof.parent.childId)?.consent;
+      const child = st.data.players.find((p) => p.id === st.prof.parent.childId);
+      // The child's own yes doesn't switch anything on for the parent: they choose each item themselves.
+      const cc = hasConsent(child) ? child?.consent : null;
       set({
         cons: { step: 1, draft: { photo: !!cc?.photo, video: !!cc?.video, name: !!cc?.name, tag: !!cc?.tag }, check: false },
         consCtx: 'app',
@@ -1020,27 +1035,14 @@ export const useStore = create<Store>()((set, get) => {
 
     // ---------- Signed forms ----------
 
+    // Under 15, a parent says yes from their own login (Jeg er foresatt), not on the player's phone.
     pcNext: () => {
       const c = s().pcons || ({ step: 1 } as SignedForm);
-      const minor = !c.adult;
-      if (c.step === 1) {
-        if (!c.p) return setPC({ err: 'Velg ett av alternativene.' });
-        if (c.p === 'yes' && !c.ps) return setPC({ err: 'Skriv signaturen din i feltet.' });
-        if (c.p === 'no') return pcFinish(false, 'player');
-        if (minor) {
-          setPC({ step: 2 });
-          scrollTop();
-          return;
-        }
-        return pcFinish(true, null);
-      }
-      if (!c.g) return setPC({ err: 'Velg ett av alternativene.' });
-      if (c.g === 'yes' && !c.gs) return setPC({ err: 'Foresatt må signere i feltet.' });
-      pcFinish(c.g === 'yes', c.g === 'yes' ? null : 'parent');
+      if (!c.p) return setPC({ err: 'Velg ett av alternativene.' });
+      if (c.p === 'yes' && !c.ps) return setPC({ err: 'Skriv signaturen din i feltet.' });
+      pcFinish(c.p === 'yes', c.p === 'yes' ? null : 'player');
     },
     pcBack: () => {
-      const c = s().pcons;
-      if (c?.step === 2) return setPC({ step: 1 });
       if (s().pcCtx === 'app') return set({ pcCtx: null, pcons: null });
       get().back();
     },
