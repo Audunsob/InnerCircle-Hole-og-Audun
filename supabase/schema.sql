@@ -1,7 +1,8 @@
 -- InnerCircle database setup, version 5 (accounts, approval of players and parents, list of coaches,
 -- team name and codes, reports, notifications for one match or some players,
 -- leaving a team, deleting your account and deleting files, removing coaches and deleting a team,
--- parents say yes to under-15 consent from their own login).
+-- parents say yes to under-15 consent from their own login, players aged 15 or more and parents post
+-- about matches and events the coaches made).
 -- Paste all of this into Supabase: SQL Editor -> New query -> Run.
 -- Safe to run more than once, and safe to run on top of version 1, 2, 3 and 4.
 
@@ -121,6 +122,94 @@ language sql immutable set search_path = public as $$
              'photo', p_prev -> 'photo', 'video', p_prev -> 'video', 'name', p_prev -> 'name', 'tag', p_prev -> 'tag')
     else p_next - 'parentBy' - 'parentAt'
   end
+$$;
+
+-- Players aged 15 or more and parents may post about something the coaches made. A player counts as 15 or
+-- more when they signed the consent form as 15 or more, unless the year of birth the coach entered says otherwise.
+create or replace function public.ic_can_post(p_data jsonb, p_role text, p_player text) returns boolean
+language sql stable set search_path = public as $$
+  select p_player is not null and case
+    when p_role = 'parent' then true
+    when p_role = 'player' then exists (
+      select 1 from jsonb_array_elements(coalesce(p_data -> 'players', '[]'::jsonb)) p
+      where p ->> 'id' = p_player
+        and p -> 'consent' ->> 'adult' = 'true'
+        and (jsonb_typeof(p -> 'born') is distinct from 'number' or extract(year from now()) - (p ->> 'born')::numeric >= 15))
+    else false
+  end
+$$;
+
+-- What a post from a player or parent can be about (its matchId or eventId): a match, training or event the coaches made.
+create or replace function public.ic_targets(p_data jsonb) returns text[]
+language sql immutable set search_path = public as $$
+  select coalesce(array_agg(x ->> 'id') filter (where x ->> 'id' is not null), '{}')
+  from unnest(array['matches', 'trainings', 'events']) k,
+       jsonb_array_elements(case when jsonb_typeof(p_data -> k) = 'array' then p_data -> k else '[]'::jsonb end) x
+$$;
+
+-- Is this id something the coaches made? One training in a weekly series has the id "<series id>:<yyyy-mm-dd>".
+create or replace function public.ic_target_ok(p_data jsonb, p_id text) returns boolean
+language sql immutable set search_path = public as $$
+  select p_id = any (ic_targets(p_data))
+    or (p_id ~ '^[^:]+:\d{4}-\d{2}-\d{2}$' and split_part(p_id, ':', 1) = any (
+      select x ->> 'id' from jsonb_array_elements(
+        case when jsonb_typeof(p_data -> 'trainings') = 'array' then p_data -> 'trainings' else '[]'::jsonb end) x))
+$$;
+
+-- A post from a player or parent, as it may be saved: about something the coaches made, with photos and
+-- videos from the team's own folder, tagging players on the team. Who wrote it, when, and the hearts are
+-- set here, never taken from the app. Returns null if the post isn't allowed.
+create or replace function public.ic_member_post(p_new jsonb, p_old jsonb, p_data jsonb, p_team uuid, p_uid text,
+  p_author text, p_author_role text) returns jsonb
+language sql stable set search_path = public as $$
+  with n as (
+    select p_new ->> 'id' as id,
+           coalesce(p_new ->> 'type', '') as type,
+           nullif(p_new ->> 'matchId', '') as match_id,
+           nullif(p_new ->> 'eventId', '') as event_id,
+           case when jsonb_typeof(p_new -> 'media') = 'array' then p_new -> 'media' else '[]'::jsonb end as media,
+           case when jsonb_typeof(p_new -> 'tagged') = 'array' then p_new -> 'tagged' else '[]'::jsonb end as tagged,
+           trim(coalesce(p_new ->> 'text', '')) as text
+  ), c as (
+    select n.*,
+      (select coalesce(jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
+         'id', x ->> 'id', 'kind', x ->> 'kind', 'src', x ->> 'src', 'label', x ->> 'label', 'dur', x ->> 'dur'))), '[]'::jsonb)
+       from jsonb_array_elements(n.media) x) as clean_media
+    from n
+  )
+  select case when
+      jsonb_typeof(p_new) = 'object'
+      and c.id is not null and length(c.id) <= 80
+      and c.type in ('kamp', 'trening', 'beskjed')
+      and (c.match_id is not null or c.event_id is not null)
+      and (c.match_id is null or ic_target_ok(p_data, c.match_id))
+      and (c.event_id is null or ic_target_ok(p_data, c.event_id))
+      and jsonb_array_length(c.media) <= 10
+      and not exists (
+        select 1 from jsonb_array_elements(c.media) x
+        where jsonb_typeof(x) <> 'object' or coalesce(x ->> 'kind', '') not in ('photo', 'video')
+           or left(coalesce(x ->> 'src', ''), length('sb:' || p_team::text || '/')) <> 'sb:' || p_team::text || '/')
+      and not exists (
+        select 1 from jsonb_array_elements(c.tagged) t
+        where not exists (
+          select 1 from jsonb_array_elements(coalesce(p_data -> 'players', '[]'::jsonb)) p where p ->> 'id' = t #>> '{}'))
+      and length(c.text) <= 2000
+      and (c.text <> '' or jsonb_array_length(c.media) > 0)
+    then jsonb_build_object(
+      'id', c.id, 'type', c.type, 'authorId', p_uid, 'author', p_author, 'authorRole', p_author_role,
+      'ts', coalesce(p_old -> 'ts', to_jsonb((extract(epoch from now()) * 1000)::bigint)),
+      'matchId', c.match_id, 'eventId', c.event_id, 'media', c.clean_media, 'tagged', c.tagged, 'text', c.text,
+      'likes', coalesce(p_old -> 'likes', '0'::jsonb), 'likedBy', coalesce(p_old -> 'likedBy', '[]'::jsonb))
+      || case
+           when p_old is null then '{}'::jsonb
+           when p_old -> 'edited' = 'true'::jsonb
+             or (p_old ->> 'type', p_old ->> 'matchId', p_old ->> 'eventId', p_old -> 'media', p_old -> 'tagged', p_old ->> 'text')
+                is distinct from (c.type, c.match_id, c.event_id, c.clean_media, c.tagged, c.text)
+             then '{"edited": true}'::jsonb
+           else '{}'::jsonb
+         end
+  end
+  from c
 $$;
 
 -- What a member gets back. Coaches see everything; others don't see the coach code,
@@ -280,7 +369,8 @@ $$;
 -- Saves a new version of the team document.
 -- Coaches may change everything. Everyone else may only change their own things:
 -- their own hearts, their own player's consent (or their child's), their own subscription and payments,
--- and their own reports to the coaches.
+-- and their own reports to the coaches. Players aged 15 or more and parents may also add posts about a
+-- match, training or event the coaches made, and change or delete their own posts.
 -- Returns ok=false with the current document if someone else saved first.
 create or replace function public.save_team(p_team uuid, p_role text, p_version integer, p_data jsonb) returns jsonb
 language plpgsql security definer set search_path = public as $$
@@ -291,6 +381,13 @@ declare
   prev jsonb;
   merged jsonb;
   own text[];
+  can_post boolean;
+  author text;
+  posts jsonb := '[]'::jsonb;
+  op jsonb;
+  np jsonb;
+  cp jsonb;
+  added integer := 0;
 begin
   m := ic_member(p_team, p_role);
   if m.team_id is null then raise exception 'not_member'; end if;
@@ -312,22 +409,56 @@ begin
     merged := prev;
     own := array['sub-' || uid, 'par-' || uid];
 
-    -- Hearts: only your own heart can be added or removed. A parent may untag their own child.
-    merged := jsonb_set(merged, '{posts}', coalesce((
-      select jsonb_agg(
-        op.v
-        || jsonb_build_object('likedBy',
-             ic_without(op.v -> 'likedBy', uid)
-             || case when np.v is not null and coalesce(np.v -> 'likedBy', '[]'::jsonb) @> to_jsonb(uid)
-                     then jsonb_build_array(uid) else '[]'::jsonb end)
-        || case when p_role = 'parent' and m.player_id is not null and np.v is not null
-                     and not coalesce(np.v -> 'tagged', '[]'::jsonb) @> to_jsonb(m.player_id)
-                then jsonb_build_object('tagged', ic_without(op.v -> 'tagged', m.player_id))
-                else '{}'::jsonb end
-        order by op.ord)
-      from jsonb_array_elements(coalesce(prev -> 'posts', '[]'::jsonb)) with ordinality op(v, ord)
-      left join jsonb_array_elements(coalesce(p_data -> 'posts', '[]'::jsonb)) np(v) on np.v ->> 'id' = op.v ->> 'id'
-    ), '[]'::jsonb));
+    -- Who may post, and the name shown on their posts. Names follow the consent form: without
+    -- consent to show the name, the post says only "Spiller" or "Foresatt".
+    can_post := ic_can_post(prev, p_role, m.player_id);
+    if can_post then
+      author := (
+        select case
+          when p_role = 'player' and p -> 'consent' ->> 'name' = 'true' then p ->> 'name'
+          when p_role = 'parent' and p -> 'consent' ->> 'name' = 'true' then 'Foresatt til ' || split_part(p ->> 'name', ' ', 1)
+          when p_role = 'player' then 'Spiller'
+          else 'Foresatt'
+        end
+        from jsonb_array_elements(coalesce(prev -> 'players', '[]'::jsonb)) p where p ->> 'id' = m.player_id limit 1);
+    end if;
+
+    -- New posts, at most 10 at a time, on top like the app shows them. Posts that aren't allowed are left out.
+    if can_post then
+      for np in
+        select x from jsonb_array_elements(coalesce(p_data -> 'posts', '[]'::jsonb)) x
+        where not exists (select 1 from jsonb_array_elements(coalesce(prev -> 'posts', '[]'::jsonb)) o where o ->> 'id' = x ->> 'id')
+      loop
+        exit when added >= 10;
+        cp := ic_member_post(np, null, prev, p_team, uid, author, case when p_role = 'player' then 'Spiller' else 'Foresatt' end);
+        if cp is not null and not posts @> jsonb_build_array(jsonb_build_object('id', cp ->> 'id')) then
+          posts := posts || jsonb_build_array(cp);
+          added := added + 1;
+        end if;
+      end loop;
+    end if;
+
+    -- Existing posts. Your own posts you may delete, and change if you may still post.
+    -- On every post only your own heart can be added or removed, and a parent may untag their own child.
+    for op in select x from jsonb_array_elements(coalesce(prev -> 'posts', '[]'::jsonb)) x loop
+      np := (select x from jsonb_array_elements(coalesce(p_data -> 'posts', '[]'::jsonb)) x where x ->> 'id' = op ->> 'id' limit 1);
+      if op ->> 'authorId' = uid then
+        continue when np is null;
+        if can_post then
+          op := coalesce(ic_member_post(np, op, prev, p_team, uid, author, op ->> 'authorRole'), op);
+        end if;
+      end if;
+      op := op || jsonb_build_object('likedBy',
+               ic_without(op -> 'likedBy', uid)
+               || case when np is not null and coalesce(np -> 'likedBy', '[]'::jsonb) @> to_jsonb(uid)
+                       then jsonb_build_array(uid) else '[]'::jsonb end);
+      if p_role = 'parent' and m.player_id is not null and np is not null
+         and not coalesce(np -> 'tagged', '[]'::jsonb) @> to_jsonb(m.player_id) then
+        op := op || jsonb_build_object('tagged', ic_without(op -> 'tagged', m.player_id));
+      end if;
+      posts := posts || jsonb_build_array(op);
+    end loop;
+    merged := jsonb_set(merged, '{posts}', posts);
 
     -- Consent: only for your own player (or your child).
     merged := jsonb_set(merged, '{players}', coalesce((
@@ -619,6 +750,10 @@ revoke all on function public.ic_consent(text, text, jsonb, jsonb) from public, 
 revoke all on function public.ic_payload(public.teams, text) from public, anon, authenticated;
 revoke all on function public.ic_forget(jsonb, text) from public, anon, authenticated;
 revoke all on function public.ic_last_coach(uuid, uuid) from public, anon, authenticated;
+revoke all on function public.ic_can_post(jsonb, text, text) from public, anon, authenticated;
+revoke all on function public.ic_targets(jsonb) from public, anon, authenticated;
+revoke all on function public.ic_target_ok(jsonb, text) from public, anon, authenticated;
+revoke all on function public.ic_member_post(jsonb, jsonb, jsonb, uuid, text, text, text) from public, anon, authenticated;
 revoke all on function public.ic_is_member(text) from public, anon;
 revoke all on function public.ic_is_coach(text) from public, anon;
 revoke all on function public.leave_team(uuid, text) from public, anon;
@@ -664,8 +799,9 @@ grant execute on function public.leave_team(uuid, text) to authenticated;
 grant execute on function public.delete_me() to authenticated;
 
 -- ---------- Photos, videos and signatures ----------
--- Private: only members of a team can upload to or open files in that team's folder,
--- and only the team's coaches can delete them (when a post or a photo in it is deleted).
+-- Private: only members of a team can upload to or open files in that team's folder.
+-- The team's coaches can delete them (when a post or a photo in it is deleted), and members can
+-- delete files they uploaded themselves (when they delete their own post).
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('media', 'media', false, 52428800, array['image/jpeg', 'image/png', 'video/mp4', 'video/quicktime', 'video/webm'])
@@ -676,6 +812,7 @@ drop policy if exists "InnerCircle upload media" on storage.objects;
 drop policy if exists "InnerCircle members upload" on storage.objects;
 drop policy if exists "InnerCircle members read" on storage.objects;
 drop policy if exists "InnerCircle coaches delete" on storage.objects;
+drop policy if exists "InnerCircle owners delete" on storage.objects;
 create policy "InnerCircle members upload" on storage.objects
   for insert to authenticated
   with check (bucket_id = 'media' and public.ic_is_member((storage.foldername(name))[1]));
@@ -685,3 +822,6 @@ create policy "InnerCircle members read" on storage.objects
 create policy "InnerCircle coaches delete" on storage.objects
   for delete to authenticated
   using (bucket_id = 'media' and public.ic_is_coach((storage.foldername(name))[1]));
+create policy "InnerCircle owners delete" on storage.objects
+  for delete to authenticated
+  using (bucket_id = 'media' and owner_id = (select auth.uid())::text and public.ic_is_member((storage.foldername(name))[1]));

@@ -2,7 +2,7 @@
 
 import { homeAway, splitMatches, visiblePosts } from '@/lib/derive';
 import { firstName, inviteLink, nextChargeText } from '@/lib/format';
-import { codes, matchTitle, opponentText, playerMap, priceText, teamName } from '@/lib/selectors';
+import { canPost, codes, matchTitle, opponentText, playerMap, priceText, teamName } from '@/lib/selectors';
 import { useStore } from '@/lib/store';
 import type { AppState, Player, Post } from '@/lib/types';
 import { Chips, DateCol, Icon } from '../ui';
@@ -215,7 +215,7 @@ export function LagView() {
           </div>
         )}
 
-        {isCoach && (
+        {canPost(st) && (isCoach || data.matches.length > 0) && (
           <button
             type="button"
             className="card-btn"
@@ -235,7 +235,7 @@ export function LagView() {
               cursor: 'pointer',
             }}
           >
-            <span style={{ flex: 1 }}>Del noe med laget …</span>
+            <span style={{ flex: 1 }}>{isCoach ? 'Del noe med laget …' : 'Del bilder fra en kamp …'}</span>
             <span style={{ width: 38, height: 38, borderRadius: 12, background: 'var(--accent)', color: 'var(--on-accent)', display: 'grid', placeItems: 'center' }}>
               <Icon name="add_photo_alternate" size={22} />
             </span>

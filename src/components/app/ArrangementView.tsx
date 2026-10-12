@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { eventHours, splitEvents, visiblePosts } from '@/lib/derive';
 import { fmtLong } from '@/lib/format';
-import { playerMap } from '@/lib/selectors';
+import { canPost, playerMap } from '@/lib/selectors';
 import { useStore } from '@/lib/store';
 import type { TeamEvent } from '@/lib/types';
 import { DateCol, Icon, Tabs } from '../ui';
@@ -143,11 +143,15 @@ export function EventDetail({ id }: { id: string }) {
           </button>
         </div>
       </section>
-      {isCoach && (
+      {(isCoach || canPost(st)) && (
         <div style={{ margin: '12px 0', display: 'flex', alignItems: 'center', gap: 16 }}>
-          <button type="button" className="link-btn small" style={{ flex: 1, textAlign: 'left' }} onClick={() => st.openAddEvent(e.id)}>
-            Endre eller slett
-          </button>
+          <span style={{ flex: 1 }}>
+            {isCoach && (
+              <button type="button" className="link-btn small" style={{ textAlign: 'left' }} onClick={() => st.openAddEvent(e.id)}>
+                Endre eller slett
+              </button>
+            )}
+          </span>
           <button type="button" className="btn-outline" onClick={() => st.openComposer(null, e.id)}>
             + Innlegg
           </button>

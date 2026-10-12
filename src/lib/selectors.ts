@@ -55,3 +55,26 @@ export const postAllowed = (P: Record<string, Player>, post: Post) =>
     if (post.media.some((m) => m.kind === 'video') && !p.consent!.video) return false;
     return true;
   });
+
+type PostState = Pick<AppState, 'data' | 'prof' | 'role'>;
+
+/**
+ * Players aged 15 or more and parents may post about a match the coaches made (the database checks the same).
+ * A player counts as 15 or more when they signed the consent form as 15 or more, unless the year of birth says otherwise.
+ */
+export const canPost = (s: PostState) => {
+  if (s.role === 'coach') return true;
+  if (s.role === 'parent') return !!s.prof.parent.childId;
+  if (s.role !== 'player') return false;
+  const me = s.data.players.find((p) => p.id === s.prof.player.playerId);
+  return !!me?.consent?.adult && (me.born == null || new Date().getFullYear() - me.born >= 15);
+};
+
+/** The name on a post from a player or parent. Without consent to show the name, only the role. Set again by the database. */
+export const memberAuthor = (s: PostState) => {
+  const id = s.role === 'player' ? s.prof.player.playerId : s.prof.parent.childId;
+  const p = s.data.players.find((x) => x.id === id);
+  const named = !!p?.consent?.name;
+  if (s.role === 'player') return { author: named ? p!.name : 'Spiller', authorRole: 'Spiller' };
+  return { author: named ? 'Foresatt til ' + p!.name.split(' ')[0] : 'Foresatt', authorRole: 'Foresatt' };
+};
