@@ -45,12 +45,14 @@ import {
   teamCoaches,
   teamLinks,
   teamVersion,
+  updateTeam,
   uploadMedia,
   verifyCode,
   type Membership,
   type TeamPayload,
 } from './supabase';
 import { scoreTitle } from './derive';
+import { enablePush, needsHomeScreen, updatePushPrefs, type PushPrefs } from './push';
 import { coachName, matchTitle, price, shortTeam, teamName } from './selectors';
 
 const MAX_VIDEO = 50 * 1024 * 1024;
@@ -223,6 +225,14 @@ export interface Actions {
   publish: () => void;
   deletePost: (id: string) => void;
   copyCode: (code: string, label: string) => void;
+  openTeamSettings: () => void;
+  /** New random code in the team settings form. */
+  newCode: (which: 'teamCode' | 'coachCode') => void;
+  saveTeamSettings: () => Promise<void>;
+  /** Coach: reminds the players (and their parents) who haven't answered the consent form. */
+  remindConsent: (ids: string[]) => void;
+  /** Coach: marks a report or question as handled. */
+  dismissReport: (id: string) => void;
   openPrice: () => void;
   stepPrice: (dir: number) => void;
   savePrice: () => void;
@@ -241,6 +251,11 @@ export interface Actions {
   copyInvite: (link: string) => void;
   shareInvite: (link: string) => void;
   removeChildFromPost: (postId: string) => void;
+
+  // Everyone
+  /** Report a post to the coaches, or (without a post) ask them something. */
+  openReport: (postId: string | null) => void;
+  sendReport: () => Promise<void>;
 }
 
 export type Store = AppState & Actions;
@@ -354,7 +369,12 @@ export const useStore = create<Store>()((set, get) => {
   };
 
   /** Tells the team's phones about something new. Only coaches can; it does nothing for others. */
-  const notify = async (kind: 'posts' | 'matches' | 'results', title: string, body: string) => {
+  const notify = async (
+    kind: 'posts' | 'matches' | 'results' | 'reminders',
+    title: string,
+    body: string,
+    extra: { matchId?: string | null; onlyWatchers?: boolean; playerIds?: string[] } = {},
+  ) => {
     const team = s().team;
     if (!team || team.role !== 'coach') return;
     try {
@@ -362,7 +382,7 @@ export const useStore = create<Store>()((set, get) => {
       await fetch('/api/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body: JSON.stringify({ teamId: team.id, kind, title, body }),
+        body: JSON.stringify({ teamId: team.id, kind, title, body, ...extra }),
       });
     } catch {}
   };
@@ -1188,9 +1208,26 @@ export const useStore = create<Store>()((set, get) => {
       set({ sheet: null, confirm: null });
       c?.action();
     },
-    toggleNotifyMatch: (id) => {
+    toggleNotifyMatch: async (id) => {
       const on = !s().notifyMatch[id];
+      const team = s().team;
       set((st) => ({ notifyMatch: { ...st.notifyMatch, [id]: on } }));
+      if (!team) return toast(on ? 'Du får varsel når bildene kommer' : 'Varselet er slått av');
+      if (on && !s().pushOn) {
+        // The wish only reaches this phone with notifications switched on.
+        if (needsHomeScreen()) {
+          set((st) => ({ notifyMatch: { ...st.notifyMatch, [id]: false } }));
+          return toast('Legg appen på Hjem-skjermen først. Se Varsler under Min side.');
+        }
+        const res = await enablePush(team.id, pushPrefs(s()));
+        if (res !== 'ok') {
+          set((st) => ({ notifyMatch: { ...st.notifyMatch, [id]: false } }));
+          return toast(res === 'denied' ? 'Varsler er blokkert i nettleseren.' : 'Fikk ikke slått på varsler på denne mobilen.');
+        }
+        set({ pushOn: true });
+      } else if (s().pushOn) {
+        await updatePushPrefs(team.id, pushPrefs(s())).catch(() => {});
+      }
       toast(on ? 'Du får varsel når bildene kommer' : 'Varselet er slått av');
     },
     addToCal: (m) => {
@@ -1376,7 +1413,8 @@ export const useStore = create<Store>()((set, get) => {
         notifs: notifyAll ? [{ id: 'n' + now, text: 'Nytt innlegg fra ' + author, ts: now, read: false, from: 'coach' as const }, ...d.notifs] : d.notifs,
       }));
       set({ sheet: null, draft: null, tab: 'lag', filter: 'all', openMatch: null });
-      if (notifyAll) void notify('posts', teamName(s()), author + ': ' + (post.text || mediaText(post.media)).slice(0, 120));
+      // Those who asked to hear about this match get it even with notifications for posts switched off.
+      if (notifyAll || matchId) void notify('posts', teamName(s()), author + ': ' + (post.text || mediaText(post.media)).slice(0, 120), { matchId, onlyWatchers: !notifyAll });
       scrollTop();
       toast(notifyAll ? 'Publisert. Laget er varslet.' : 'Innlegget er publisert');
     },
@@ -1386,6 +1424,58 @@ export const useStore = create<Store>()((set, get) => {
         toast('Innlegget er slettet');
       }),
     copyCode: (code, label) => copyText(code, () => toast(label + ' er kopiert')),
+    openTeamSettings: () => {
+      const c = s().data;
+      set({ sheet: 'teamSettings', form: { name: teamName(s()), teamCode: c.teamCode || '', coachCode: c.coachCode || '', err: '' } });
+    },
+    newCode: (which) => {
+      const base = ascii(String(s().form.name || teamName(s())))
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '')
+        .slice(0, 8) || 'LAG';
+      const r = () => String(100 + Math.floor(Math.random() * 900));
+      setForm({ [which]: which === 'coachCode' ? base + '-ADMIN' + r() : base + r(), err: '' });
+    },
+    saveTeamSettings: async () => {
+      const st = s();
+      const team = st.team;
+      const f = st.form;
+      if (!team || team.role !== 'coach' || f.busy) return;
+      const name = String(f.name || '').trim().replace(/\s+/g, ' ');
+      const tc = String(f.teamCode || '').replace(/\s/g, '').toUpperCase();
+      const cc = String(f.coachCode || '').replace(/\s/g, '').toUpperCase();
+      if (name.length < 2) return setForm({ err: 'Skriv inn navnet på laget.' });
+      if (tc.length < 6) return setForm({ err: 'Lagkoden må ha minst 6 tegn.' });
+      if (cc.length < 6) return setForm({ err: 'Administratorkoden må ha minst 6 tegn.' });
+      if (tc === cc) return setForm({ err: 'Administratorkoden og lagkoden må være forskjellige.' });
+      const changed = { name: name !== teamName(st), team: tc !== st.data.teamCode, coach: cc !== st.data.coachCode };
+      if (!changed.name && !changed.team && !changed.coach) return set({ sheet: null });
+      setForm({ busy: true, err: '' });
+      try {
+        const p = await updateTeam(team.id, name, tc, cc);
+        applyServer(p);
+        if (pending.length) void flush();
+      } catch (e) {
+        return setForm({
+          busy: false,
+          err: e instanceof CodeTakenError ? 'En av kodene er allerede i bruk på et annet lag. Velg en annen.' : netError,
+        });
+      }
+      set({ sheet: null, form: {} });
+      toast(changed.team || changed.coach ? 'Lagret. De gamle kodene virker ikke lenger.' : 'Navnet er endret');
+    },
+    remindConsent: (ids) => {
+      const players = s().data.players.filter((p) => ids.includes(p.id));
+      if (!players.length) return;
+      const now = Date.now();
+      setData((d) => ({ ...d, reminders: { ...(d.reminders || {}), ...Object.fromEntries(players.map((p) => [p.id, now])) } }));
+      toast(players.length === 1 ? 'Påminnelse sendt til ' + firstName(players[0].name) : 'Påminnelse sendt til ' + players.length + ' spillere');
+      void notify('reminders', teamName(s()), 'Husk å svare på samtykket om bilder i appen.', { playerIds: players.map((p) => p.id) });
+    },
+    dismissReport: (id) => {
+      setData((d) => ({ ...d, reports: (d.reports || []).filter((r) => r.id !== id) }));
+      toast('Markert som ferdig');
+    },
     openPrice: () => set({ sheet: 'price', form: { price: String(price(s())), err: '' } }),
     stepPrice: (dir) => {
       const v = parseInt(String(s().form.price), 10) || 0;
@@ -1509,6 +1599,37 @@ export const useStore = create<Store>()((set, get) => {
       setData((d) => ({ ...d, posts: d.posts.map((q) => (q.id === postId ? { ...q, tagged: q.tagged.filter((t) => t !== child.id) } : q)) }));
       toast(firstName(child.name) + ' er fjernet fra innlegget');
     },
+
+    // ---------- Everyone ----------
+
+    openReport: (postId) => set({ sheet: 'report', menuPost: null, form: { postId: postId || '', text: '', err: '' } }),
+    sendReport: async () => {
+      const st = s();
+      const f = st.form;
+      if (f.busy) return;
+      const postId = String(f.postId || '') || null;
+      const text = String(f.text || '').trim().slice(0, 1000);
+      if (!postId && text.length < 3) return setForm({ err: 'Skriv hva du lurer på.' });
+      setForm({ busy: true, err: '' });
+      const session = await currentSession();
+      const P = st.data.players;
+      const name =
+        st.role === 'player'
+          ? P.find((p) => p.id === st.prof.player.playerId)?.name
+          : st.role === 'parent'
+            ? 'Foresatt til ' + (P.find((p) => p.id === st.prof.parent.childId)?.name || 'en spiller')
+            : st.prof.sub.name;
+      const now = Date.now();
+      setData((d) => ({
+        ...d,
+        reports: [
+          ...(d.reports || []),
+          { id: 'r' + now, by: st.uid, name: name || 'Ukjent', contact: session?.email || st.flow.contact || '', postId, text: text || 'Vil at innlegget blir sett på', at: now },
+        ],
+      }));
+      set({ sheet: null, form: {} });
+      toast(postId ? 'Takk! Administratorene ser på innlegget.' : 'Sendt til administratorene. De svarer på e-post.');
+    },
   };
 });
 
@@ -1549,4 +1670,12 @@ export function receiptText(team: string, at: number, amount: string, method: st
     'Beløp: ' + amount,
     'Betalt med: ' + method,
   ].join('\n');
+}
+
+/** What this device wants push notifications about, including matches it asked to hear about. */
+export function pushPrefs(st: Pick<AppState, 'prof' | 'notifyMatch' | 'data'>): PushPrefs {
+  const nf = st.prof.sub.notify || { posts: true, matches: true, results: true };
+  const recent = Date.now() - 14 * DAY;
+  const matchIds = st.data.matches.filter((m) => st.notifyMatch[m.id] && matchTime(m) > recent).map((m) => m.id);
+  return { posts: nf.posts, matches: nf.matches, results: nf.results, matchIds };
 }

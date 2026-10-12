@@ -180,6 +180,10 @@ export const teamCoaches = (teamId: string) => rpc<TeamCoach[]>('team_coaches', 
 export const decideLink = (teamId: string, userId: string, role: 'player' | 'parent', approve: boolean) =>
   rpc<void>('decide_link', { p_team: teamId, p_user: userId, p_role: role, p_approve: approve });
 
+/** Coach: renames the team and/or replaces its codes. Throws CodeTakenError if another team uses a code. */
+export const updateTeam = (teamId: string, name: string, teamCode: string, coachCode: string) =>
+  rpc<TeamPayload>('update_team', { p_team: teamId, p_name: name, p_team_code: teamCode, p_coach_code: coachCode });
+
 /** Saves if `version` is still current; otherwise returns ok=false and the newer document. */
 export const saveTeam = (teamId: string, role: MemberRole, version: number, data: TeamData) =>
   rpc<TeamPayload>('save_team', { p_team: teamId, p_role: role, p_version: version, p_data: data });
@@ -263,7 +267,7 @@ export function cachedMediaUrl(src: string): string | null {
 
 // ---------- Push notifications ----------
 
-export const savePush = (teamId: string, sub: PushSubscriptionJSON, prefs: Record<string, boolean>) =>
+export const savePush = (teamId: string, sub: PushSubscriptionJSON, prefs: Record<string, unknown>) =>
   rpc<void>('save_push', {
     p_team: teamId,
     p_endpoint: sub.endpoint,

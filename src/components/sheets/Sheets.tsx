@@ -24,6 +24,9 @@ const TITLES: Record<Exclude<SheetName, 'confirm'>, string> = {
   method: 'Betalingsmåte',
   receipts: 'Kvitteringer',
   consentView: 'Samtykke',
+  teamSettings: 'Laget og kodene',
+  report: 'Meld fra',
+  help: 'Vanlige spørsmål',
 };
 
 /** "2 bilder", "1 video", "2 bilder og 1 video". */
@@ -38,6 +41,7 @@ export function SheetHost() {
   const sheet = useStore((s) => s.sheet);
   const confirm = useStore((s) => s.confirm);
   const editing = useStore((s) => !!s.draft?.id);
+  const asking = useStore((s) => s.sheet === 'report' && !s.form.postId);
   const closeSheet = useStore((s) => s.closeSheet);
 
   useEffect(() => {
@@ -48,7 +52,7 @@ export function SheetHost() {
   }, [sheet, closeSheet]);
 
   if (!sheet) return null;
-  const title = sheet === 'confirm' ? confirm?.title || '' : sheet === 'composer' && editing ? 'Rediger innlegg' : TITLES[sheet];
+  const title = sheet === 'confirm' ? confirm?.title || '' : sheet === 'composer' && editing ? 'Rediger innlegg' : asking ? 'Spør administratorene' : TITLES[sheet];
 
   return (
     <div className="sheet-wrap">
@@ -74,6 +78,9 @@ export function SheetHost() {
           {sheet === 'method' && <Method />}
           {sheet === 'receipts' && <Receipts />}
           {sheet === 'consentView' && <ConsentView />}
+          {sheet === 'teamSettings' && <TeamSettings />}
+          {sheet === 'report' && <Report />}
+          {sheet === 'help' && <Help />}
         </div>
       </div>
     </div>
@@ -846,5 +853,131 @@ function ConsentView() {
         </p>
       )}
     </>
+  );
+}
+
+/** Coach: the team's name, and new codes if one has leaked. */
+function TeamSettings() {
+  const st = useStore();
+  const f = st.form as Record<string, string | boolean | undefined>;
+  const bind = (k: string) => ({
+    value: String(f[k] ?? ''),
+    onChange: (e: { target: { value: string } }) => st.setForm({ [k]: e.target.value, err: '' }),
+  });
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    void st.saveTeamSettings();
+  };
+  const newBtn = (which: 'teamCode' | 'coachCode') => (
+    <button type="button" className="link-btn small start" style={{ minHeight: 0, padding: '2px 0' }} onClick={() => st.newCode(which)}>
+      Lag ny kode
+    </button>
+  );
+  const changedCode = f.teamCode !== st.data.teamCode || f.coachCode !== st.data.coachCode;
+  return (
+    <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <Field label="Lagets navn">
+        <input className="input" {...bind('name')} autoComplete="off" />
+      </Field>
+      <Field label="Lagkode" hint="For spillere, foresatte og abonnenter.">
+        <input className="input" {...bind('teamCode')} autoCapitalize="characters" autoComplete="off" />
+      </Field>
+      {newBtn('teamCode')}
+      <Field label="Administratorkode" hint="Kun for administratorer.">
+        <input className="input" {...bind('coachCode')} autoCapitalize="characters" autoComplete="off" />
+      </Field>
+      {newBtn('coachCode')}
+      {changedCode && (
+        <p className="note">
+          Den gamle koden slutter å virke med en gang, også i invitasjonslenker som er sendt ut. De som allerede er med på laget, beholder
+          tilgangen.
+        </p>
+      )}
+      <FormError text={f.err} />
+      <button type="submit" className="btn btn-primary btn-block" disabled={!!f.busy}>
+        {f.busy ? 'Lagrer …' : 'Lagre'}
+      </button>
+    </form>
+  );
+}
+
+/** Report a post to the coaches, or ask them something. */
+function Report() {
+  const st = useStore();
+  const f = st.form as Record<string, string | boolean | undefined>;
+  const post = f.postId ? st.data.posts.find((p) => p.id === f.postId) : undefined;
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    void st.sendReport();
+  };
+  const reasons = ['Jeg vil ikke at dette skal ligge ute', 'Feil person er merket', 'Bildet er upassende'];
+  return (
+    <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <p className="note">
+        {post
+          ? 'Administratorene på laget får beskjed og kan fjerne innlegget. De kan svare deg på e-posten du logget inn med.'
+          : 'Administratorene på laget får spørsmålet og svarer på e-posten du logget inn med.'}
+      </p>
+      {post && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {reasons.map((r) => (
+            <Chip key={r} label={r} on={f.text === r} onClick={() => st.setForm({ text: r, err: '' })} />
+          ))}
+        </div>
+      )}
+      <Field label={post ? 'Hva gjelder det? (valgfritt)' : 'Spørsmålet ditt'}>
+        <textarea
+          className="input"
+          rows={4}
+          maxLength={1000}
+          value={String(f.text ?? '')}
+          onChange={(e) => st.setForm({ text: e.target.value, err: '' })}
+          style={{ minHeight: 110 }}
+        />
+      </Field>
+      <FormError text={f.err} />
+      <button type="submit" className="btn btn-primary btn-block" disabled={!!f.busy}>
+        Send
+      </button>
+    </form>
+  );
+}
+
+const HELP: [string, string][] = [
+  [
+    'Hvem ser bildene?',
+    'Bare de som er med på laget: administratorene, spillerne, foresatte og de som abonnerer. Strømmen er lukket og kan ikke ses uten innlogging.',
+  ],
+  [
+    'Hvorfor ser jeg ikke alle bildene?',
+    'Innlegg med spillere som ikke har gitt samtykke, blir skjult. Foresatte uten abonnement ser bare innlegg der barnet deres er med.',
+  ],
+  [
+    'Hvordan endrer eller trekker jeg samtykket?',
+    'Under Min side, i delen Samtykke. Endringen gjelder med en gang.',
+  ],
+  [
+    'Jeg får ikke varsler',
+    'Slå på Varsler under Min side. På iPhone må appen først legges på Hjem-skjermen: trykk Del i Safari og velg «Legg til på Hjem-skjerm».',
+  ],
+  ['Hvordan sier jeg opp abonnementet?', 'Under Min side, nederst i delen Abonnement. Du ser bildene ut perioden du har betalt for.'],
+  [
+    'Et bilde bør fjernes',
+    'Trykk på flagget under innlegget og send en melding. Administratorene får beskjed og kan slette det.',
+  ],
+];
+
+function Help() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      {HELP.map(([q, a]) => (
+        <div key={q} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span style={{ font: '600 16px var(--body)' }}>{q}</span>
+          <span className="note" style={{ fontSize: 15 }}>
+            {a}
+          </span>
+        </div>
+      ))}
+    </div>
   );
 }

@@ -1,6 +1,7 @@
--- InnerCircle database setup, version 4 (accounts, approval of players and parents, list of coaches).
+-- InnerCircle database setup, version 5 (accounts, approval of players and parents, list of coaches,
+-- team name and codes, reports, notifications for one match or some players).
 -- Paste all of this into Supabase: SQL Editor -> New query -> Run.
--- Safe to run more than once, and safe to run on top of version 1, 2 and 3.
+-- Safe to run more than once, and safe to run on top of version 1, 2, 3 and 4.
 
 create extension if not exists pgcrypto;
 
@@ -116,6 +117,11 @@ language sql stable set search_path = public as $$
           'payments', coalesce((
             select jsonb_agg(x) from jsonb_array_elements(coalesce(t.data -> 'payments', '[]'::jsonb)) x
             where x ->> 'subId' in ('sub-' || auth.uid()::text, 'par-' || auth.uid()::text)
+          ), '[]'::jsonb),
+          -- Reports and messages to the coaches: only your own.
+          'reports', coalesce((
+            select jsonb_agg(x) from jsonb_array_elements(coalesce(t.data -> 'reports', '[]'::jsonb)) x
+            where x ->> 'by' = auth.uid()::text
           ), '[]'::jsonb))
       end
   )
@@ -248,7 +254,8 @@ $$;
 
 -- Saves a new version of the team document.
 -- Coaches may change everything. Everyone else may only change their own things:
--- their own hearts, their own player's consent (or their child's), and their own subscription and payments.
+-- their own hearts, their own player's consent (or their child's), their own subscription and payments,
+-- and their own reports to the coaches.
 -- Returns ok=false with the current document if someone else saved first.
 create or replace function public.save_team(p_team uuid, p_role text, p_version integer, p_data jsonb) returns jsonb
 language plpgsql security definer set search_path = public as $$
@@ -317,6 +324,13 @@ begin
     merged := jsonb_set(merged, '{payments}',
       coalesce((select jsonb_agg(x) from jsonb_array_elements(coalesce(prev -> 'payments', '[]'::jsonb)) x where not (x ->> 'subId' = any (own))), '[]'::jsonb)
       || coalesce((select jsonb_agg(x) from jsonb_array_elements(coalesce(p_data -> 'payments', '[]'::jsonb)) x where x ->> 'subId' = any (own)), '[]'::jsonb));
+
+    -- Reports about a post, and messages to the coaches: only your own, at most 20 at a time.
+    merged := jsonb_set(merged, '{reports}',
+      coalesce((select jsonb_agg(x) from jsonb_array_elements(coalesce(prev -> 'reports', '[]'::jsonb)) x where x ->> 'by' is distinct from uid), '[]'::jsonb)
+      || coalesce((select jsonb_agg(x) from (
+           select x from jsonb_array_elements(coalesce(p_data -> 'reports', '[]'::jsonb)) x where x ->> 'by' = uid limit 20
+         ) r(x)), '[]'::jsonb));
   end if;
 
   update teams set data = merged, version = version + 1, updated_at = now() where id = p_team;
@@ -422,6 +436,62 @@ begin
   ), '[]'::jsonb);
 end $$;
 
+-- ---------- Team name and codes ----------
+
+-- Renames the team and/or replaces its codes (for example when a code has leaked). Coaches only.
+-- Members keep their access: a code is only needed to join.
+create or replace function public.update_team(p_team uuid, p_name text, p_team_code text, p_coach_code text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  n text := trim(regexp_replace(coalesce(p_name, ''), '\s+', ' ', 'g'));
+  tc text := ic_norm(p_team_code);
+  cc text := ic_norm(p_coach_code);
+begin
+  perform ic_uid();
+  if (ic_member(p_team, 'coach')).team_id is null then raise exception 'not_coach'; end if;
+  if length(n) < 2 or length(cc) < 4 or length(tc) < 4 or cc = tc then raise exception 'invalid_codes'; end if;
+  if exists (select 1 from teams where id <> p_team and (team_code in (cc, tc) or coach_code in (cc, tc))) then
+    raise exception 'code_taken';
+  end if;
+  update teams set name = n, team_code = tc, coach_code = cc, version = version + 1, updated_at = now() where id = p_team;
+  return ic_payload((select x from teams x where x.id = p_team), 'coach') || jsonb_build_object('ok', true);
+end $$;
+
+-- ---------- Notifications to some of the team ----------
+
+-- Devices that asked to hear when photos from one match are posted. Coaches only.
+create or replace function public.notify_match_targets(p_team uuid, p_match text) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  uid uuid := ic_uid();
+begin
+  if (ic_member(p_team, 'coach')).team_id is null then raise exception 'not_coach'; end if;
+  return coalesce((
+    select jsonb_agg(jsonb_build_object('endpoint', s.endpoint, 'p256dh', s.p256dh, 'auth', s.auth_key))
+    from push_subscriptions s
+    where s.team_id = p_team and s.user_id <> uid and coalesce(s.prefs -> 'matchIds', '[]'::jsonb) @> to_jsonb(p_match)
+  ), '[]'::jsonb);
+end $$;
+
+-- Devices of the accounts linked to some players (the player and their parents), e.g. for a
+-- reminder about the consent form. Coaches only.
+create or replace function public.notify_player_targets(p_team uuid, p_players text[]) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  uid uuid := ic_uid();
+begin
+  if (ic_member(p_team, 'coach')).team_id is null then raise exception 'not_coach'; end if;
+  return coalesce((
+    select jsonb_agg(jsonb_build_object('endpoint', s.endpoint, 'p256dh', s.p256dh, 'auth', s.auth_key))
+    from push_subscriptions s
+    where s.team_id = p_team and s.user_id <> uid and exists (
+      select 1 from team_members m
+      where m.team_id = p_team and m.user_id = s.user_id and m.role in ('player', 'parent')
+        and m.status = 'active' and m.player_id = any (p_players)
+    )
+  ), '[]'::jsonb);
+end $$;
+
 -- ---------- Who may call what ----------
 
 revoke all on function public.ic_member(uuid, text) from public, anon, authenticated;
@@ -443,6 +513,12 @@ revoke all on function public.notify_targets(uuid, text) from public, anon;
 revoke all on function public.team_links(uuid) from public, anon;
 revoke all on function public.decide_link(uuid, uuid, text, boolean) from public, anon;
 revoke all on function public.team_coaches(uuid) from public, anon;
+revoke all on function public.update_team(uuid, text, text, text) from public, anon;
+revoke all on function public.notify_match_targets(uuid, text) from public, anon;
+revoke all on function public.notify_player_targets(uuid, text[]) from public, anon;
+grant execute on function public.update_team(uuid, text, text, text) to authenticated;
+grant execute on function public.notify_match_targets(uuid, text) to authenticated;
+grant execute on function public.notify_player_targets(uuid, text[]) to authenticated;
 grant execute on function public.team_links(uuid) to authenticated;
 grant execute on function public.decide_link(uuid, uuid, text, boolean) to authenticated;
 grant execute on function public.team_coaches(uuid) to authenticated;
