@@ -330,7 +330,9 @@ export function MatchDetail({ id }: { id: string }) {
             )}
           </>
         )}
-        {m.title && <div style={{ position: 'relative', font: 'italic 800 18px var(--display)', textTransform: 'uppercase', textAlign: o && m.opp ? 'center' : 'left' }}>{m.title}</div>}
+        {o && m.opp
+          ? m.title && <div style={{ position: 'relative', font: 'italic 800 18px var(--display)', textTransform: 'uppercase', textAlign: 'center' }}>{m.title}</div>
+          : opponentText(m) && <div style={{ position: 'relative', font: '600 15px var(--body)' }}>{opponentText(m)}</div>}
         {o && (
           <div style={{ position: 'relative', display: 'flex', justifyContent: o && m.opp ? 'center' : 'flex-start' }}>
             <span
