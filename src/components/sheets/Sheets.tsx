@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { download, firstName, fmtAcct, fmtDate, fmtDay, fmtLong, fmtShort, iso, krd, matchTime, NB, rel, stripe } from '@/lib/format';
-import { CKEYS, EVENT_ICONS, EVENT_KINDS, TYPES } from '@/lib/seed';
+import { CKEYS, EVENT_ICONS, TYPES } from '@/lib/seed';
 import { allEvents, isTraining, WEEK_ORDER, WEEKDAYS } from '@/lib/trainings';
 import { canPost, CONSENT_INK, CONSENT_LABEL, consentStatus, waitsForParent, matchTitle, playerMap, price, shortTeam, teamName } from '@/lib/selectors';
 import { canInstall, installApp, phoneKind } from '@/lib/push';
@@ -488,86 +488,49 @@ function AddEvent() {
   const saveEvent = useStore((s) => s.saveEvent);
   const deleteEvent = useStore((s) => s.deleteEvent);
   const f = form as Record<string, string | undefined>;
-  const preset = EVENT_KINDS.find((k) => k.kind === f.kind);
-  // Writing your own kind: on when the kind isn't one of the suggestions, or the coach picked "Egen type".
-  const [own, setOwn] = useState(!preset);
   const bind = (k: string) => ({
     value: String(f[k] ?? ''),
     onChange: (e: { target: { value: string } }) => setForm({ [k]: e.target.value, err: '' }),
   });
-  // The title follows the kind until the coach writes one of their own.
-  const pickKind = (kind: string, icon: string) =>
-    setForm({ kind, icon, title: !f.title || f.title === f.kind ? '' : f.title, err: '' });
   const submit = (e: FormEvent) => {
     e.preventDefault();
     saveEvent();
   };
   return (
     <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <Field label="Navn">
+        <input className="input" {...bind('title')} placeholder="F.eks. Pizzakveld eller spillermøte" />
+      </Field>
       <div className="field">
-        <span className="field-label">Type</span>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {EVENT_KINDS.map((k) => (
-            <Chip
-              key={k.kind}
-              label={k.kind}
-              on={!own && f.kind === k.kind}
-              onClick={() => {
-                setOwn(false);
-                pickKind(k.kind, k.icon);
-              }}
-            />
-          ))}
-          <Chip
-            label="Egen type"
-            on={own}
-            onClick={() => {
-              setOwn(true);
-              pickKind(preset ? '' : f.kind || '', f.icon || 'event');
-            }}
-          />
+        <span className="field-label">Ikon</span>
+        <div role="group" aria-label="Ikon" style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {EVENT_ICONS.map((ic) => {
+            const on = (f.icon || 'event') === ic;
+            return (
+              <button
+                key={ic}
+                type="button"
+                aria-label={ic}
+                aria-pressed={on}
+                onClick={() => setForm({ icon: ic })}
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 12,
+                  display: 'grid',
+                  placeItems: 'center',
+                  cursor: 'pointer',
+                  border: '1px solid ' + (on ? 'var(--accent)' : 'var(--line-strong)'),
+                  background: on ? 'var(--accent-soft)' : 'none',
+                  color: on ? 'var(--accent-ink)' : 'var(--ink)',
+                }}
+              >
+                <Icon name={ic} size={22} filled={on} />
+              </button>
+            );
+          })}
         </div>
       </div>
-      {own && (
-        <>
-          <Field label="Navn på typen">
-            <input className="input" {...bind('kind')} placeholder="F.eks. Juleavslutning" />
-          </Field>
-          <div className="field">
-            <span className="field-label">Ikon</span>
-            <div role="group" aria-label="Ikon" style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {EVENT_ICONS.map((ic) => {
-                const on = f.icon === ic;
-                return (
-                  <button
-                    key={ic}
-                    type="button"
-                    aria-label={ic}
-                    aria-pressed={on}
-                    onClick={() => setForm({ icon: ic })}
-                    style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: 12,
-                      display: 'grid',
-                      placeItems: 'center',
-                      cursor: 'pointer',
-                      border: '1px solid ' + (on ? 'var(--accent)' : 'var(--line-strong)'),
-                      background: on ? 'var(--accent-soft)' : 'none',
-                      color: on ? 'var(--accent-ink)' : 'var(--ink)',
-                    }}
-                  >
-                    <Icon name={ic} size={22} filled={on} />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </>
-      )}
-      <Field label="Tittel" hint="Tomt felt gir typen som tittel.">
-        <input className="input" {...bind('title')} placeholder={f.kind ? 'F.eks. ' + f.kind + ' etter treningen' : 'F.eks. Pizzakveld etter treningen'} />
-      </Field>
       <Field label="Dato">
         <input className="input" type="date" {...bind('date')} />
       </Field>

@@ -24,7 +24,6 @@ import {
   emptyTeam,
   ephemeral,
   freshState,
-  EVENT_KINDS,
   LS_KEY,
   newPay,
 } from './seed';
@@ -1622,20 +1621,18 @@ export const useStore = create<Store>()((set, get) => {
       if (e)
         return set({
           sheet: 'addEvent',
-          form: { eventId: e.id, kind: e.kind, icon: e.icon, title: e.title, date: e.date, time: e.time, end: e.end || '', venue: e.venue, note: e.note || '', err: '' },
+          form: { eventId: e.id, icon: e.icon, title: e.title, date: e.date, time: e.time, end: e.end || '', venue: e.venue, note: e.note || '', err: '' },
         });
-      const k = EVENT_KINDS[1];
       set({
         sheet: 'addEvent',
-        form: { kind: k.kind, icon: k.icon, title: '', date: iso(new Date(Date.now() + 7 * DAY)), time: '18:00', end: '', venue: '', note: '', err: '' },
+        form: { icon: 'event', title: '', date: iso(new Date(Date.now() + 7 * DAY)), time: '18:00', end: '', venue: '', note: '', err: '' },
       });
     },
     saveEvent: () => {
       const f = s().form as Record<string, string | undefined>;
-      const kind = String(f.kind || '').trim();
-      const title = String(f.title || '').trim() || kind;
+      const title = String(f.title || '').trim();
       const venue = String(f.venue || '').trim();
-      if (!title) return setForm({ err: 'Velg en type eller skriv en tittel.' });
+      if (!title) return setForm({ err: 'Gi hendelsen et navn.' });
       if (!f.date) return setForm({ err: 'Velg dato.' });
       if (!f.time) return setForm({ err: 'Legg inn når det starter.' });
       if (f.end && f.end <= f.time) return setForm({ err: 'Slutt må være etter start.' });
@@ -1643,7 +1640,7 @@ export const useStore = create<Store>()((set, get) => {
       const old = f.eventId ? (s().data.events || []).find((x) => x.id === f.eventId) : undefined;
       const e: TeamEvent = {
         id: old?.id || 'e' + Date.now(),
-        kind: kind || 'Annet',
+        kind: title,
         icon: String(f.icon || 'event'),
         title,
         date: String(f.date),

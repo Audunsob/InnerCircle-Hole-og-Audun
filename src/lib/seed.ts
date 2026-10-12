@@ -20,17 +20,7 @@ export const TYPES: Record<PostType, { label: string }> = {
   trening: { label: 'Trening' },
   beskjed: { label: 'Beskjed' },
 };
-/** Suggested kinds of events, with an icon each. The coach can also write their own. */
-export const EVENT_KINDS: { kind: string; icon: string }[] = [
-  { kind: 'Trening', icon: 'directions_run' },
-  { kind: 'Pizzakveld', icon: 'local_pizza' },
-  { kind: 'Spillermøte', icon: 'forum' },
-  { kind: 'Foreldremøte', icon: 'family_restroom' },
-  { kind: 'Dugnad', icon: 'volunteer_activism' },
-  { kind: 'Sosialt', icon: 'celebration' },
-  { kind: 'Turnering', icon: 'emoji_events' },
-];
-/** Icons to pick from for a kind the coach wrote themselves. */
+/** Icons a coach can pick for an event. */
 export const EVENT_ICONS = ['event', 'groups', 'restaurant', 'local_pizza', 'celebration', 'forum', 'directions_run', 'directions_bus', 'emoji_events', 'volunteer_activism', 'school', 'sports_soccer'];
 
 export const ROLES: Record<Role, string> = { player: 'Spiller', parent: 'Foresatt', sub: 'Abonnent', coach: 'Administrator' };

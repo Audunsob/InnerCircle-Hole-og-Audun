@@ -77,7 +77,7 @@ export interface Match {
  */
 export interface TeamEvent {
   id: string;
-  /** What kind of thing it is. One of the suggestions in EVENT_KINDS, or a name the coach wrote. */
+  /** What kind of thing it is. The same as the title for events a coach made; "Trening" for trainings from a series. */
   kind: string;
   /** Material Symbols name shown next to it. */
   icon: string;
@@ -386,7 +386,7 @@ export interface PersistedState {
 /** Kept in memory only. */
 export interface EphemeralState {
   sheet: SheetName | null;
-  /** The event open in the Hendelser tab. */
+  /** The event open in the Annet tab. */
   openEvent: string | null;
   viewer: { postId: string; i: number } | null;
   toastMsg: string | null;

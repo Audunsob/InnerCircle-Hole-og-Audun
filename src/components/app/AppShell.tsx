@@ -20,7 +20,7 @@ export function AppShell() {
   const tabs: [Tab, string, string][] = [
     ['lag', 'Lag', 'groups'],
     ['kamper', 'Kamper', 'sports_soccer'],
-    ['arrangement', 'Hendelser', 'celebration'],
+    ['arrangement', 'Annet', 'celebration'],
     ...(isCoach ? ([['okonomi', 'Økonomi', 'payments']] as [Tab, string, string][]) : []),
     ['min', 'Min side', 'person'],
   ];
