@@ -74,21 +74,27 @@ export function ChevronRow({
   sub,
   onClick,
   large,
+  num,
   arrow = 'chevron_right',
 }: {
   title: string;
   sub?: string;
   onClick: () => void;
   large?: boolean;
+  /** Big gold number in front, like "01". */
+  num?: string;
   arrow?: 'chevron_right' | 'arrow_forward';
 }) {
   return (
     <button type="button" className={'row-btn ' + (large ? 'choice-row-lg' : 'choice-row')} onClick={onClick}>
+      {num && <span className="choice-num">{num}</span>}
       <span className="row-text" style={{ gap: 3 }}>
         <span className="row-title">{title}</span>
         {sub && <span className="row-sub">{sub}</span>}
       </span>
-      <Icon name={arrow} style={{ color: arrow === 'arrow_forward' ? 'var(--accent-ink)' : 'var(--muted)' }} />
+      <span className="choice-arrow">
+        <Icon name={arrow} size={20} />
+      </span>
     </button>
   );
 }
@@ -126,6 +132,7 @@ export function Checkbox({ checked, onToggle, children }: { checked: boolean; on
   );
 }
 
+/** Segmented control; the dark thumb slides to the chosen tab. */
 export function Tabs<T extends string>({
   value,
   items,
@@ -139,8 +146,14 @@ export function Tabs<T extends string>({
   className?: string;
   style?: CSSProperties;
 }) {
+  const i = Math.max(0, items.findIndex(([k]) => k === value));
   return (
-    <div role="tablist" className={'tabs' + (className ? ' ' + className : '')} style={style}>
+    <div
+      role="tablist"
+      className={'tabs' + (className ? ' ' + className : '')}
+      style={{ ...style, ['--n' as string]: items.length, ['--i' as string]: i }}
+    >
+      <span className="tabs-thumb" aria-hidden="true" />
       {items.map(([k, label]) => (
         <button key={k} type="button" role="tab" aria-selected={value === k} className="tab" onClick={() => onChange(k)}>
           {label}
@@ -150,12 +163,37 @@ export function Tabs<T extends string>({
   );
 }
 
-export function DateCol({ date, accent }: { date: string; accent?: boolean }) {
+/** Scrollable filter chips. */
+export function Chips<T extends string>({
+  value,
+  items,
+  onChange,
+  label,
+  style,
+}: {
+  value: T;
+  items: [T, string][];
+  onChange: (v: T) => void;
+  label: string;
+  style?: CSSProperties;
+}) {
+  return (
+    <div role="tablist" aria-label={label} className="chips" style={style}>
+      {items.map(([k, text]) => (
+        <button key={k} type="button" role="tab" aria-selected={value === k} className="chip" onClick={() => onChange(k)}>
+          {text}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function DateCol({ date, accent, block }: { date: string; accent?: boolean; block?: boolean }) {
   const d = new Date(date + 'T12:00');
   const wk = d.toLocaleDateString('nb-NO', { weekday: 'short' }).replace('.', '');
   const mon = d.toLocaleDateString('nb-NO', { month: 'short' }).replace('.', '');
   return (
-    <span className={'datecol' + (accent ? ' accent' : '')}>
+    <span className={block ? 'dateblock' : 'datecol' + (accent ? ' accent' : '')}>
       <span className="datecol-small">{wk}</span>
       <span className="datecol-day">{d.getDate()}</span>
       <span className="datecol-small">{mon}</span>

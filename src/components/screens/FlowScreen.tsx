@@ -1,6 +1,6 @@
 'use client';
 
-import type { FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { NB } from '@/lib/format';
 import { ROLES } from '@/lib/seed';
 import { useStore } from '@/lib/store';
@@ -56,14 +56,25 @@ export function FlowScreen() {
     if (!flow.busy) flowSubmit();
   };
 
+  const goBack = () => {
+    navDir = 'back';
+    back();
+  };
+  // Forward is the default; a back step only slides the next screen in from the left.
+  useEffect(() => {
+    navDir = 'fwd';
+  }, [screen]);
+
   return (
     <div className="screen">
-      <TopBar label={label} onBack={back} style={{ padding: '4px 16px 0 4px' }} />
+      <TopBar label={label} onBack={goBack} style={{ padding: '4px 16px 0 4px' }} />
       <form
         onSubmit={submit}
         style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16, padding: '12px 16px calc(16px + env(safe-area-inset-bottom))' }}
       >
-        <FlowStep key={screen} screen={screen} />
+        <Slide key={screen} dir={navDir}>
+          <FlowStep screen={screen} />
+        </Slide>
         {flow.err && (
           <p role="alert" className="error">
             {flow.err}
@@ -78,6 +89,18 @@ export function FlowScreen() {
           </div>
         )}
       </form>
+    </div>
+  );
+}
+
+let navDir: 'fwd' | 'back' = 'fwd';
+
+/** Slides a step in from the side it came from. The direction is fixed when it mounts. */
+function Slide({ dir, children }: { dir: 'fwd' | 'back'; children: React.ReactNode }) {
+  const [d] = useState(dir);
+  return (
+    <div className={d === 'back' ? 'view-from-left' : 'view-from-right'} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {children}
     </div>
   );
 }
@@ -145,7 +168,7 @@ function PlayerKind() {
   return (
     <>
       <Intro title="Hvem er du?" text="Alle spillere må godkjenne samtykket selv. Er du under 15 år, må en foresatt også signere." />
-      <div className="list" style={{ marginTop: 8 }}>
+      <div className="stagger" style={{ marginTop: 8 }}>
         <ChevronRow title="Jeg er spiller (over 15 år)" sub="Du signerer samtykket selv" onClick={() => choose(true)} />
         <ChevronRow title="Jeg er spiller (under 15 år)" sub="Du og en foresatt signerer samtykket" onClick={() => choose(false)} />
       </div>
@@ -174,21 +197,27 @@ function Otp() {
     <>
       <Intro title="Sjekk e-posten" text={`Vi har sendt en kode med 6 sifre til ${contact}. Skriv den inn her:`} />
       <div style={{ position: 'relative' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 6 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 8 }}>
           {[0, 1, 2, 3, 4, 5].map((i) => (
             <div
               key={i}
               className="tnum"
               style={{
-                height: 56,
-                border: '1px solid ' + (i === active ? 'var(--accent-ink)' : 'var(--line-strong)'),
-                borderRadius: 6,
+                height: 62,
+                border: i === active ? '2px solid var(--accent)' : '1px solid var(--line-strong)',
+                borderRadius: 14,
+                background: 'var(--field)',
                 display: 'grid',
                 placeItems: 'center',
-                font: '600 24px var(--body)',
+                font: '700 30px var(--display)',
+                transition: 'border-color var(--t-med) var(--ease-out)',
               }}
             >
-              {otp[i] || ''}
+              {otp[i] && (
+                <span key={otp[i]} style={{ animation: 'ic-tick 220ms var(--ease-spring)' }}>
+                  {otp[i]}
+                </span>
+              )}
             </div>
           ))}
         </div>
@@ -293,7 +322,7 @@ function Terms() {
         </select>
       </Field>
       <div style={{ padding: '16px 0', borderTop: '1px solid var(--line)', borderBottom: '1px solid var(--line)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <p style={{ margin: 0, font: '600 19px/1.35 var(--display)', textWrap: 'pretty' }}>
+        <p style={{ margin: 0, font: 'italic 800 24px/1.1 var(--display)', textTransform: 'uppercase', textWrap: 'pretty' }}>
           Bildene er bare for deg. Ikke del eller legg ut bilder av barna andre steder.
         </p>
         <p className="note">Foresatte har gitt samtykke til at du kan se bildene i InnerCircle, ikke til at de spres videre.</p>
@@ -310,7 +339,7 @@ function CoachChoice() {
   return (
     <>
       <Intro title="Trener" text="Er laget allerede på InnerCircle? Logg inn med trenerkoden. Ellers oppretter du laget her." />
-      <div className="list" style={{ marginTop: 8 }}>
+      <div className="stagger" style={{ marginTop: 8 }}>
         <ChevronRow title="Logg inn" sub="Jeg har en trenerkode" onClick={() => choose('join')} />
         <ChevronRow title="Opprett lag" sub="Laget er ikke på InnerCircle ennå" onClick={() => choose('create')} />
       </div>

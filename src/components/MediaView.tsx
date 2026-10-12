@@ -40,10 +40,12 @@ export function MediaView({
   style?: CSSProperties;
 }) {
   const url = useMediaUrl(src);
+  // Fade the picture in when it has loaded instead of letting it pop in line by line.
+  const [loaded, setLoaded] = useState<string | null>(null);
   if (!url) return null;
   const css: CSSProperties = { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: fit, ...style };
   if (kind === 'video')
     return <video src={controls ? url : url + '#t=0.1'} style={css} controls={controls} autoPlay={autoPlay} playsInline muted={!controls} preload="metadata" />;
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={url} alt="" style={css} />;
+  return <img src={url} alt="" style={css} className={'media-fade' + (loaded === url ? ' loaded' : '')} onLoad={() => setLoaded(url)} />;
 }

@@ -9,6 +9,7 @@ import { disablePush, enablePush, needsHomeScreen, updatePushPrefs } from '@/lib
 import type { Consent, Player } from '@/lib/types';
 import { Icon, SwitchRow } from '../ui';
 import { MediaView } from '../MediaView';
+import { Rings } from '../screens/RoleScreen';
 
 export const METHOD_NAMES = (last4: string) => ({
   card: 'Kort •••• ' + (last4 || '4242'),
@@ -100,29 +101,31 @@ export function MinSide() {
         <div className="app-title" style={{ flex: 1, minWidth: 0 }}>
           Min side
         </div>
-        <button type="button" className="icon-btn" aria-label="Bytt mellom lys og mørk modus" onClick={st.toggleTheme}>
-          <Icon name={theme === 'dark' ? 'light_mode' : 'dark_mode'} />
+        <button type="button" className="icon-btn round" aria-label="Bytt mellom lys og mørk modus" onClick={st.toggleTheme}>
+          <Icon key={theme} name={theme === 'dark' ? 'light_mode' : 'dark_mode'} style={{ animation: 'ic-tick 280ms var(--ease-spring)' }} />
         </button>
       </header>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 0', borderBottom: '1px solid var(--line)' }}>
+      <div className="brand-card" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: 16 }}>
+        <Rings size={180} style={{ top: -60, right: -60 }} />
         <span
           style={{
-            width: 44,
-            height: 44,
+            position: 'relative',
+            width: 56,
+            height: 56,
             flex: 'none',
             borderRadius: '50%',
-            background: 'var(--accent)',
-            color: 'var(--on-accent)',
+            background: 'var(--gold)',
+            color: 'var(--on-gold)',
             display: 'grid',
             placeItems: 'center',
-            font: '600 15px var(--body)',
+            font: '800 22px var(--display)',
           }}
         >
           {initials(name)}
         </span>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ font: '600 17px/1.3 var(--body)' }}>{name}</div>
-          <div className="row-sub">{subtitle}</div>
+        <div style={{ position: 'relative', minWidth: 0 }}>
+          <div style={{ font: 'italic 800 24px/1.05 var(--display)', textTransform: 'uppercase' }}>{name}</div>
+          <div style={{ marginTop: 3, font: '500 13px var(--body)', color: 'var(--on-brand-muted)' }}>{subtitle}</div>
         </div>
       </div>
 

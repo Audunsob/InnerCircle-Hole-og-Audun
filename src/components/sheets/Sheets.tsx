@@ -352,7 +352,7 @@ function ScoreBox({ label, value, onStep }: { label: string; value: number; onSt
   return (
     <div style={{ background: 'var(--surface)', padding: '16px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
       <span style={{ font: '500 15px var(--body)' }}>{label}</span>
-      <span className="tnum" style={{ font: '700 48px/1 var(--display)' }}>
+      <span className="tnum" style={{ font: 'italic 800 56px/1 var(--display)' }}>
         {value}
       </span>
       <div style={{ display: 'flex', gap: 8 }}>
@@ -484,7 +484,7 @@ function Price() {
               background: 'none',
               color: 'var(--ink)',
               textAlign: 'center',
-              font: '700 44px/1.1 var(--display)',
+              font: 'italic 800 48px/1.1 var(--display)',
               outline: 'none',
               padding: 0,
             }}
