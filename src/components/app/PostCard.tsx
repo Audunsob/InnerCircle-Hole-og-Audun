@@ -17,6 +17,7 @@ export function PostCard({ post, P }: { post: Post; P: Record<string, Player> })
   const resultTitle = useStore((s) => (match && post.type === 'kamp' && outcomeOf(match) ? scoreTitle(s, match) : ''));
   const toggleLike = useStore((s) => s.toggleLike);
   const openViewer = useStore((s) => s.openViewer);
+  const openReport = useStore((s) => s.openReport);
   const [pop, setPop] = useState(false);
   const popTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(popTimer.current), []);
@@ -197,6 +198,18 @@ export function PostCard({ post, P }: { post: Post; P: Record<string, Player> })
           </span>
         </button>
         {post.edited && <span style={{ marginLeft: 'auto', font: '400 13px var(--body)', color: 'var(--muted)' }}>Redigert</span>}
+        {role !== 'coach' && (
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="Meld fra om innlegget"
+            title="Meld fra"
+            style={{ marginLeft: post.edited ? 4 : 'auto', marginRight: -10, color: 'var(--muted)' }}
+            onClick={() => openReport(post.id)}
+          >
+            <Icon name="flag" size={20} />
+          </button>
+        )}
       </div>
     </article>
   );

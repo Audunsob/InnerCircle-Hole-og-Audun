@@ -25,8 +25,13 @@ const TITLES: Record<Exclude<SheetName, 'confirm'>, string> = {
   method: 'Betalingsmåte',
   receipts: 'Kvitteringer',
   consentView: 'Samtykke',
+  teamSettings: 'Laget og kodene',
+  report: 'Meld fra',
+  help: 'Vanlige spørsmål',
+  editPlayer: 'Endre spiller',
   homeScreen: 'Legg appen på Hjem-skjermen',
   switchTeam: 'Administratorkode',
+  deleteTeam: 'Slett laget',
 };
 
 /** "2 bilder", "1 video", "2 bilder og 1 video". */
@@ -41,6 +46,8 @@ export function SheetHost() {
   const sheet = useStore((s) => s.sheet);
   const confirm = useStore((s) => s.confirm);
   const editing = useStore((s) => !!s.draft?.id);
+  const asking = useStore((s) => s.sheet === 'report' && !s.form.postId);
+  const editingMatch = useStore((s) => s.sheet === 'addMatch' && !!s.form.matchId);
   const closeSheet = useStore((s) => s.closeSheet);
 
   useEffect(() => {
@@ -51,7 +58,7 @@ export function SheetHost() {
   }, [sheet, closeSheet]);
 
   if (!sheet) return null;
-  const title = sheet === 'confirm' ? confirm?.title || '' : sheet === 'composer' && editing ? 'Rediger innlegg' : TITLES[sheet];
+  const title = sheet === 'confirm' ? confirm?.title || '' : sheet === 'composer' && editing ? 'Rediger innlegg' : asking ? 'Spør administratorene' : editingMatch ? 'Endre kamp' : TITLES[sheet];
 
   return (
     <div className="sheet-wrap">
@@ -77,8 +84,13 @@ export function SheetHost() {
           {sheet === 'method' && <Method />}
           {sheet === 'receipts' && <Receipts />}
           {sheet === 'consentView' && <ConsentView />}
+          {sheet === 'teamSettings' && <TeamSettings />}
+          {sheet === 'report' && <Report />}
+          {sheet === 'help' && <Help />}
+          {sheet === 'editPlayer' && <EditPlayer />}
           {sheet === 'homeScreen' && <HomeScreenGuide />}
           {sheet === 'switchTeam' && <SwitchTeam />}
+          {sheet === 'deleteTeam' && <DeleteTeam />}
         </div>
       </div>
     </div>
@@ -372,6 +384,7 @@ function AddMatch() {
   const form = useStore((s) => s.form);
   const setForm = useStore((s) => s.setForm);
   const saveMatch = useStore((s) => s.saveMatch);
+  const deleteMatch = useStore((s) => s.deleteMatch);
   const f = form as Record<string, string | boolean | undefined>;
   const bind = (k: string) => ({
     value: String(f[k] ?? ''),
@@ -421,8 +434,13 @@ function AddMatch() {
       </Field>
       <FormError text={f.err} />
       <button type="submit" className="btn btn-primary btn-block">
-        Legg til kamp
+        {f.matchId ? 'Lagre endringer' : 'Legg til kamp'}
       </button>
+      {f.matchId && (
+        <button type="button" className="link-btn" style={{ color: 'var(--accent-ink)' }} onClick={() => deleteMatch(String(f.matchId))}>
+          Slett kampen
+        </button>
+      )}
     </form>
   );
 }
@@ -865,6 +883,132 @@ function ConsentView() {
   );
 }
 
+/** Coach: the team's name, and new codes if one has leaked. */
+function TeamSettings() {
+  const st = useStore();
+  const f = st.form as Record<string, string | boolean | undefined>;
+  const bind = (k: string) => ({
+    value: String(f[k] ?? ''),
+    onChange: (e: { target: { value: string } }) => st.setForm({ [k]: e.target.value, err: '' }),
+  });
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    void st.saveTeamSettings();
+  };
+  const newBtn = (which: 'teamCode' | 'coachCode') => (
+    <button type="button" className="link-btn small start" style={{ minHeight: 0, padding: '2px 0' }} onClick={() => st.newCode(which)}>
+      Lag ny kode
+    </button>
+  );
+  const changedCode = f.teamCode !== st.data.teamCode || f.coachCode !== st.data.coachCode;
+  return (
+    <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <Field label="Lagets navn">
+        <input className="input" {...bind('name')} autoComplete="off" />
+      </Field>
+      <Field label="Lagkode" hint="For spillere, foresatte og abonnenter.">
+        <input className="input" {...bind('teamCode')} autoCapitalize="characters" autoComplete="off" />
+      </Field>
+      {newBtn('teamCode')}
+      <Field label="Administratorkode" hint="Kun for administratorer.">
+        <input className="input" {...bind('coachCode')} autoCapitalize="characters" autoComplete="off" />
+      </Field>
+      {newBtn('coachCode')}
+      {changedCode && (
+        <p className="note">
+          Den gamle koden slutter å virke med en gang, også i invitasjonslenker som er sendt ut. De som allerede er med på laget, beholder
+          tilgangen.
+        </p>
+      )}
+      <FormError text={f.err} />
+      <button type="submit" className="btn btn-primary btn-block" disabled={!!f.busy}>
+        {f.busy ? 'Lagrer …' : 'Lagre'}
+      </button>
+    </form>
+  );
+}
+
+/** Report a post to the coaches, or ask them something. */
+function Report() {
+  const st = useStore();
+  const f = st.form as Record<string, string | boolean | undefined>;
+  const post = f.postId ? st.data.posts.find((p) => p.id === f.postId) : undefined;
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    void st.sendReport();
+  };
+  const reasons = ['Jeg vil ikke at dette skal ligge ute', 'Feil person er merket', 'Bildet er upassende'];
+  return (
+    <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <p className="note">
+        {post
+          ? 'Administratorene på laget får beskjed og kan fjerne innlegget. De kan svare deg på e-posten du logget inn med.'
+          : 'Administratorene på laget får spørsmålet og svarer på e-posten du logget inn med.'}
+      </p>
+      {post && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {reasons.map((r) => (
+            <Chip key={r} label={r} on={f.text === r} onClick={() => st.setForm({ text: r, err: '' })} />
+          ))}
+        </div>
+      )}
+      <Field label={post ? 'Hva gjelder det? (valgfritt)' : 'Spørsmålet ditt'}>
+        <textarea
+          className="input"
+          rows={4}
+          maxLength={1000}
+          value={String(f.text ?? '')}
+          onChange={(e) => st.setForm({ text: e.target.value, err: '' })}
+          style={{ minHeight: 110 }}
+        />
+      </Field>
+      <FormError text={f.err} />
+      <button type="submit" className="btn btn-primary btn-block" disabled={!!f.busy}>
+        Send
+      </button>
+    </form>
+  );
+}
+
+const HELP: [string, string][] = [
+  [
+    'Hvem ser bildene?',
+    'Bare de som er med på laget: administratorene, spillerne, foresatte og de som abonnerer. Strømmen er lukket og kan ikke ses uten innlogging.',
+  ],
+  [
+    'Hvorfor ser jeg ikke alle bildene?',
+    'Innlegg med spillere som ikke har gitt samtykke, blir skjult. Foresatte uten abonnement ser bare innlegg der barnet deres er med.',
+  ],
+  [
+    'Hvordan endrer eller trekker jeg samtykket?',
+    'Under Min side, i delen Samtykke. Endringen gjelder med en gang.',
+  ],
+  [
+    'Jeg får ikke varsler',
+    'Slå på Varsler under Min side. På iPhone må appen først legges på Hjem-skjermen: trykk Del i Safari og velg «Legg til på Hjem-skjerm».',
+  ],
+  ['Hvordan sier jeg opp abonnementet?', 'Under Min side, nederst i delen Abonnement. Du ser bildene ut perioden du har betalt for.'],
+  [
+    'Et bilde bør fjernes',
+    'Trykk på flagget under innlegget og send en melding. Administratorene får beskjed og kan slette det.',
+  ],
+];
+
+function Help() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      {HELP.map(([q, a]) => (
+        <div key={q} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span style={{ font: '600 16px var(--body)' }}>{q}</span>
+          <span className="note" style={{ fontSize: 15 }}>
+            {a}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** Opened inside Facebook, Instagram, Gmail and similar apps, which can't add to the home screen. */
 const inAppBrowser = () => typeof navigator !== 'undefined' && /FBAN|FBAV|Instagram|Snapchat|LinkedInApp|GSA\/|Line\//i.test(navigator.userAgent);
 
@@ -997,6 +1141,83 @@ function SwitchTeam() {
       <FormError text={f.err} />
       <button type="submit" className="btn btn-primary btn-block" disabled={!!f.busy}>
         Gå inn
+      </button>
+    </form>
+  );
+}
+
+/** Coach: change a player's name, shirt number, birth year and the parent's contact details. */
+function EditPlayer() {
+  const form = useStore((s) => s.form);
+  const setForm = useStore((s) => s.setForm);
+  const savePlayer = useStore((s) => s.savePlayer);
+  const f = form as Record<string, string | undefined>;
+  const bind = (k: string) => ({
+    value: String(f[k] ?? ''),
+    onChange: (e: { target: { value: string } }) => setForm({ [k]: e.target.value, err: '' }),
+  });
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    savePlayer();
+  };
+  return (
+    <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <Field label="Navn">
+        <input className="input" {...bind('name')} autoComplete="off" />
+      </Field>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <Field label="Draktnummer">
+          <input className="input" inputMode="numeric" {...bind('num')} placeholder="F.eks. 7" />
+        </Field>
+        <Field label="Fødselsår" hint="Spillere fra 13 år kan logge inn selv.">
+          <input className="input" inputMode="numeric" {...bind('born')} placeholder={'F.eks. ' + (new Date().getFullYear() - 12)} />
+        </Field>
+      </div>
+      <h3 className="field-label" style={{ margin: '4px 0 -8px' }}>
+        Foresatt
+      </h3>
+      <Field label="Navn">
+        <input className="input" {...bind('parentName')} autoComplete="off" />
+      </Field>
+      <Field label="Telefon">
+        <input className="input" type="tel" inputMode="tel" {...bind('parentPhone')} autoComplete="off" />
+      </Field>
+      <Field label="E-post">
+        <input className="input" type="email" inputMode="email" {...bind('parentEmail')} autoComplete="off" />
+      </Field>
+      <FormError text={f.err} />
+      <button type="submit" className="btn btn-primary btn-block">
+        Lagre
+      </button>
+    </form>
+  );
+}
+
+/** Coach: delete the team for everyone, after typing its name. */
+function DeleteTeam() {
+  const st = useStore();
+  const f = st.form as Record<string, string | boolean | undefined>;
+  const name = teamName(st);
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    void st.deleteTeam();
+  };
+  return (
+    <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <p className="lead">
+        Alt på {name} slettes for alle: spillerlista, kamper, innlegg, bilder, videoer og samtykker. Alle mister tilgangen. Dette kan ikke angres.
+      </p>
+      <Field label={'Skriv «' + name + '» for å bekrefte'}>
+        <input
+          className="input"
+          value={String(f.confirm ?? '')}
+          onChange={(e) => st.setForm({ confirm: e.target.value, err: '' })}
+          autoComplete="off"
+        />
+      </Field>
+      <FormError text={f.err} />
+      <button type="submit" className="btn btn-primary btn-block" disabled={!!f.busy}>
+        {f.busy ? 'Sletter …' : 'Slett laget for alle'}
       </button>
     </form>
   );

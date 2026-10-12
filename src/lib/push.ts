@@ -4,7 +4,8 @@ import { deletePush, savePush } from './supabase';
 export const VAPID_PUBLIC_KEY =
   process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 'BISU8zfav-tY8wgWJcy5Tp8YHj2YiwoRJLasBsJuczzmjj568vMhCZd2g-ZMIsEY6I4U4Cx7pRSl0XJ-OVLcxCI';
 
-export type PushPrefs = { posts: boolean; matches: boolean; results: boolean };
+/** matchIds: matches this device wants to hear about when photos are posted, whatever `posts` says. */
+export type PushPrefs = { posts: boolean; matches: boolean; results: boolean; matchIds?: string[] };
 
 export const pushSupported = () =>
   typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;

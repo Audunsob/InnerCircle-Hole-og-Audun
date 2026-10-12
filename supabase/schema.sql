@@ -1,4 +1,6 @@
 -- InnerCircle database setup, version 5 (accounts, approval of players and parents, list of coaches,
+-- team name and codes, reports, notifications for one match or some players,
+-- leaving a team, deleting your account and deleting files, removing coaches and deleting a team,
 -- parents say yes to under-15 consent from their own login).
 -- Paste all of this into Supabase: SQL Editor -> New query -> Run.
 -- Safe to run more than once, and safe to run on top of version 1, 2, 3 and 4.
@@ -92,6 +94,12 @@ language sql stable security definer set search_path = public as $$
   select exists (select 1 from team_members m where m.team_id::text = p_folder and m.user_id = auth.uid() and m.status = 'active')
 $$;
 
+-- Used by the photo storage rules: is the signed-in account a coach on the team whose folder this is?
+create or replace function public.ic_is_coach(p_folder text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from team_members m where m.team_id::text = p_folder and m.user_id = auth.uid() and m.role = 'coach' and m.status = 'active')
+$$;
+
 -- Removes array items whose text equals p_value.
 create or replace function public.ic_without(p_arr jsonb, p_value text) returns jsonb
 language sql immutable set search_path = public as $$
@@ -134,6 +142,11 @@ language sql stable set search_path = public as $$
           'payments', coalesce((
             select jsonb_agg(x) from jsonb_array_elements(coalesce(t.data -> 'payments', '[]'::jsonb)) x
             where x ->> 'subId' in ('sub-' || auth.uid()::text, 'par-' || auth.uid()::text)
+          ), '[]'::jsonb),
+          -- Reports and messages to the coaches: only your own.
+          'reports', coalesce((
+            select jsonb_agg(x) from jsonb_array_elements(coalesce(t.data -> 'reports', '[]'::jsonb)) x
+            where x ->> 'by' = auth.uid()::text
           ), '[]'::jsonb))
       end
   )
@@ -266,7 +279,8 @@ $$;
 
 -- Saves a new version of the team document.
 -- Coaches may change everything. Everyone else may only change their own things:
--- their own hearts, their own player's consent (or their child's), and their own subscription and payments.
+-- their own hearts, their own player's consent (or their child's), their own subscription and payments,
+-- and their own reports to the coaches.
 -- Returns ok=false with the current document if someone else saved first.
 create or replace function public.save_team(p_team uuid, p_role text, p_version integer, p_data jsonb) returns jsonb
 language plpgsql security definer set search_path = public as $$
@@ -337,6 +351,13 @@ begin
     merged := jsonb_set(merged, '{payments}',
       coalesce((select jsonb_agg(x) from jsonb_array_elements(coalesce(prev -> 'payments', '[]'::jsonb)) x where not (x ->> 'subId' = any (own))), '[]'::jsonb)
       || coalesce((select jsonb_agg(x) from jsonb_array_elements(coalesce(p_data -> 'payments', '[]'::jsonb)) x where x ->> 'subId' = any (own)), '[]'::jsonb));
+
+    -- Reports about a post, and messages to the coaches: only your own, at most 20 at a time.
+    merged := jsonb_set(merged, '{reports}',
+      coalesce((select jsonb_agg(x) from jsonb_array_elements(coalesce(prev -> 'reports', '[]'::jsonb)) x where x ->> 'by' is distinct from uid), '[]'::jsonb)
+      || coalesce((select jsonb_agg(x) from (
+           select x from jsonb_array_elements(coalesce(p_data -> 'reports', '[]'::jsonb)) x where x ->> 'by' = uid limit 20
+         ) r(x)), '[]'::jsonb));
   end if;
 
   update teams set data = merged, version = version + 1, updated_at = now() where id = p_team;
@@ -442,6 +463,151 @@ begin
   ), '[]'::jsonb);
 end $$;
 
+-- ---------- Team name and codes ----------
+
+-- Renames the team and/or replaces its codes (for example when a code has leaked). Coaches only.
+-- Members keep their access: a code is only needed to join.
+create or replace function public.update_team(p_team uuid, p_name text, p_team_code text, p_coach_code text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  n text := trim(regexp_replace(coalesce(p_name, ''), '\s+', ' ', 'g'));
+  tc text := ic_norm(p_team_code);
+  cc text := ic_norm(p_coach_code);
+begin
+  perform ic_uid();
+  if (ic_member(p_team, 'coach')).team_id is null then raise exception 'not_coach'; end if;
+  if length(n) < 2 or length(cc) < 4 or length(tc) < 4 or cc = tc then raise exception 'invalid_codes'; end if;
+  if exists (select 1 from teams where id <> p_team and (team_code in (cc, tc) or coach_code in (cc, tc))) then
+    raise exception 'code_taken';
+  end if;
+  update teams set name = n, team_code = tc, coach_code = cc, version = version + 1, updated_at = now() where id = p_team;
+  return ic_payload((select x from teams x where x.id = p_team), 'coach') || jsonb_build_object('ok', true);
+end $$;
+
+-- ---------- Notifications to some of the team ----------
+
+-- Devices that asked to hear when photos from one match are posted. Coaches only.
+create or replace function public.notify_match_targets(p_team uuid, p_match text) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  uid uuid := ic_uid();
+begin
+  if (ic_member(p_team, 'coach')).team_id is null then raise exception 'not_coach'; end if;
+  return coalesce((
+    select jsonb_agg(jsonb_build_object('endpoint', s.endpoint, 'p256dh', s.p256dh, 'auth', s.auth_key))
+    from push_subscriptions s
+    where s.team_id = p_team and s.user_id <> uid and coalesce(s.prefs -> 'matchIds', '[]'::jsonb) @> to_jsonb(p_match)
+  ), '[]'::jsonb);
+end $$;
+
+-- Devices of the accounts linked to some players (the player and their parents), e.g. for a
+-- reminder about the consent form. Coaches only.
+create or replace function public.notify_player_targets(p_team uuid, p_players text[]) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  uid uuid := ic_uid();
+begin
+  if (ic_member(p_team, 'coach')).team_id is null then raise exception 'not_coach'; end if;
+  return coalesce((
+    select jsonb_agg(jsonb_build_object('endpoint', s.endpoint, 'p256dh', s.p256dh, 'auth', s.auth_key))
+    from push_subscriptions s
+    where s.team_id = p_team and s.user_id <> uid and exists (
+      select 1 from team_members m
+      where m.team_id = p_team and m.user_id = s.user_id and m.role in ('player', 'parent')
+        and m.status = 'active' and m.player_id = any (p_players)
+    )
+  ), '[]'::jsonb);
+end $$;
+
+-- ---------- Leaving and deleting your account ----------
+
+-- Removes an account's own things from a team document: its hearts and its subscription.
+-- Payments stay, since the team needs them for its accounts.
+create or replace function public.ic_forget(p_data jsonb, p_uid text) returns jsonb
+language sql immutable set search_path = public as $$
+  select p_data
+    || jsonb_build_object('posts', coalesce((
+      select jsonb_agg(p || jsonb_build_object('likedBy', ic_without(p -> 'likedBy', p_uid)) order by ord)
+      from jsonb_array_elements(coalesce(p_data -> 'posts', '[]'::jsonb)) with ordinality x(p, ord)
+    ), '[]'::jsonb))
+    || jsonb_build_object('subs', coalesce((
+      select jsonb_agg(x) from jsonb_array_elements(coalesce(p_data -> 'subs', '[]'::jsonb)) x
+      where not (x ->> 'id' in ('sub-' || p_uid, 'par-' || p_uid))
+    ), '[]'::jsonb))
+$$;
+
+-- Is the account the only coach on the team? Then the team would be left without anyone to run it.
+create or replace function public.ic_last_coach(p_team uuid, p_uid uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from team_members m where m.team_id = p_team and m.user_id = p_uid and m.role = 'coach')
+    and not exists (select 1 from team_members m where m.team_id = p_team and m.user_id <> p_uid and m.role = 'coach' and m.status = 'active')
+$$;
+
+-- Leaves a team in one role (or withdraws a request that is waiting for approval).
+-- The only coach can't leave; someone else has to log in with the coach code first.
+create or replace function public.leave_team(p_team uuid, p_role text) returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  uid uuid := ic_uid();
+begin
+  if not exists (select 1 from team_members m where m.team_id = p_team and m.user_id = uid and m.role = p_role) then
+    raise exception 'not_member';
+  end if;
+  if p_role = 'coach' and ic_last_coach(p_team, uid) then raise exception 'last_coach'; end if;
+  delete from team_members where team_id = p_team and user_id = uid and role = p_role;
+  if not exists (select 1 from team_members m where m.team_id = p_team and m.user_id = uid) then
+    delete from push_subscriptions where team_id = p_team and user_id = uid;
+    update teams set data = ic_forget(data, uid::text), version = version + 1, updated_at = now() where id = p_team;
+  end if;
+end $$;
+
+-- Deletes the signed-in account: its memberships, hearts, subscriptions, phones and the login itself.
+-- Not allowed while the account is the only coach on a team; the error names that team.
+create or replace function public.delete_me() returns void
+language plpgsql security definer set search_path = public, auth as $$
+declare
+  uid uuid := ic_uid();
+  lone text;
+begin
+  select t.name into lone from team_members m join teams t on t.id = m.team_id
+  where m.user_id = uid and m.role = 'coach' and ic_last_coach(m.team_id, uid) limit 1;
+  if lone is not null then raise exception 'last_coach:%', lone; end if;
+  update teams set data = ic_forget(data, uid::text), version = version + 1, updated_at = now()
+  where id in (select m.team_id from team_members m where m.user_id = uid);
+  delete from push_subscriptions where user_id = uid;
+  delete from team_members where user_id = uid;
+  delete from auth.users where id = uid;
+end $$;
+
+-- ---------- Running the team ----------
+
+-- Removes another coach from the team. Any coach may do it; to remove yourself, leave the team.
+create or replace function public.remove_coach(p_team uuid, p_user uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  uid uuid := ic_uid();
+begin
+  if (ic_member(p_team, 'coach')).team_id is null then raise exception 'not_coach'; end if;
+  if p_user = uid then raise exception 'use_leave'; end if;
+  delete from team_members where team_id = p_team and user_id = p_user and role = 'coach';
+  delete from push_subscriptions s where s.team_id = p_team and s.user_id = p_user
+    and not exists (select 1 from team_members x where x.team_id = p_team and x.user_id = p_user);
+end $$;
+
+-- Deletes the team with everything in it: members, posts, matches and phones. Any coach may do it,
+-- but must type the team's name. The app deletes the team's files first, while it still may.
+create or replace function public.delete_team(p_team uuid, p_confirm text) returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  t teams;
+begin
+  perform ic_uid();
+  if (ic_member(p_team, 'coach')).team_id is null then raise exception 'not_coach'; end if;
+  t := (select x from teams x where x.id = p_team);
+  if lower(trim(coalesce(p_confirm, ''))) <> lower(trim(t.name)) then raise exception 'wrong_name'; end if;
+  delete from teams where id = p_team;
+end $$;
+
 -- ---------- Who may call what ----------
 
 revoke all on function public.ic_member(uuid, text) from public, anon, authenticated;
@@ -451,7 +617,16 @@ revoke all on function public.ic_uid() from public, anon, authenticated;
 revoke all on function public.ic_without(jsonb, text) from public, anon, authenticated;
 revoke all on function public.ic_consent(text, text, jsonb, jsonb) from public, anon, authenticated;
 revoke all on function public.ic_payload(public.teams, text) from public, anon, authenticated;
+revoke all on function public.ic_forget(jsonb, text) from public, anon, authenticated;
+revoke all on function public.ic_last_coach(uuid, uuid) from public, anon, authenticated;
 revoke all on function public.ic_is_member(text) from public, anon;
+revoke all on function public.ic_is_coach(text) from public, anon;
+revoke all on function public.leave_team(uuid, text) from public, anon;
+revoke all on function public.delete_me() from public, anon;
+revoke all on function public.remove_coach(uuid, uuid) from public, anon;
+revoke all on function public.delete_team(uuid, text) from public, anon;
+grant execute on function public.remove_coach(uuid, uuid) to authenticated;
+grant execute on function public.delete_team(uuid, text) to authenticated;
 revoke all on function public.peek_team(text) from public, anon;
 revoke all on function public.join_team(text, text, text) from public, anon;
 revoke all on function public.create_team(text, text, text, jsonb) from public, anon;
@@ -464,6 +639,12 @@ revoke all on function public.notify_targets(uuid, text) from public, anon;
 revoke all on function public.team_links(uuid) from public, anon;
 revoke all on function public.decide_link(uuid, uuid, text, boolean) from public, anon;
 revoke all on function public.team_coaches(uuid) from public, anon;
+revoke all on function public.update_team(uuid, text, text, text) from public, anon;
+revoke all on function public.notify_match_targets(uuid, text) from public, anon;
+revoke all on function public.notify_player_targets(uuid, text[]) from public, anon;
+grant execute on function public.update_team(uuid, text, text, text) to authenticated;
+grant execute on function public.notify_match_targets(uuid, text) to authenticated;
+grant execute on function public.notify_player_targets(uuid, text[]) to authenticated;
 grant execute on function public.team_links(uuid) to authenticated;
 grant execute on function public.decide_link(uuid, uuid, text, boolean) to authenticated;
 grant execute on function public.team_coaches(uuid) to authenticated;
@@ -478,9 +659,13 @@ grant execute on function public.save_push(uuid, text, text, text, jsonb) to aut
 grant execute on function public.notify_targets(uuid, text) to authenticated;
 grant execute on function public.delete_push(text) to anon, authenticated;
 grant execute on function public.ic_is_member(text) to authenticated;
+grant execute on function public.ic_is_coach(text) to authenticated;
+grant execute on function public.leave_team(uuid, text) to authenticated;
+grant execute on function public.delete_me() to authenticated;
 
 -- ---------- Photos, videos and signatures ----------
--- Private: only members of a team can upload to or open files in that team's folder.
+-- Private: only members of a team can upload to or open files in that team's folder,
+-- and only the team's coaches can delete them (when a post or a photo in it is deleted).
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('media', 'media', false, 52428800, array['image/jpeg', 'image/png', 'video/mp4', 'video/quicktime', 'video/webm'])
@@ -490,9 +675,13 @@ on conflict (id) do update set public = false, file_size_limit = 52428800,
 drop policy if exists "InnerCircle upload media" on storage.objects;
 drop policy if exists "InnerCircle members upload" on storage.objects;
 drop policy if exists "InnerCircle members read" on storage.objects;
+drop policy if exists "InnerCircle coaches delete" on storage.objects;
 create policy "InnerCircle members upload" on storage.objects
   for insert to authenticated
   with check (bucket_id = 'media' and public.ic_is_member((storage.foldername(name))[1]));
 create policy "InnerCircle members read" on storage.objects
   for select to authenticated
   using (bucket_id = 'media' and public.ic_is_member((storage.foldername(name))[1]));
+create policy "InnerCircle coaches delete" on storage.objects
+  for delete to authenticated
+  using (bucket_id = 'media' and public.ic_is_coach((storage.foldername(name))[1]));

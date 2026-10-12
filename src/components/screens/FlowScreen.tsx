@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
 import { NB } from '@/lib/format';
 import { ROLES } from '@/lib/seed';
@@ -365,6 +366,9 @@ function Terms() {
       <Checkbox checked={flow.terms} onToggle={() => setFlow({ terms: !flow.terms, err: '' })}>
         Jeg forstår og godtar vilkårene
       </Checkbox>
+      <p className="note">
+        Les <Link href="/vilkar">vilkårene</Link> og <Link href="/personvern">personvernerklæringen</Link>.
+      </p>
     </>
   );
 }

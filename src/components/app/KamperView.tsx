@@ -44,7 +44,7 @@ export function KamperView() {
           Kamper
         </div>
         {isCoach && (
-          <button type="button" className="btn-outline" onClick={st.openAddMatch}>
+          <button type="button" className="btn-outline" onClick={() => st.openAddMatch()}>
             + Legg til kamp
           </button>
         )}
@@ -82,6 +82,11 @@ export function KamperView() {
                       <span className="row-meta">
                         {homeAway(m)} · {m.kind}
                       </span>
+                      {isCoach && (
+                        <button type="button" className="link-btn small start" style={{ minHeight: 0, padding: '4px 0 0' }} onClick={() => st.openAddMatch(m.id)}>
+                          Endre kamp
+                        </button>
+                      )}
                     </div>
                     <button
                       type="button"
@@ -135,9 +140,12 @@ export function KamperView() {
                     )}
                   </button>
                   {isCoach && (
-                    <div style={{ padding: '0 0 6px 56px', marginTop: -8 }}>
+                    <div style={{ padding: '0 0 6px 56px', marginTop: -8, display: 'flex', gap: 16 }}>
                       <button type="button" className="link-btn small" onClick={() => st.openResult(m.id)}>
                         {hasResult(m) ? 'Endre resultat' : 'Legg inn resultat'}
+                      </button>
+                      <button type="button" className="link-btn small" onClick={() => st.openAddMatch(m.id)}>
+                        Endre kamp
                       </button>
                     </div>
                   )}
@@ -242,6 +250,11 @@ function NextMatch({ m }: { m: Match }) {
           </button>
         </div>
       </section>
+      {st.role === 'coach' && (
+        <button type="button" className="link-btn small start" style={{ marginTop: 6 }} onClick={() => st.openAddMatch(m.id)}>
+          Endre eller slett kampen
+        </button>
+      )}
       <div style={{ marginTop: 10 }}>
         <NotifyToggle id={m.id} />
       </div>
@@ -350,9 +363,14 @@ export function MatchDetail({ id }: { id: string }) {
           {photoText(matchPhotoCount(allowed, m.id))} fra kampen
         </span>
         {st.role === 'coach' && (
-          <button type="button" className="btn-outline" onClick={() => st.openResult(m.id)}>
-            {hasResult(m) ? 'Endre resultat' : 'Legg inn resultat'}
-          </button>
+          <>
+            <button type="button" className="link-btn small" onClick={() => st.openAddMatch(m.id)}>
+              Endre kamp
+            </button>
+            <button type="button" className="btn-outline" onClick={() => st.openResult(m.id)}>
+              {hasResult(m) ? 'Endre resultat' : 'Legg inn resultat'}
+            </button>
+          </>
         )}
       </div>
       <NotifyToggle id={m.id} />

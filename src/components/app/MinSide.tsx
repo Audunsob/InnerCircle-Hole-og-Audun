@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { CKEYS, TYPES } from '@/lib/seed';
 import { firstName, fmtDate, fmtShort, initials, inviteLink, nextChargeText, rel, stripe } from '@/lib/format';
@@ -16,7 +17,7 @@ import {
   teamName,
   waitsForParent,
 } from '@/lib/selectors';
-import { useStore } from '@/lib/store';
+import { pushPrefs, useStore } from '@/lib/store';
 import { disablePush, enablePush, isStandalone, needsHomeScreen, phoneKind, updatePushPrefs } from '@/lib/push';
 import type { Consent, Player } from '@/lib/types';
 import { Icon, SwitchRow } from '../ui';
@@ -148,6 +149,7 @@ export function MinSide() {
 
       <TeamsSection />
       <PushSection />
+      <HelpSection />
 
       <div className="list" style={{ marginTop: 28 }}>
         <SwitchRow label="Mørk modus" on={theme === 'dark'} onToggle={st.toggleTheme} />
@@ -155,7 +157,45 @@ export function MinSide() {
       <button type="button" className="btn btn-secondary btn-block" style={{ marginTop: 24 }} onClick={st.logout}>
         Logg ut
       </button>
+
+      <AccountSection />
     </>
+  );
+}
+
+/** Privacy policy, terms, leaving the team and deleting the account. */
+function AccountSection() {
+  const leaveTeam = useStore((s) => s.leaveTeam);
+  const deleteAccount = useStore((s) => s.deleteAccount);
+  return (
+    <Section title="Konto og personvern">
+      <div className="list">
+        <Link href="/personvern" className="row-btn choice-row" style={{ color: 'inherit', textDecoration: 'none' }}>
+          <span className="row-text">
+            <span className="row-title">Personvern</span>
+          </span>
+          <span className="choice-arrow">
+            <Icon name="chevron_right" size={20} />
+          </span>
+        </Link>
+        <Link href="/vilkar" className="row-btn choice-row" style={{ color: 'inherit', textDecoration: 'none' }}>
+          <span className="row-text">
+            <span className="row-title">Vilkår</span>
+          </span>
+          <span className="choice-arrow">
+            <Icon name="chevron_right" size={20} />
+          </span>
+        </Link>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginTop: 8 }}>
+        <button type="button" className="link-btn quiet" style={{ padding: 0 }} onClick={leaveTeam}>
+          Forlat laget
+        </button>
+        <button type="button" className="link-btn quiet" style={{ padding: 0, color: 'var(--loss)' }} onClick={deleteAccount}>
+          Slett kontoen
+        </button>
+      </div>
+    </Section>
   );
 }
 
@@ -180,12 +220,53 @@ function CoachSections() {
   }, [loadLinks]);
   const coaches = st.coaches || [];
   const linked = (id: string) => links.filter((l) => l.playerId === id && l.status === 'active');
+  const unanswered = players.filter((p) => consentStatus(p) === 'none');
+  const reminded = st.data.reminders || {};
+  const reports = [...(st.data.reports || [])].sort((a, b) => b.at - a.at);
+  const postOf = (id?: string | null) => (id ? st.data.posts.find((x) => x.id === id) : undefined);
   const codeRows = [
     { key: 'coach', label: 'Administratorkode', code: C.coach, hint: 'Kun for administratorer. Andre administratorer logger inn med denne.', copyLabel: 'Administratorkoden' },
     { key: 'team', label: 'Lagkode', code: C.team, hint: 'For spillere, foresatte og abonnenter.', copyLabel: 'Lagkoden' },
   ];
   return (
     <>
+      {reports.length > 0 && (
+        <Section title="Meldinger" aside={<span className="note">{reports.length}</span>}>
+          <p className="note">Fra medlemmer som har meldt fra om et innlegg eller har et spørsmål. Svar på e-post.</p>
+          <div className="list">
+            {reports.map((r) => {
+              const post = postOf(r.postId);
+              return (
+                <div key={r.id} className="row" style={{ alignItems: 'flex-start', padding: '12px 0', gap: 8 }}>
+                  <span className="row-text" style={{ gap: 2 }}>
+                    <span style={{ font: '500 16px var(--body)' }}>{r.postId ? 'Meldt fra om et innlegg' : 'Spørsmål'}</span>
+                    <span style={{ font: '400 15px/1.4 var(--body)', whiteSpace: 'pre-wrap' }}>{r.text}</span>
+                    <span className="row-meta" style={{ wordBreak: 'break-all' }}>
+                      {r.name + (r.contact ? ' · ' + r.contact : '') + ' · ' + fmtShort(r.at)}
+                    </span>
+                    {r.postId && !post && <span className="row-meta">Innlegget er slettet.</span>}
+                    {post && (
+                      <span style={{ display: 'flex', gap: 16 }}>
+                        {post.media.length > 0 && (
+                          <button type="button" className="link-btn small start" style={{ minHeight: 0, padding: '4px 0' }} onClick={() => st.openViewer(post.id, 0)}>
+                            Vis innlegget
+                          </button>
+                        )}
+                        <button type="button" className="link-btn small start" style={{ minHeight: 0, padding: '4px 0', color: 'var(--accent-ink)' }} onClick={() => st.deletePost(post.id)}>
+                          Slett innlegget
+                        </button>
+                      </span>
+                    )}
+                  </span>
+                  <button type="button" className="link-btn quiet" onClick={() => st.dismissReport(r.id)}>
+                    Ferdig
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </Section>
+      )}
       {waiting.length > 0 && (
         <Section title="Venter på godkjenning" aside={<span className="note">{waiting.length}</span>}>
           <p className="note">Godkjenn bare dem du vet hvem er. Spør hvis du ikke kjenner igjen e-posten.</p>
@@ -228,13 +309,31 @@ function CoachSections() {
                     {'Administrator siden ' + fmtDate(Date.parse(c.at)) + (c.signedAt ? ' · Har signert administratorreglene' : ' · Har ikke signert administratorreglene')}
                   </span>
                 </span>
+                {!c.me && (
+                  <button type="button" className="link-btn quiet" onClick={() => st.removeCoach(c.userId)}>
+                    Fjern
+                  </button>
+                )}
               </div>
             ))}
           </div>
         </Section>
       )}
-      <Section title="Lagets koder">
+      <Section
+        title="Laget og kodene"
+        aside={
+          <button type="button" className="link-btn" onClick={st.openTeamSettings}>
+            Endre
+          </button>
+        }
+      >
         <div>
+          <div className="row" style={{ padding: '12px 0' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="row-meta">Lagets navn</div>
+              <div style={{ marginTop: 2, font: '600 17px var(--body)' }}>{teamName(st)}</div>
+            </div>
+          </div>
           {codeRows.map((c) => (
             <div key={c.key} className="row" style={{ alignItems: 'flex-start', padding: '12px 0' }}>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -256,6 +355,24 @@ function CoachSections() {
           Alle spillere må godkjenne at det tas bilder av dem før de kan være med i bildestrømmen.
           {players.length > 0 && ` ${nGiven} av ${players.length} har gitt samtykke. Trykk på et navn for å se skjemaet.`}
         </p>
+        {unanswered.length > 0 && (
+          <div className="card" style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span className="row-text">
+              <span style={{ font: '600 15px var(--body)' }}>
+                {unanswered.length === 1 ? '1 har ikke svart' : unanswered.length + ' har ikke svart'}
+              </span>
+              <span className="row-sub">Spilleren og foresatte får en påminnelse i appen og på mobilen.</span>
+            </span>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ minHeight: 40, padding: '0 14px' }}
+              onClick={() => st.remindConsent(unanswered.map((p) => p.id))}
+            >
+              Send påminnelse
+            </button>
+          </div>
+        )}
         <form onSubmit={add} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 8, marginTop: 4 }}>
           <input
             className="input"
@@ -290,6 +407,9 @@ function CoachSections() {
                     </button>
                     <span className="row-meta" style={{ color: CONSENT_INK[consentStatus(p)], fontWeight: 600 }}>
                       {CONSENT_LABEL[consentStatus(p)]}
+                      {consentStatus(p) === 'none' && reminded[p.id] ? (
+                        <span style={{ fontWeight: 400 }}>{' · påminnet ' + fmtShort(reminded[p.id])}</span>
+                      ) : null}
                     </span>
                     {linked(p.id).map((l) => (
                       <span key={l.userId + l.role} className="row-meta" style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
@@ -307,6 +427,9 @@ function CoachSections() {
                       </span>
                     ))}
                   </span>
+                  <button type="button" className="link-btn quiet" onClick={() => st.openEditPlayer(p.id)}>
+                    Endre
+                  </button>
                   <button type="button" className="link-btn quiet" onClick={() => st.removePlayer(p.id)}>
                     Fjern
                   </button>
@@ -320,6 +443,19 @@ function CoachSections() {
             )}
           </>
         )}
+      </Section>
+      <Section title="Slett laget">
+        <p className="note">
+          Laget slettes for alle: spillerlista, kamper, innlegg, bilder og videoer. Alle mister tilgangen. Dette kan ikke angres.
+        </p>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          style={{ alignSelf: 'flex-start', color: 'var(--accent-ink)' }}
+          onClick={() => useStore.setState({ sheet: 'deleteTeam', form: { confirm: '', err: '' } })}
+        >
+          Slett laget
+        </button>
       </Section>
     </>
   );
@@ -581,7 +717,7 @@ function PushSection() {
       useStore.setState({ pushOn: false });
       st.toast('Varsler er slått av på denne enheten');
     } else {
-      const res = await enablePush(team.id, nf);
+      const res = await enablePush(team.id, pushPrefs(st));
       if (res === 'ok') {
         useStore.setState({ pushOn: true });
         st.toast('Varsler er slått på');
@@ -592,7 +728,7 @@ function PushSection() {
   const setPref = (k: keyof typeof nf) => () => {
     const next = { ...nf, [k]: !nf[k] };
     st.setProf('sub', { notify: next });
-    void updatePushPrefs(team.id, next);
+    void updatePushPrefs(team.id, { ...pushPrefs(st), ...next });
   };
 
   return (
@@ -616,6 +752,33 @@ function PushSection() {
           Slik legger du appen på Hjem-skjermen
         </button>
       )}
+    </Section>
+  );
+}
+
+/** Answers to common questions, and a way to ask the coaches. */
+function HelpSection() {
+  const st = useStore();
+  return (
+    <Section title="Hjelp">
+      <div>
+        <button type="button" className="row-btn" onClick={() => st.openSheet('help')}>
+          <span className="row-text">
+            <span style={{ font: '400 16px var(--body)' }}>Vanlige spørsmål</span>
+            <span className="row-sub">Varsler, samtykke, abonnement og hvem som ser bildene</span>
+          </span>
+          <Icon name="chevron_right" className="chev" size={20} />
+        </button>
+        {st.role !== 'coach' && (
+          <button type="button" className="row-btn" onClick={() => st.openReport(null)}>
+            <span className="row-text">
+              <span style={{ font: '400 16px var(--body)' }}>Spør administratorene</span>
+              <span className="row-sub">De svarer på e-posten du logget inn med</span>
+            </span>
+            <Icon name="chevron_right" className="chev" size={20} />
+          </button>
+        )}
+      </div>
     </Section>
   );
 }

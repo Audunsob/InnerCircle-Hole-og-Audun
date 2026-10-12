@@ -44,6 +44,10 @@ export function LagView() {
   const { next } = splitMatches(data.matches);
   const price = priceText(st);
   const waiting = isCoach ? (st.links || []).filter((l) => l.status === 'pending').length : 0;
+  const nReports = isCoach ? (data.reports || []).length : 0;
+  // A coach asked this player (or this parent's child) to answer the consent form.
+  const mine = me || child;
+  const reminded = !!mine && !!data.reminders?.[mine.id] && !mine.consent && !(role === 'player' && mine.declined);
 
   let list = visiblePosts(st, data.posts, P);
   if (filter !== 'all') list = list.filter((p) => p.type === filter);
@@ -103,6 +107,37 @@ export function LagView() {
                 {waiting === 1 ? '1 venter på godkjenning' : waiting + ' venter på godkjenning'}
               </span>
               <span className="row-sub">Spillere og foresatte som vil inn på laget.</span>
+            </span>
+            <Icon name="arrow_forward" size={20} style={{ color: 'var(--accent-ink)' }} />
+          </button>
+        )}
+
+        {nReports > 0 && (
+          <button type="button" className="card card-btn" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', color: 'var(--ink)', textAlign: 'left', cursor: 'pointer' }} onClick={() => st.setTab('min')}>
+            <span className="row-text">
+              <span style={{ font: '600 16px var(--body)', color: 'var(--accent-ink)' }}>
+                {nReports === 1 ? '1 melding' : nReports + ' meldinger'}
+              </span>
+              <span className="row-sub">Noen har meldt fra om et innlegg eller har et spørsmål.</span>
+            </span>
+            <Icon name="arrow_forward" size={20} style={{ color: 'var(--accent-ink)' }} />
+          </button>
+        )}
+
+        {reminded && mine && (
+          <button
+            type="button"
+            className="card card-btn"
+            style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', color: 'var(--ink)', textAlign: 'left', cursor: 'pointer' }}
+            onClick={role === 'player' ? st.openPlayerConsent : st.editParentConsent}
+          >
+            <span className="row-text">
+              <span style={{ font: '600 16px var(--body)', color: 'var(--accent-ink)' }}>Svar på samtykket</span>
+              <span className="row-sub">
+                {role === 'player'
+                  ? 'Administratoren minner deg om å svare på om du vil være med på bilder.'
+                  : 'Administratoren minner deg om å svare på om ' + firstName(mine.name) + ' kan være med på bilder.'}
+              </span>
             </span>
             <Icon name="arrow_forward" size={20} style={{ color: 'var(--accent-ink)' }} />
           </button>

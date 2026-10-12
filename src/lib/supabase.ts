@@ -73,6 +73,13 @@ export interface Membership {
   status?: 'pending' | 'active';
 }
 
+/** Thrown when the only coach on a team tries to leave it or delete their account. team: the team's name, when known. */
+export class LastCoachError extends Error {
+  constructor(message: string, public team: string | null) {
+    super(message);
+  }
+}
+
 /** Thrown when a code is already used by another team. */
 export class CodeTakenError extends Error {}
 
@@ -82,6 +89,8 @@ async function rpc<T>(fn: string, args: Record<string, unknown> = {}): Promise<T
     if (/code_taken/.test(error.message)) throw new CodeTakenError(error.message);
     if (/player_taken/.test(error.message)) throw new PlayerTakenError(error.message);
     if (/parent_limit/.test(error.message)) throw new ParentLimitError(error.message);
+    const last = /last_coach(?::(.*))?/.exec(error.message);
+    if (last) throw new LastCoachError(error.message, last[1]?.trim() || null);
     throw new Error(error.message);
   }
   return data as T;
@@ -180,6 +189,32 @@ export const teamCoaches = (teamId: string) => rpc<TeamCoach[]>('team_coaches', 
 export const decideLink = (teamId: string, userId: string, role: 'player' | 'parent', approve: boolean) =>
   rpc<void>('decide_link', { p_team: teamId, p_user: userId, p_role: role, p_approve: approve });
 
+/** Coach: renames the team and/or replaces its codes. Throws CodeTakenError if another team uses a code. */
+export const updateTeam = (teamId: string, name: string, teamCode: string, coachCode: string) =>
+  rpc<TeamPayload>('update_team', { p_team: teamId, p_name: name, p_team_code: teamCode, p_coach_code: coachCode });
+
+/** Leaves the team in this role. The only coach can't (LastCoachError). */
+export const leaveTeam = (teamId: string, role: MemberRole) => rpc<void>('leave_team', { p_team: teamId, p_role: role });
+/** Deletes the signed-in account everywhere. Not while it is the only coach on a team (LastCoachError). */
+export const deleteMe = () => rpc<void>('delete_me');
+/** Coach: removes another coach from the team. */
+export const removeCoach = (teamId: string, userId: string) => rpc<void>('remove_coach', { p_team: teamId, p_user: userId });
+/** Coach: deletes the team for everyone. `confirm` must be the team's name. */
+export const deleteTeam = (teamId: string, confirm: string) => rpc<void>('delete_team', { p_team: teamId, p_confirm: confirm });
+
+/** Coach: deletes every file in the team's folder. Best effort; never throws. */
+export async function deleteTeamFiles(teamId: string) {
+  const bucket = db().storage.from('media');
+  try {
+    for (let round = 0; round < 100; round++) {
+      const { data, error } = await bucket.list(teamId, { limit: 100 });
+      if (error || !data?.length) return;
+      const { error: rmError } = await bucket.remove(data.map((f) => teamId + '/' + f.name));
+      if (rmError) return;
+    }
+  } catch {}
+}
+
 /** Saves if `version` is still current; otherwise returns ok=false and the newer document. */
 export const saveTeam = (teamId: string, role: MemberRole, version: number, data: TeamData) =>
   rpc<TeamPayload>('save_team', { p_team: teamId, p_role: role, p_version: version, p_data: data });
@@ -261,9 +296,19 @@ export function cachedMediaUrl(src: string): string | null {
   return hit && hit.exp > Date.now() ? hit.url : null;
 }
 
+/** Deletes stored files (coaches only). Plain URLs and data URLs are ignored. Never throws. */
+export async function deleteMedia(srcs: (string | undefined)[]) {
+  const paths = srcs.filter((x): x is string => !!x && x.startsWith(STORAGE_PREFIX)).map((x) => x.slice(STORAGE_PREFIX.length));
+  if (!paths.length) return;
+  for (const p of paths) signed.delete(p);
+  try {
+    await db().storage.from('media').remove(paths);
+  } catch {}
+}
+
 // ---------- Push notifications ----------
 
-export const savePush = (teamId: string, sub: PushSubscriptionJSON, prefs: Record<string, boolean>) =>
+export const savePush = (teamId: string, sub: PushSubscriptionJSON, prefs: Record<string, unknown>) =>
   rpc<void>('save_push', {
     p_team: teamId,
     p_endpoint: sub.endpoint,

@@ -123,6 +123,20 @@ export interface Payment {
   team: number;
 }
 
+/** Something a member sent to the coaches: a post they want looked at, or a question. */
+export interface Report {
+  id: string;
+  /** Account id of the sender. Non-coaches only see and change their own. */
+  by: string;
+  name: string;
+  /** Email to answer, filled in from the login. */
+  contact: string;
+  /** The post it is about; missing for a plain question. */
+  postId?: string | null;
+  text: string;
+  at: number;
+}
+
 export interface CoachConsentRecord {
   id: string;
   name: string;
@@ -141,7 +155,7 @@ export interface TeamData {
   account: { connected: boolean; bank: string; number: string };
   ytdBase: number;
   reminders: Record<string, number>;
-  reports: unknown[];
+  reports: Report[];
   teamName?: string;
   teamCode?: string;
   coachCode?: string;
@@ -246,8 +260,13 @@ export type SheetName =
   | 'method'
   | 'receipts'
   | 'consentView'
-  | 'homeScreen'
-  | 'switchTeam';
+  | 'editPlayer'
+  | 'switchTeam'
+  | 'teamSettings'
+  | 'report'
+  | 'help'
+  | 'deleteTeam'
+  | 'homeScreen';
 
 export interface Draft {
   id: string | null;
