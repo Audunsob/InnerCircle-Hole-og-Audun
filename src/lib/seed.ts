@@ -132,4 +132,5 @@ export const ephemeral = (): EphemeralState => ({
   pf: { name: '', err: '' },
   links: null,
   coaches: null,
+  consentPlayer: null,
 });

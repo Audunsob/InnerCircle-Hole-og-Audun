@@ -160,6 +160,8 @@ export interface Flow {
   inviteVia: string | null;
   terms: boolean;
   coachCode: string;
+  /** Teams this account already coaches, found after login. They log in with the code, not sign up again. */
+  coachTeams?: { id: string; name: string }[];
   teamName?: string;
   newCoachCode: string;
   newTeamCode: string;
@@ -237,7 +239,8 @@ export type SheetName =
   | 'payout'
   | 'subscribers'
   | 'method'
-  | 'receipts';
+  | 'receipts'
+  | 'consentView';
 
 export interface Draft {
   id: string | null;
@@ -309,6 +312,8 @@ export interface EphemeralState {
   links: TeamLink[] | null;
   /** Coach: all coaches on the team. Null until loaded. */
   coaches: TeamCoach[] | null;
+  /** Coach: the player whose consent form is open. */
+  consentPlayer: string | null;
 }
 
 export type AppState = PersistedState & EphemeralState;

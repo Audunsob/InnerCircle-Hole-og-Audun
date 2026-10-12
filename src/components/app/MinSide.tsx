@@ -3,7 +3,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { CKEYS, TYPES } from '@/lib/seed';
 import { firstName, fmtDate, fmtShort, initials, inviteLink, nextChargeText, rel, stripe } from '@/lib/format';
-import { codes, coachName, matchTitle, playerMap, priceText, teamName } from '@/lib/selectors';
+import { CONSENT_INK, CONSENT_LABEL, codes, coachName, consentStatus, matchTitle, playerMap, priceText, teamName } from '@/lib/selectors';
 import { useStore } from '@/lib/store';
 import { disablePush, enablePush, needsHomeScreen, updatePushPrefs } from '@/lib/push';
 import type { Consent, Player } from '@/lib/types';
@@ -152,6 +152,8 @@ function CoachSections() {
   const players = [...st.data.players].sort((a, b) => (a.num || 0) - (b.num || 0));
   const shown = st.allPlayers ? players : players.slice(0, 8);
   const count = players.length === 1 ? '1 spiller' : players.length + ' spillere';
+  const nGiven = players.filter((p) => consentStatus(p) === 'given').length;
+  const openConsent = (id: string) => useStore.setState({ sheet: 'consentView', consentPlayer: id });
   const add = (e: FormEvent) => {
     e.preventDefault();
     st.addPlayer();
@@ -237,7 +239,10 @@ function CoachSections() {
         </div>
       </Section>
       <Section title="Spillerne på laget" aside={<span className="note">{count}</span>}>
-        <p className="note">Alle spillere må godkjenne at det tas bilder av dem før de kan være med i bildestrømmen.</p>
+        <p className="note">
+          Alle spillere må godkjenne at det tas bilder av dem før de kan være med i bildestrømmen.
+          {players.length > 0 && ` ${nGiven} av ${players.length} har gitt samtykke. Trykk på et navn for å se skjemaet.`}
+        </p>
         <form onSubmit={add} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 8, marginTop: 4 }}>
           <input
             className="input"
@@ -262,7 +267,17 @@ function CoachSections() {
               {shown.map((p) => (
                 <div key={p.id} className="row" style={{ padding: '4px 0', alignItems: 'flex-start' }}>
                   <span className="row-text" style={{ paddingTop: 10 }}>
-                    <span style={{ font: '400 16px var(--body)' }}>{p.name}</span>
+                    <button
+                      type="button"
+                      className="link-btn start"
+                      style={{ minHeight: 0, padding: 0, font: '400 16px var(--body)', color: 'var(--ink)', textAlign: 'left' }}
+                      onClick={() => openConsent(p.id)}
+                    >
+                      {p.name}
+                    </button>
+                    <span className="row-meta" style={{ color: CONSENT_INK[consentStatus(p)], fontWeight: 600 }}>
+                      {CONSENT_LABEL[consentStatus(p)]}
+                    </span>
                     {linked(p.id).map((l) => (
                       <span key={l.userId + l.role} className="row-meta" style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                         <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
