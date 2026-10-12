@@ -14,6 +14,7 @@ export function PostCard({ post, P }: { post: Post; P: Record<string, Player> })
   const uid = useStore((s) => s.uid);
   const dark = useStore((s) => s.theme === 'dark');
   const match = useStore((s) => (post.matchId ? s.data.matches.find((m) => m.id === post.matchId) : undefined));
+  const eventTitle = useStore((s) => (post.eventId ? (s.data.events || []).find((e) => e.id === post.eventId)?.title : undefined));
   const resultTitle = useStore((s) => (match && post.type === 'kamp' && outcomeOf(match) ? scoreTitle(s, match) : ''));
   const toggleLike = useStore((s) => s.toggleLike);
   const openViewer = useStore((s) => s.openViewer);
@@ -35,7 +36,10 @@ export function PostCard({ post, P }: { post: Post; P: Record<string, Player> })
     ? 'Med: ' + shown.join(', ') + (hidden ? (shown.length ? ' + ' : '') + hidden + (hidden === 1 ? ' spiller' : ' spillere') : '')
     : '';
 
-  const typeLabel = (TYPES[post.type] || TYPES.beskjed).label + (match && post.type === 'kamp' && match.opp ? ' mot ' + match.opp : '');
+  const typeLabel =
+    (TYPES[post.type] || TYPES.beskjed).label +
+    (match && post.type === 'kamp' && match.opp ? ' mot ' + match.opp : '') +
+    (eventTitle && post.type !== 'kamp' ? ' · ' + eventTitle : '');
   const many = post.media.length > 1;
 
   const like = () => {

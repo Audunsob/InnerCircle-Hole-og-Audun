@@ -24,6 +24,7 @@ import {
   emptyTeam,
   ephemeral,
   freshState,
+  EVENT_KINDS,
   LS_KEY,
   newPay,
 } from './seed';
@@ -125,6 +126,7 @@ import type {
   SignedForm,
   Tab,
   TeamData,
+  TeamEvent,
 } from './types';
 
 const EPHEMERAL_KEYS = Object.keys(ephemeral()) as (keyof EphemeralState)[];
@@ -221,17 +223,25 @@ export interface Actions {
   doConfirm: () => void;
   toggleNotifyMatch: (id: string) => void;
   addToCal: (m: Match) => void;
-  showMap: (m: Match) => void;
+  showMap: (m: { venue: string }) => void;
+  openEventView: (id: string) => void;
+  closeEvent: () => void;
+  addEventToCal: (e: TeamEvent) => void;
 
   // Coach
   /** Opens the match form, empty or with an existing match to change. */
   openAddMatch: (id?: string) => void;
   saveMatch: () => void;
   deleteMatch: (id: string) => void;
+  /** Opens the event form, empty or with an existing event to change. */
+  openAddEvent: (id?: string) => void;
+  saveEvent: () => void;
+  deleteEvent: (id: string) => void;
   openResult: (id: string) => void;
   stepResult: (k: 'us' | 'them', dir: number) => void;
   saveResult: () => void;
-  openComposer: (postId: string | null) => void;
+  /** Opens the composer for a new post (optionally about an event), or to edit a post. */
+  openComposer: (postId: string | null, eventId?: string) => void;
   setDraft: (p: Partial<Draft>) => void;
   addFiles: (files: File[]) => Promise<void>;
   removeMedia: (id: string) => void;
@@ -490,6 +500,7 @@ export const useStore = create<Store>()((set, get) => {
       pay: null,
       tab: 'lag',
       openMatch: null,
+      openEvent: null,
       links: null,
       coaches: null,
     });
@@ -503,6 +514,7 @@ export const useStore = create<Store>()((set, get) => {
       tab: 'lag',
       filter: 'all',
       openMatch: null,
+      openEvent: null,
       cons: null,
       consCtx: null,
       sheet: null,
@@ -757,7 +769,7 @@ export const useStore = create<Store>()((set, get) => {
     }
     const m = (s().teams || []).find((x) => x.teamId === teamId && x.role === role);
     connect(p);
-    set({ links: null, coaches: null, sheet: null, form: {}, openMatch: null, notifyMatch: {} });
+    set({ links: null, coaches: null, sheet: null, form: {}, openMatch: null, openEvent: null, notifyMatch: {} });
     const uid = s().uid;
     if (role === 'player') setProf('player', { playerId: m?.playerId || null });
     if (role === 'parent') setProf('parent', { childId: m?.playerId || null, subscribed: p.data.subs.some((x) => x.id === 'par-' + uid) });
@@ -1338,7 +1350,7 @@ export const useStore = create<Store>()((set, get) => {
     // ---------- App ----------
 
     setTab: (t) => {
-      set({ tab: t, openMatch: null });
+      set({ tab: t, openMatch: null, openEvent: null });
       scrollTop();
     },
     setFilter: (f) => set({ filter: f }),
@@ -1433,6 +1445,40 @@ export const useStore = create<Store>()((set, get) => {
         'text/calendar',
       );
       toast('Kampen er lagt i kalenderen');
+    },
+    openEventView: (id) => {
+      set({ tab: 'arrangement', openEvent: id });
+      scrollTop();
+    },
+    closeEvent: () => {
+      set({ openEvent: null });
+      scrollTop();
+    },
+    addEventToCal: (e) => {
+      const start = new Date(e.date + 'T' + e.time);
+      const end = e.end && e.end > e.time ? new Date(e.date + 'T' + e.end) : new Date(start.getTime() + 2 * 3600e3);
+      const f = (x: Date) => x.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+      const esc = (x: string) => x.replace(/\\/g, '\\\\').replace(/[,;]/g, (c) => '\\' + c).replace(/\n/g, '\\n');
+      download(
+        ascii(e.title || e.kind || 'arrangement').toLowerCase() + '.ics',
+        [
+          'BEGIN:VCALENDAR',
+          'VERSION:2.0',
+          'PRODID:-//InnerCircle//NO',
+          'BEGIN:VEVENT',
+          'UID:' + e.id + '@innercircle.no',
+          'DTSTAMP:' + f(new Date()),
+          'DTSTART:' + f(start),
+          'DTEND:' + f(end),
+          'SUMMARY:' + esc(e.title + ' (' + shortTeam(s()) + ')'),
+          'LOCATION:' + esc(e.venue),
+          ...(e.note ? ['DESCRIPTION:' + esc(e.note)] : []),
+          'END:VEVENT',
+          'END:VCALENDAR',
+        ].join('\r\n'),
+        'text/calendar',
+      );
+      toast('Lagt i kalenderen');
     },
     showMap: (m) => {
       try {
@@ -1545,6 +1591,82 @@ export const useStore = create<Store>()((set, get) => {
         },
       );
     },
+    openAddEvent: (id) => {
+      const e = id ? (s().data.events || []).find((x) => x.id === id) : undefined;
+      if (e)
+        return set({
+          sheet: 'addEvent',
+          form: { eventId: e.id, kind: e.kind, icon: e.icon, title: e.title, date: e.date, time: e.time, end: e.end || '', venue: e.venue, note: e.note || '', err: '' },
+        });
+      const k = EVENT_KINDS[1];
+      set({
+        sheet: 'addEvent',
+        form: { kind: k.kind, icon: k.icon, title: '', date: iso(new Date(Date.now() + 7 * DAY)), time: '18:00', end: '', venue: '', note: '', err: '' },
+      });
+    },
+    saveEvent: () => {
+      const f = s().form as Record<string, string | undefined>;
+      const kind = String(f.kind || '').trim();
+      const title = String(f.title || '').trim() || kind;
+      const venue = String(f.venue || '').trim();
+      if (!title) return setForm({ err: 'Velg en type eller skriv en tittel.' });
+      if (!f.date) return setForm({ err: 'Velg dato.' });
+      if (!f.time) return setForm({ err: 'Legg inn når det starter.' });
+      if (f.end && f.end <= f.time) return setForm({ err: 'Slutt må være etter start.' });
+      if (!venue) return setForm({ err: 'Skriv inn hvor det skjer.' });
+      const old = f.eventId ? (s().data.events || []).find((x) => x.id === f.eventId) : undefined;
+      const e: TeamEvent = {
+        id: old?.id || 'e' + Date.now(),
+        kind: kind || 'Annet',
+        icon: String(f.icon || 'event'),
+        title,
+        date: String(f.date),
+        time: String(f.time),
+        end: String(f.end || ''),
+        venue,
+        note: String(f.note || '').trim(),
+        seriesId: old?.seriesId ?? null,
+      };
+      const when = fmtDay(e.date) + ' kl. ' + e.time;
+      if (old) {
+        setData((d) => ({ ...d, events: (d.events || []).map((x) => (x.id === e.id ? e : x)) }));
+        set({ sheet: null });
+        toast('Endringen er lagret');
+        // Only a new time or place is worth a notification; a typo fix is not.
+        if (old.date !== e.date || old.time !== e.time || old.venue !== e.venue) {
+          const text = 'Endret: ' + e.title + ', ' + when + ', ' + e.venue;
+          addNotif(text);
+          void notify('matches', teamName(s()), text);
+        }
+        return;
+      }
+      setData((d) => ({ ...d, events: [...(d.events || []), e] }));
+      set({ sheet: null, tab: 'arrangement', openEvent: null });
+      scrollTop();
+      toast(e.title + ' er lagt til');
+      const text = 'Ny hendelse: ' + e.title + ', ' + when;
+      addNotif(text);
+      void notify('matches', teamName(s()), text);
+    },
+    deleteEvent: (id) => {
+      const e = (s().data.events || []).find((x) => x.id === id);
+      if (!e) return;
+      const n = s().data.posts.filter((p) => p.eventId === id).length;
+      ask(
+        'Slette hendelsen?',
+        e.title + ' forsvinner for alle.' + (n ? ' Innleggene fra den blir liggende i bildestrømmen.' : ''),
+        'Slett',
+        () => {
+          setData((d) => ({
+            ...d,
+            events: (d.events || []).filter((x) => x.id !== id),
+            posts: d.posts.map((p) => (p.eventId === id ? { ...p, eventId: null } : p)),
+          }));
+          set({ openEvent: null });
+          toast('Hendelsen er slettet');
+        },
+      );
+    },
     openResult: (id) => {
       const m = s().data.matches.find((x) => x.id === id);
       if (!m) return;
@@ -1568,13 +1690,16 @@ export const useStore = create<Store>()((set, get) => {
         void notify('results', teamName(s()), 'Resultat: ' + scoreTitle(s(), rm));
       }
     },
-    openComposer: (postId) => {
+    openComposer: (postId, eventId) => {
       const st = s();
       if (!postId && !canPost(st)) return;
       let dr: Draft;
       const p = postId ? st.data.posts.find((x) => x.id === postId) : null;
+      const ev = eventId ? (st.data.events || []).find((x) => x.id === eventId) : undefined;
       if (p) {
-        dr = { id: p.id, type: p.type, matchId: p.matchId || '', media: p.media.slice(), tagged: p.tagged.slice(), text: p.text, notify: false };
+        dr = { id: p.id, type: p.type, matchId: p.matchId || '', eventId: p.eventId || '', media: p.media.slice(), tagged: p.tagged.slice(), text: p.text, notify: false };
+      } else if (ev) {
+        dr = { id: null, type: ev.kind === 'Trening' ? 'trening' : 'beskjed', matchId: '', eventId: ev.id, media: [], tagged: [], text: '', notify: true };
       } else {
         const last = st.data.matches.filter(isPlayed).sort((a, b) => matchTime(b) - matchTime(a))[0];
         dr = { id: null, type: 'kamp', matchId: last ? last.id : '', media: [], tagged: [], text: '', notify: true };
@@ -1621,9 +1746,12 @@ export const useStore = create<Store>()((set, get) => {
       if (dr.loading) return toast('Vent til opplastingen er ferdig');
       if (!dr.text.trim() && !dr.media.length) return toast('Legg til tekst, bilder eller video først');
       const coach = st.role === 'coach';
-      // Players and parents post about a match the coaches made, never on their own.
-      if (!coach && !st.data.matches.some((m) => m.id === dr.matchId)) return toast('Velg kampen innlegget gjelder');
+      // Players and parents post about a match or event the coaches made, never on their own.
+      const onMatch = st.data.matches.some((m) => m.id === dr.matchId);
+      const onEvent = (st.data.events || []).some((e) => e.id === dr.eventId);
+      if (!coach && !onMatch && !onEvent) return toast('Velg kampen eller hendelsen innlegget gjelder');
       const matchId = (dr.type === 'kamp' || !coach) && dr.matchId ? dr.matchId : null;
+      const eventId = (dr.type !== 'kamp' || !coach) && dr.eventId ? dr.eventId : null;
       if (dr.id) {
         const kept = new Set(dr.media.map((m) => m.src));
         const dropped = (st.data.posts.find((p) => p.id === dr.id)?.media || []).filter((m) => !kept.has(m.src));
@@ -1631,7 +1759,7 @@ export const useStore = create<Store>()((set, get) => {
         setData((d) => ({
           ...d,
           posts: d.posts.map((p) =>
-            p.id === dr.id ? { ...p, type: dr.type, matchId, media: dr.media, tagged: dr.tagged, text: dr.text.trim(), edited: true } : p,
+            p.id === dr.id ? { ...p, type: dr.type, matchId, eventId, media: dr.media, tagged: dr.tagged, text: dr.text.trim(), edited: true } : p,
           ),
         }));
         set({ sheet: null, draft: null });
@@ -1649,6 +1777,7 @@ export const useStore = create<Store>()((set, get) => {
         authorRole: by.authorRole,
         ts: now,
         matchId,
+        eventId,
         media: dr.media,
         tagged: dr.tagged,
         text: dr.text.trim(),
@@ -1662,7 +1791,8 @@ export const useStore = create<Store>()((set, get) => {
         posts: [post, ...d.posts],
         notifs: notifyAll ? [{ id: 'n' + now, text: 'Nytt innlegg fra ' + author, ts: now, read: false, from: 'coach' as const }, ...d.notifs] : d.notifs,
       }));
-      set({ sheet: null, draft: null, tab: 'lag', filter: 'all', openMatch: null });
+      // Posted from an event: stay there and see it turn up. Otherwise go to the feed.
+      set(eventId ? { sheet: null, draft: null } : { sheet: null, draft: null, tab: 'lag', filter: 'all', openMatch: null });
       // Those who asked to hear about this match get it even with notifications for posts switched off.
       if (coach && (notifyAll || matchId)) void notify('posts', teamName(s()), author + ': ' + (post.text || mediaText(post.media)).slice(0, 120), { matchId, onlyWatchers: !notifyAll });
       scrollTop();
