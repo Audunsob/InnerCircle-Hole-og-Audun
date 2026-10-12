@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { OUTCOME_COLOR, outcomeOf, scoreTitle } from '@/lib/derive';
 import { firstName, initials, rel, stripe } from '@/lib/format';
 import { TYPES } from '@/lib/seed';
+import { findEvent } from '@/lib/trainings';
 import { useStore } from '@/lib/store';
 import type { Player, Post } from '@/lib/types';
 import { Icon } from '../ui';
@@ -14,7 +15,7 @@ export function PostCard({ post, P }: { post: Post; P: Record<string, Player> })
   const uid = useStore((s) => s.uid);
   const dark = useStore((s) => s.theme === 'dark');
   const match = useStore((s) => (post.matchId ? s.data.matches.find((m) => m.id === post.matchId) : undefined));
-  const eventTitle = useStore((s) => (post.eventId ? (s.data.events || []).find((e) => e.id === post.eventId)?.title : undefined));
+  const eventTitle = useStore((s) => findEvent(s.data, post.eventId)?.title);
   const resultTitle = useStore((s) => (match && post.type === 'kamp' && outcomeOf(match) ? scoreTitle(s, match) : ''));
   const toggleLike = useStore((s) => s.toggleLike);
   const openViewer = useStore((s) => s.openViewer);

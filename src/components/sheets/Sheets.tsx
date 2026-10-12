@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { download, firstName, fmtAcct, fmtDate, fmtDay, fmtShort, iso, krd, matchTime, NB, rel, stripe } from '@/lib/format';
+import { download, firstName, fmtAcct, fmtDate, fmtDay, fmtLong, fmtShort, iso, krd, matchTime, NB, rel, stripe } from '@/lib/format';
 import { CKEYS, EVENT_ICONS, EVENT_KINDS, TYPES } from '@/lib/seed';
+import { allEvents, isTraining, WEEK_ORDER, WEEKDAYS } from '@/lib/trainings';
 import { canPost, CONSENT_INK, CONSENT_LABEL, consentStatus, waitsForParent, matchTitle, playerMap, price, shortTeam, teamName } from '@/lib/selectors';
 import { canInstall, installApp, phoneKind } from '@/lib/push';
 import { receiptText, useStore } from '@/lib/store';
@@ -16,6 +17,8 @@ const TITLES: Record<Exclude<SheetName, 'confirm'>, string> = {
   composer: 'Nytt innlegg',
   addMatch: 'Legg til kamp',
   addEvent: 'Ny hendelse',
+  training: 'Fast trening',
+  trainingDay: 'Endre én trening',
   result: 'Resultat',
   postMenu: 'Innlegg',
   notifs: 'Varsler',
@@ -50,6 +53,7 @@ export function SheetHost() {
   const asking = useStore((s) => s.sheet === 'report' && !s.form.postId);
   const editingMatch = useStore((s) => s.sheet === 'addMatch' && !!s.form.matchId);
   const editingEvent = useStore((s) => s.sheet === 'addEvent' && !!s.form.eventId);
+  const editingTraining = useStore((s) => s.sheet === 'training' && !!s.form.trainingId);
   const closeSheet = useStore((s) => s.closeSheet);
 
   useEffect(() => {
@@ -60,7 +64,7 @@ export function SheetHost() {
   }, [sheet, closeSheet]);
 
   if (!sheet) return null;
-  const title = sheet === 'confirm' ? confirm?.title || '' : sheet === 'composer' && editing ? 'Rediger innlegg' : asking ? 'Spør administratorene' : editingMatch ? 'Endre kamp' : editingEvent ? 'Endre hendelse' : TITLES[sheet];
+  const title = sheet === 'confirm' ? confirm?.title || '' : sheet === 'composer' && editing ? 'Rediger innlegg' : asking ? 'Spør administratorene' : editingMatch ? 'Endre kamp' : editingEvent ? 'Endre hendelse' : editingTraining ? 'Endre fast trening' : TITLES[sheet];
 
   return (
     <div className="sheet-wrap">
@@ -76,6 +80,8 @@ export function SheetHost() {
           {sheet === 'composer' && <Composer />}
           {sheet === 'addMatch' && <AddMatch />}
           {sheet === 'addEvent' && <AddEvent />}
+          {sheet === 'training' && <TrainingForm />}
+          {sheet === 'trainingDay' && <TrainingDay />}
           {sheet === 'result' && <Result />}
           {sheet === 'postMenu' && <PostMenu />}
           {sheet === 'confirm' && <Confirm />}
@@ -115,14 +121,14 @@ function Composer() {
   if (!dr) return null;
   const dark = st.theme === 'dark';
   const matches = [...st.data.matches].sort((a, b) => matchTime(b) - matchTime(a));
-  const events = [...(st.data.events || [])].sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
+  const events = allEvents(st.data).filter((e) => !isTraining(e) || (!e.cancelled && e.date <= iso(new Date()))).sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
   const coach = st.role === 'coach';
   const ready = (dr.text.trim() || dr.media.length) && !dr.loading && (coach || !!dr.matchId || !!dr.eventId);
   return (
     <>
       {!coach && (
         <p className="note" style={{ fontSize: 13 }}>
-          Del bilder og video fra en kamp eller hendelse administratorene har lagt inn. Administratorene kan fjerne innlegg.
+          Del bilder og video fra en kamp, trening eller hendelse administratorene har lagt inn. Administratorene kan fjerne innlegg.
         </p>
       )}
       {coach && (
@@ -594,6 +600,131 @@ function AddEvent() {
           Slett hendelsen
         </button>
       )}
+    </form>
+  );
+}
+
+/** A training that repeats on the same day every week, or every other week. */
+function TrainingForm() {
+  const form = useStore((s) => s.form);
+  const setForm = useStore((s) => s.setForm);
+  const saveTraining = useStore((s) => s.saveTraining);
+  const endTraining = useStore((s) => s.endTraining);
+  const f = form as Record<string, string | number | boolean | undefined>;
+  const bind = (k: string) => ({
+    value: String(f[k] ?? ''),
+    onChange: (e: { target: { value: string } }) => setForm({ [k]: e.target.value, err: '' }),
+  });
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    saveTraining();
+  };
+  return (
+    <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <Field label="Navn">
+        <input className="input" {...bind('title')} placeholder="F.eks. Trening eller Keepertrening" />
+      </Field>
+      <div className="field">
+        <span className="field-label">Dag</span>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {WEEK_ORDER.map((d) => (
+            <Chip key={d} label={WEEKDAYS[d].slice(0, 3)} on={Number(f.weekday) === d} onClick={() => setForm({ weekday: d, err: '' })} />
+          ))}
+        </div>
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        <Chip label="Hver uke" on={Number(f.every) !== 2} onClick={() => setForm({ every: 1 })} />
+        <Chip label="Annenhver uke" on={Number(f.every) === 2} onClick={() => setForm({ every: 2 })} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <Field label="Start">
+          <input className="input" type="time" {...bind('time')} />
+        </Field>
+        <Field label="Slutt">
+          <input className="input" type="time" {...bind('end')} />
+        </Field>
+      </div>
+      <Field label="Sted">
+        <input className="input" {...bind('venue')} placeholder="F.eks. Solberg kunstgress" />
+      </Field>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <Field label="Fra og med">
+          <input className="input" type="date" {...bind('from')} />
+        </Field>
+        <Field label="Til og med">
+          <input className="input" type="date" {...bind('until')} />
+        </Field>
+      </div>
+      <p className="note" style={{ margin: '-8px 0 0' }}>
+        La «Til og med» stå tom hvis treningen skal fortsette til du avslutter den.
+      </p>
+      <Field label="Tekst">
+        <textarea className="input" {...bind('note')} rows={3} placeholder="F.eks. Ta med vannflaske og leggskinn." style={{ minHeight: 96 }} />
+      </Field>
+      <FormError text={f.err} />
+      <button type="submit" className="btn btn-primary btn-block">
+        {f.trainingId ? 'Lagre endringer' : 'Legg inn fast trening'}
+      </button>
+      {f.trainingId && (
+        <button type="button" className="link-btn" style={{ color: 'var(--accent-ink)' }} onClick={() => endTraining(String(f.trainingId))}>
+          Avslutt treningen
+        </button>
+      )}
+    </form>
+  );
+}
+
+/** One training in a series: move it, or cancel just that day. */
+function TrainingDay() {
+  const form = useStore((s) => s.form);
+  const setForm = useStore((s) => s.setForm);
+  const save = useStore((s) => s.saveTrainingDay);
+  const cancel = useStore((s) => s.cancelTrainingDay);
+  const f = form as Record<string, string | boolean | undefined>;
+  const bind = (k: string) => ({
+    value: String(f[k] ?? ''),
+    onChange: (e: { target: { value: string } }) => setForm({ [k]: e.target.value, err: '' }),
+  });
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    save();
+  };
+  const date = String(f.date || '');
+  return (
+    <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <p style={{ margin: 0, font: '600 15px var(--body)' }}>{date && fmtLong(date).replace(/^./, (c) => c.toUpperCase())}</p>
+      {f.cancelled ? (
+        <p className="note" style={{ margin: 0 }}>
+          Denne treningen er avlyst. De andre treningene går som vanlig.
+        </p>
+      ) : (
+        <>
+          <p className="note" style={{ margin: 0 }}>
+            Endringene gjelder bare denne gangen. De andre treningene går som vanlig.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Field label="Start">
+              <input className="input" type="time" {...bind('time')} />
+            </Field>
+            <Field label="Slutt">
+              <input className="input" type="time" {...bind('end')} />
+            </Field>
+          </div>
+          <Field label="Sted">
+            <input className="input" {...bind('venue')} />
+          </Field>
+          <Field label="Tekst">
+            <textarea className="input" {...bind('note')} rows={3} style={{ minHeight: 96 }} />
+          </Field>
+          <FormError text={f.err} />
+          <button type="submit" className="btn btn-primary btn-block">
+            Lagre for denne gangen
+          </button>
+        </>
+      )}
+      <button type="button" className={f.cancelled ? 'btn btn-primary btn-block' : 'link-btn'} style={f.cancelled ? undefined : { color: 'var(--accent-ink)' }} onClick={() => cancel(!f.cancelled)}>
+        {f.cancelled ? 'Ta treningen tilbake' : 'Avlys denne treningen'}
+      </button>
     </form>
   );
 }

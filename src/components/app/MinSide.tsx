@@ -741,7 +741,7 @@ function PushSection() {
           {on && (
             <>
               <SwitchRow label="Nye innlegg" sub="Bilder, video og beskjeder" on={nf.posts} onToggle={setPref('posts')} />
-              <SwitchRow label="Kamper" sub="Når en ny kamp blir lagt inn" on={nf.matches} onToggle={setPref('matches')} />
+              <SwitchRow label="Kamper og treninger" sub="Når en kamp eller trening blir lagt inn, endret eller avlyst" on={nf.matches} onToggle={setPref('matches')} />
               <SwitchRow label="Resultater" sub="Når et resultat er lagt inn" on={nf.results} onToggle={setPref('results')} />
             </>
           )}

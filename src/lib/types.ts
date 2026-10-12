@@ -92,6 +92,35 @@ export interface TeamEvent {
   seriesId?: string | null;
 }
 
+/** A change to one training in a series: moved, or cancelled. Keyed by its date. */
+export interface TrainingChange {
+  cancelled?: boolean;
+  time?: string;
+  end?: string;
+  venue?: string;
+  note?: string;
+}
+
+/** A training that repeats every week (or every other week) on the same day. */
+export interface TrainingSeries {
+  id: string;
+  title: string;
+  /** 0 = Sunday … 6 = Saturday, like Date.getDay(). */
+  weekday: number;
+  /** 1 = every week, 2 = every other week. */
+  every: 1 | 2;
+  time: string; // hh:mm
+  end: string; // hh:mm
+  venue: string;
+  note?: string;
+  /** First training, yyyy-mm-dd. */
+  from: string;
+  /** Last day of the series, yyyy-mm-dd. Missing while it goes on. */
+  until?: string | null;
+  /** Single trainings that were moved or cancelled. */
+  changes: Record<string, TrainingChange>;
+}
+
 export interface Media {
   id: string;
   kind: 'photo' | 'video';
@@ -174,6 +203,8 @@ export interface TeamData {
   matches: Match[];
   /** Missing on teams made before events existed. */
   events?: TeamEvent[];
+  /** Trainings that repeat every week. Missing on teams made before there were any. */
+  trainings?: TrainingSeries[];
   posts: Post[];
   subs: Subscriber[];
   notifs: Notif[];
@@ -275,6 +306,8 @@ export type SheetName =
   | 'composer'
   | 'addMatch'
   | 'addEvent'
+  | 'training'
+  | 'trainingDay'
   | 'result'
   | 'postMenu'
   | 'confirm'

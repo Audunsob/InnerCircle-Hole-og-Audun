@@ -5,6 +5,7 @@ import { eventHours, splitEvents, visiblePosts } from '@/lib/derive';
 import { fmtLong } from '@/lib/format';
 import { canPost, playerMap } from '@/lib/selectors';
 import { useStore } from '@/lib/store';
+import { allEvents, findEvent, isRunning, isTraining, repeatText, timeText, type TrainingEvent } from '@/lib/trainings';
 import type { TeamEvent } from '@/lib/types';
 import { DateCol, Icon, Tabs } from '../ui';
 import { Feed } from './LagView';
@@ -15,7 +16,7 @@ export function ArrangementView() {
   const st = useStore();
   const isCoach = st.role === 'coach';
   const [view, setView] = useState<'upcoming' | 'past'>('upcoming');
-  const { upcoming, past } = splitEvents(st.data.events);
+  const { upcoming, past } = splitEvents(allEvents(st.data));
   const list = view === 'upcoming' ? upcoming : past;
 
   return (
@@ -38,6 +39,7 @@ export function ArrangementView() {
         ]}
         onChange={setView}
       />
+      {view === 'upcoming' && <TrainingSeriesList />}
       {!list.length && (
         <p className="note" style={{ padding: '40px 0', textAlign: 'center' }}>
           {view === 'upcoming'
@@ -56,19 +58,72 @@ export function ArrangementView() {
   );
 }
 
-function EventRow({ e }: { e: TeamEvent }) {
+/** The trainings that repeat every week, with buttons for the coach. */
+function TrainingSeriesList() {
+  const st = useStore();
+  const isCoach = st.role === 'coach';
+  const running = (st.data.trainings || []).filter((t) => isRunning(t));
+  if (!running.length && !isCoach) return null;
+  return (
+    <section className="section">
+      <h2 className="h2">Faste treninger</h2>
+      <div className="list">
+        {running.map((t) => (
+          <div key={t.id} className="row">
+            <span className="row-text">
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6, font: 'italic 800 18px/1.15 var(--display)', textTransform: 'uppercase' }}>
+                <Icon name="directions_run" size={20} style={{ color: 'var(--accent-ink)' }} />
+                <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{t.title}</span>
+              </span>
+              <span className="row-sub">
+                {repeatText(t)} kl. {timeText(t)} · {t.venue}
+              </span>
+              {t.until && <span className="row-meta">Til og med {fmtLong(t.until)}</span>}
+              {isCoach && (
+                <span style={{ display: 'flex', gap: 16, paddingTop: 4 }}>
+                  <button type="button" className="link-btn small start" style={{ minHeight: 0, padding: 0 }} onClick={() => st.openTraining(t.id)}>
+                    Endre
+                  </button>
+                  <button type="button" className="link-btn small start" style={{ minHeight: 0, padding: 0 }} onClick={() => st.endTraining(t.id)}>
+                    Avslutt
+                  </button>
+                </span>
+              )}
+            </span>
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label="Legg alle treningene i kalender"
+              style={{ marginRight: -12, color: 'var(--accent-ink)' }}
+              onClick={() => st.trainingToCal(t.id)}
+            >
+              <Icon name="event" />
+            </button>
+          </div>
+        ))}
+      </div>
+      {isCoach && (
+        <button type="button" className="link-btn small start" style={{ marginTop: 6 }} onClick={() => st.openTraining()}>
+          + Fast trening, f.eks. hver onsdag
+        </button>
+      )}
+    </section>
+  );
+}
+
+function EventRow({ e }: { e: TeamEvent | TrainingEvent }) {
   const open = useStore((s) => s.openEventView);
+  const cancelled = isTraining(e) && e.cancelled;
   return (
     <button type="button" className="row-btn" style={{ minHeight: 72 }} onClick={() => open(e.id)}>
       <DateCol date={e.date} />
       <span className="row-text">
         <span style={{ display: 'flex', alignItems: 'center', gap: 6, font: 'italic 800 18px/1.15 var(--display)', textTransform: 'uppercase' }}>
           <Icon name={e.icon || 'event'} size={20} style={{ color: 'var(--accent-ink)' }} />
-          <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{e.title}</span>
+          <span style={{ minWidth: 0, overflowWrap: 'anywhere', ...(cancelled ? { textDecoration: 'line-through', color: 'var(--muted)' } : {}) }}>{e.title}</span>
         </span>
-        <span className="row-sub">
-          {eventHours(e)} · {e.venue}
-        </span>
+        <span className="row-sub">{cancelled ? 'Avlyst' : eventHours(e) + ' · ' + e.venue}</span>
+        {!cancelled && isTraining(e) && e.changed && <span className="row-meta">Endret denne gangen</span>}
         {e.kind !== e.title && <span className="row-meta">{e.kind}</span>}
       </span>
       <Icon name="chevron_right" style={{ color: 'var(--muted)' }} />
@@ -78,8 +133,9 @@ function EventRow({ e }: { e: TeamEvent }) {
 
 export function EventDetail({ id }: { id: string }) {
   const st = useStore();
-  const e = (st.data.events || []).find((x) => x.id === id);
+  const e = findEvent(st.data, id);
   if (!e) return null;
+  const training = isTraining(e) ? e : null;
   const isCoach = st.role === 'coach';
   const P = playerMap(st.data.players);
   const posts = visiblePosts(st, st.data.posts, P).filter((p) => p.eventId === e.id);
@@ -114,9 +170,11 @@ export function EventDetail({ id }: { id: string }) {
           <Icon name={e.icon || 'event'} size={18} />
           {e.kind}
         </div>
-        <h1 className="h1" style={{ margin: 0, overflowWrap: 'anywhere' }}>
+        <h1 className="h1" style={{ margin: 0, overflowWrap: 'anywhere', ...(training?.cancelled ? { textDecoration: 'line-through' } : {}) }}>
           {e.title}
         </h1>
+        {training?.cancelled && <p style={{ margin: 0, font: '700 15px var(--body)', color: 'var(--accent-ink)' }}>Denne treningen er avlyst.</p>}
+        {training && !training.cancelled && training.changed && <p className="note" style={{ margin: 0 }}>Tid, sted eller tekst er endret denne gangen.</p>}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, font: '400 15px/1.4 var(--body)' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Icon name="calendar_today" size={18} style={{ color: 'var(--muted)' }} />
@@ -145,12 +203,22 @@ export function EventDetail({ id }: { id: string }) {
       </section>
       {(isCoach || canPost(st)) && (
         <div style={{ margin: '12px 0', display: 'flex', alignItems: 'center', gap: 16 }}>
-          <span style={{ flex: 1 }}>
-            {isCoach && (
-              <button type="button" className="link-btn small" style={{ textAlign: 'left' }} onClick={() => st.openAddEvent(e.id)}>
-                Endre eller slett
-              </button>
-            )}
+          <span style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
+            {isCoach &&
+              (training ? (
+                <>
+                  <button type="button" className="link-btn small" style={{ textAlign: 'left' }} onClick={() => st.openTrainingDay(training.seriesId, training.date)}>
+                    Flytt eller avlys denne gangen
+                  </button>
+                  <button type="button" className="link-btn small" style={{ textAlign: 'left' }} onClick={() => st.openTraining(training.seriesId)}>
+                    Endre alle treningene
+                  </button>
+                </>
+              ) : (
+                <button type="button" className="link-btn small" style={{ textAlign: 'left' }} onClick={() => st.openAddEvent(e.id)}>
+                  Endre eller slett
+                </button>
+              ))}
           </span>
           <button type="button" className="btn-outline" onClick={() => st.openComposer(null, e.id)}>
             + Innlegg
