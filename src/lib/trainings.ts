@@ -63,7 +63,7 @@ export function occurrences(t: TrainingSeries, fromDate: string, toDate: string)
       venue,
       note,
       cancelled: !!c.cancelled,
-      changed: time !== t.time || end !== t.end || venue !== t.venue || note !== (t.note || ''),
+      changed: time !== t.time || end !== t.end || venue !== t.venue,
     });
   }
   return out;
@@ -108,7 +108,6 @@ export function seriesIcs(t: TrainingSeries, teamName: string) {
     ...cancelled,
     'SUMMARY:' + esc(t.title + ' (' + teamName + ')'),
     'LOCATION:' + esc(t.venue),
-    ...(t.note ? ['DESCRIPTION:' + esc(t.note)] : []),
     'END:VEVENT',
     'END:VCALENDAR',
   ].join('\r\n');

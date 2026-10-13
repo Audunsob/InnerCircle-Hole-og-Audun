@@ -13,7 +13,7 @@ import {
   visiblePosts,
 } from '@/lib/derive';
 import { fmtLong } from '@/lib/format';
-import { matchTitle, opponentText, playerMap, seesTeamInfo, shortTeam } from '@/lib/selectors';
+import { matchTitle, opponentText, playerMap, shortTeam } from '@/lib/selectors';
 import { useStore } from '@/lib/store';
 import type { Match } from '@/lib/types';
 import { DateCol, Icon, SwitchRow, Tabs } from '../ui';
@@ -191,10 +191,6 @@ function Side({ name, us }: { name: string; us: boolean }) {
 function NextMatch({ m }: { m: Match }) {
   const st = useStore();
   const us = shortTeam(st);
-  // Meeting time and the message to the team are for players, not subscribers.
-  const team = seesTeamInfo(st.role);
-  const meet = team ? m.meet : '';
-  const note = team ? m.note : '';
   return (
     <>
       <section className="brand-card" style={{ marginTop: 16, display: 'flex', flexDirection: 'column', animation: 'ic-rise 320ms var(--ease-out) both' }}>
@@ -217,10 +213,9 @@ function NextMatch({ m }: { m: Match }) {
         {(m.title || !m.opp) && (
           <h2 style={{ position: 'relative', margin: '14px 16px 0', font: 'italic 800 26px/1.05 var(--display)', textTransform: 'uppercase' }}>{matchTitle(st, m)}</h2>
         )}
-        <div style={{ position: 'relative', margin: '14px 16px 0', display: 'grid', gridTemplateColumns: meet ? 'repeat(3,minmax(0,1fr))' : 'repeat(2,minmax(0,1fr))', gap: 8 }}>
+        <div style={{ position: 'relative', margin: '14px 16px 0', display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8 }}>
           <Stat label="Dato" value={<span style={{ textTransform: 'capitalize' }}>{shortDate(m.date)}</span>} />
           <Stat label="Avspark" value={m.time} />
-          {meet && <Stat label="Oppmøte" value={meet} />}
         </div>
         <div style={{ position: 'relative', margin: '12px 16px 0', display: 'flex', flexDirection: 'column', gap: 6, font: '400 14px/1.4 var(--body)' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--on-brand-muted)' }}>
@@ -228,9 +223,9 @@ function NextMatch({ m }: { m: Match }) {
             {m.venue}
           </span>
         </div>
-        {note && (
+        {m.note && (
           <p style={{ position: 'relative', margin: '12px 16px 0', padding: 12, borderRadius: 14, background: 'rgba(15,10,11,.35)', font: '400 14px/1.5 var(--body)', whiteSpace: 'pre-wrap' }}>
-            {note}
+            {m.note}
           </p>
         )}
         <div className="btn-pair" style={{ position: 'relative', padding: '14px 16px 16px' }}>
@@ -360,7 +355,7 @@ export function MatchDetail({ id }: { id: string }) {
             </span>
           </div>
         )}
-        {m.note && seesTeamInfo(st.role) && (
+        {m.note && (
           <p style={{ position: 'relative', margin: 0, font: '400 14px/1.5 var(--body)', color: 'var(--muted)', whiteSpace: 'pre-wrap', textAlign: o && m.opp ? 'center' : 'left' }}>{m.note}</p>
         )}
       </section>

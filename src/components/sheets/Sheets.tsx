@@ -420,21 +420,16 @@ function AddMatch() {
       <Field label="Dato">
         <input className="input" type="date" {...bind('date')} />
       </Field>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <Field label="Oppmøte">
-          <input className="input" type="time" {...bind('meet')} />
-        </Field>
-        <Field label="Avspark">
-          <input className="input" type="time" {...bind('time')} />
-        </Field>
-      </div>
+      <Field label="Avspark">
+        <input className="input" type="time" {...bind('time')} />
+      </Field>
       <Field label="Sted">
         <input className="input" {...bind('venue')} placeholder="F.eks. Solberg kunstgress" />
       </Field>
-      <Field label="Beskjed til laget">
-        <textarea className="input" {...bind('note')} rows={3} placeholder="F.eks. Vi kjører samlet fra klubbhuset." style={{ minHeight: 96 }} />
+      <Field label="Om kampen (valgfritt)">
+        <textarea className="input" {...bind('note')} rows={3} placeholder="F.eks. Cupfinale! Kom gjerne og hei på laget." style={{ minHeight: 96 }} />
       </Field>
-      <p className="note" style={{ margin: '-8px 0 0' }}>Bare administratorer og spillere ser beskjeden. Abonnenter ser den ikke.</p>
+      <p className="note" style={{ margin: '-8px 0 0' }}>Alle ser teksten, også abonnenter.</p>
       <FormError text={f.err} />
       <button type="submit" className="btn btn-primary btn-block">
         {f.matchId ? 'Lagre endringer' : 'Legg til kamp'}
@@ -511,10 +506,7 @@ function AddEvent() {
       <Field label="Sted">
         <input className="input" {...bind('venue')} placeholder="F.eks. Klubbhuset" />
       </Field>
-      <Field label="Beskjed til laget">
-        <textarea className="input" {...bind('note')} rows={3} placeholder="F.eks. Laget spanderer pizza." style={{ minHeight: 96 }} />
-      </Field>
-      <p className="note" style={{ margin: '-8px 0 0' }}>Bare administratorer og spillere ser beskjeden. Abonnenter ser den ikke.</p>
+
       <FormError text={f.err} />
       <button type="submit" className="btn btn-primary btn-block">
         {f.eventId ? 'Lagre endringer' : 'Legg til'}
@@ -582,10 +574,7 @@ function TrainingForm() {
       <p className="note" style={{ margin: '-8px 0 0' }}>
         La «Til og med» stå tom hvis treningen skal fortsette til du avslutter den.
       </p>
-      <Field label="Beskjed til laget">
-        <textarea className="input" {...bind('note')} rows={3} placeholder="F.eks. Vi trener inne hvis det regner." style={{ minHeight: 96 }} />
-      </Field>
-      <p className="note" style={{ margin: '-8px 0 0' }}>Bare administratorer og spillere ser beskjeden. Abonnenter ser den ikke.</p>
+
       <FormError text={f.err} />
       <button type="submit" className="btn btn-primary btn-block">
         {f.trainingId ? 'Lagre endringer' : 'Legg inn fast trening'}
@@ -638,10 +627,6 @@ function TrainingDay() {
           <Field label="Sted">
             <input className="input" {...bind('venue')} />
           </Field>
-          <Field label="Beskjed til laget">
-            <textarea className="input" {...bind('note')} rows={3} style={{ minHeight: 96 }} />
-          </Field>
-          <p className="note" style={{ margin: '-8px 0 0' }}>Bare administratorer og spillere ser beskjeden. Abonnenter ser den ikke.</p>
           <FormError text={f.err} />
           <button type="submit" className="btn btn-primary btn-block">
             Lagre for denne gangen
