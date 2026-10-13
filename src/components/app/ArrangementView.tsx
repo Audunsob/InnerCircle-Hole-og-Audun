@@ -3,12 +3,12 @@
 import { useState } from 'react';
 import { eventHours, splitEvents, visiblePosts } from '@/lib/derive';
 import { fmtLong } from '@/lib/format';
-import { canPost, playerMap } from '@/lib/selectors';
+import { canPost, playerMap, seesTeamInfo } from '@/lib/selectors';
 import { useStore } from '@/lib/store';
 import { allEvents, findEvent, isRunning, isTraining, repeatText, timeText, type TrainingEvent } from '@/lib/trainings';
 import type { TeamEvent } from '@/lib/types';
 import { DateCol, Icon, Tabs } from '../ui';
-import { Feed } from './LagView';
+import { Feed, PostPrompt } from './LagView';
 
 
 /** Pizza nights, meetings, trainings: everything on the calendar that isn't a match. */
@@ -113,6 +113,7 @@ function TrainingSeriesList() {
 
 function EventRow({ e }: { e: TeamEvent | TrainingEvent }) {
   const open = useStore((s) => s.openEventView);
+  const media = useStore((s) => s.data.posts.reduce((n, p) => (p.eventId === e.id ? n + p.media.length : n), 0));
   const cancelled = isTraining(e) && e.cancelled;
   return (
     <button type="button" className="row-btn" style={{ minHeight: 72 }} onClick={() => open(e.id)}>
@@ -125,6 +126,7 @@ function EventRow({ e }: { e: TeamEvent | TrainingEvent }) {
         <span className="row-sub">{cancelled ? 'Avlyst' : eventHours(e) + ' · ' + e.venue}</span>
         {!cancelled && isTraining(e) && e.changed && <span className="row-meta">Endret denne gangen</span>}
         {e.kind !== e.title && <span className="row-meta">{e.kind}</span>}
+        {media > 0 && <span className="row-meta">{media === 1 ? '1 bilde eller video' : media + ' bilder og videoer'}</span>}
       </span>
       <Icon name="chevron_right" style={{ color: 'var(--muted)' }} />
     </button>
@@ -189,7 +191,7 @@ export function EventDetail({ id }: { id: string }) {
             {e.venue}
           </span>
         </div>
-        {e.note && <p style={{ margin: 0, font: '400 14px/1.5 var(--body)', color: 'var(--muted)', whiteSpace: 'pre-wrap' }}>{e.note}</p>}
+        {e.note && seesTeamInfo(st.role) && <p style={{ margin: 0, font: '400 14px/1.5 var(--body)', color: 'var(--muted)', whiteSpace: 'pre-wrap' }}>{e.note}</p>}
         <div className="btn-pair">
           <button type="button" className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} onClick={() => st.addEventToCal(e)}>
             <Icon name="event" size={18} />
@@ -201,28 +203,27 @@ export function EventDetail({ id }: { id: string }) {
           </button>
         </div>
       </section>
-      {(isCoach || canPost(st)) && (
-        <div style={{ margin: '12px 0', display: 'flex', alignItems: 'center', gap: 16 }}>
-          <span style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
-            {isCoach &&
-              (training ? (
-                <>
-                  <button type="button" className="link-btn small" style={{ textAlign: 'left' }} onClick={() => st.openTrainingDay(training.seriesId, training.date)}>
-                    Flytt eller avlys denne gangen
-                  </button>
-                  <button type="button" className="link-btn small" style={{ textAlign: 'left' }} onClick={() => st.openTraining(training.seriesId)}>
-                    Endre alle treningene
-                  </button>
-                </>
-              ) : (
-                <button type="button" className="link-btn small" style={{ textAlign: 'left' }} onClick={() => st.openAddEvent(e.id)}>
-                  Endre eller slett
-                </button>
-              ))}
-          </span>
-          <button type="button" className="btn-outline" onClick={() => st.openComposer(null, e.id)}>
-            + Innlegg
-          </button>
+      {isCoach && (
+        <div style={{ margin: '12px 0 0', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
+          {training ? (
+            <>
+              <button type="button" className="link-btn small" style={{ textAlign: 'left' }} onClick={() => st.openTrainingDay(training.seriesId, training.date)}>
+                Flytt eller avlys denne gangen
+              </button>
+              <button type="button" className="link-btn small" style={{ textAlign: 'left' }} onClick={() => st.openTraining(training.seriesId)}>
+                Endre alle treningene
+              </button>
+            </>
+          ) : (
+            <button type="button" className="link-btn small" style={{ textAlign: 'left' }} onClick={() => st.openAddEvent(e.id)}>
+              Endre eller slett
+            </button>
+          )}
+        </div>
+      )}
+      {canPost(st) && (
+        <div style={{ marginTop: 12 }}>
+          <PostPrompt label="Del bilder, video eller tekst herfra …" onClick={() => st.openComposer(null, e.id)} />
         </div>
       )}
       <Feed posts={posts} P={P} emptyText="Ingen innlegg fra denne hendelsen ennå." />

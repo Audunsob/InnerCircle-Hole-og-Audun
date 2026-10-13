@@ -1,8 +1,6 @@
 import type {
-  ConsentKey,
   EphemeralState,
   Flow,
-  ParentConsentDraft,
   PayForm,
   PersistedState,
   PostType,
@@ -23,13 +21,7 @@ export const TYPES: Record<PostType, { label: string }> = {
 /** Icons a coach can pick for an event. */
 export const EVENT_ICONS = ['event', 'groups', 'restaurant', 'local_pizza', 'celebration', 'forum', 'directions_run', 'directions_bus', 'emoji_events', 'volunteer_activism', 'school', 'sports_soccer'];
 
-export const ROLES: Record<Role, string> = { player: 'Spiller', parent: 'Foresatt', sub: 'Abonnent', coach: 'Administrator' };
-export const CKEYS: [ConsentKey, string, string][] = [
-  ['photo', 'Bilder', 'Bilder fra kamper og treninger'],
-  ['video', 'Videoklipp', 'Korte klipp fra kamp og trening'],
-  ['name', 'Fornavn i tekst', 'Fornavnet kan stå i teksten til et innlegg'],
-  ['tag', 'Merking i innlegg', 'Administratoren kan merke barnet, så dere finner bildene'],
-];
+export const ROLES: Record<Role, string> = { player: 'Spiller', sub: 'Abonnent', coach: 'Administrator' };
 
 /** A new team with nothing in it yet. */
 export const emptyTeam = (): TeamData => ({
@@ -71,12 +63,6 @@ export const blankFlow = (): Flow => ({
   err: '',
 });
 
-export const defCons = (): ParentConsentDraft => ({
-  step: 1,
-  draft: { photo: false, video: false, name: false, tag: false },
-  check: false,
-});
-
 export const newPay = (): PayForm => ({ autoRenew: true, method: 'card', num: '', exp: '', cvc: '', err: '', busy: false });
 
 export function freshState(): PersistedState {
@@ -90,15 +76,12 @@ export function freshState(): PersistedState {
     theme: 'dark',
     screen: 'role',
     flow: blankFlow(),
-    cons: null,
-    consCtx: null,
     pcons: null,
     pcCtx: null,
     role: null,
     onboarded: {},
     prof: {
       player: { playerId: null },
-      parent: { childId: null, subscribed: false },
       sub: {
         viaId: null,
         active: false,

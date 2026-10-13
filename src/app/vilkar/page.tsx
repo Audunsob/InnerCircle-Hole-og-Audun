@@ -12,7 +12,7 @@ export default function Page() {
       <LegalSection title="Bildene er private">
         <ul className="bullets">
           <li>Bildene og videoene er bare for deg. Ikke del, last ned for å spre eller legg dem ut andre steder.</li>
-          <li>Foresatte har gitt samtykke til at bildene vises i InnerCircle, ikke til at de spres videre.</li>
+          <li>Spillerne, og foresatte for spillere under 15 år, har gitt samtykke til at bildene vises i InnerCircle, ikke til at de spres videre.</li>
           <li>Ikke gi lagkoden eller kontoen din til andre enn dem den er ment for.</li>
         </ul>
       </LegalSection>
@@ -20,8 +20,8 @@ export default function Page() {
       <LegalSection title="Administratorer">
         <ul className="bullets">
           <li>Administratoren er ansvarlig for det som legges ut på laget.</li>
-          <li>Merk bare spillere som har samtykke. Legg aldri ut bilder som kan være krenkende eller som en spiller eller foresatt har bedt deg fjerne.</li>
-          <li>Godkjenn bare spillere og foresatte du vet hvem er.</li>
+          <li>Legg bare ut bilder av spillere som har samtykket. Legg aldri ut bilder som kan være krenkende eller som en spiller eller foresatt har bedt deg fjerne.</li>
+          <li>Godkjenn bare spillere du vet hvem er.</li>
         </ul>
       </LegalSection>
 

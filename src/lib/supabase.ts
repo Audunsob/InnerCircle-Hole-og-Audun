@@ -13,7 +13,7 @@ export const db = () => {
   return client;
 };
 
-export type MemberRole = 'coach' | 'player' | 'parent' | 'sub';
+export type MemberRole = 'coach' | 'player' | 'sub';
 
 export interface TeamPayload {
   teamId: string;
@@ -31,7 +31,7 @@ export interface TeamPeek {
   players: { id: string; name: string; taken?: boolean }[];
 }
 
-/** What joining as a player or parent returns while a coach hasn't approved it yet. */
+/** What joining as a player returns while a coach hasn't approved it yet. */
 export interface PendingJoin {
   pending: true;
   teamId: string;
@@ -39,10 +39,10 @@ export interface PendingJoin {
   role: MemberRole;
 }
 
-/** An account linked to a player on the team (as the player or a parent), for the coach. */
+/** An account linked to a player on the team, for the coach. */
 export interface TeamLink {
   userId: string;
-  role: 'player' | 'parent';
+  role: 'player';
   playerId: string;
   status: 'pending' | 'active';
   email: string | null;
@@ -61,8 +61,6 @@ export interface TeamCoach {
 
 /** Thrown when the player is already linked to another account. */
 export class PlayerTakenError extends Error {}
-/** Thrown when the player already has two parents linked. */
-export class ParentLimitError extends Error {}
 
 export interface Membership {
   teamId: string;
@@ -88,7 +86,6 @@ async function rpc<T>(fn: string, args: Record<string, unknown> = {}): Promise<T
   if (error) {
     if (/code_taken/.test(error.message)) throw new CodeTakenError(error.message);
     if (/player_taken/.test(error.message)) throw new PlayerTakenError(error.message);
-    if (/parent_limit/.test(error.message)) throw new ParentLimitError(error.message);
     const last = /last_coach(?::(.*))?/.exec(error.message);
     if (last) throw new LastCoachError(error.message, last[1]?.trim() || null);
     throw new Error(error.message);
@@ -180,13 +177,15 @@ export const joinTeam = (code: string, role: MemberRole, playerId: string | null
   rpc<TeamPayload | PendingJoin | null>('join_team', { p_code: code, p_role: role, p_player_id: playerId });
 export const createTeam = (name: string, coachCode: string, teamCode: string, data: TeamData) =>
   rpc<TeamPayload>('create_team', { p_name: name, p_coach_code: coachCode, p_team_code: teamCode, p_data: data });
-export const myTeams = () => rpc<Membership[]>('my_teams');
+// The parent role is gone. A database that still has parents linked returns them; they are left out here.
+export const myTeams = async () => (await rpc<(Membership | { role: 'parent' })[]>('my_teams')).filter((m): m is Membership => m.role !== 'parent');
 export const getTeam = (teamId: string, role: MemberRole) => rpc<TeamPayload>('get_team', { p_team: teamId, p_role: role });
 export const teamVersion = (teamId: string) => rpc<number | null>('team_version', { p_team: teamId });
 
-export const teamLinks = (teamId: string) => rpc<TeamLink[]>('team_links', { p_team: teamId });
+export const teamLinks = async (teamId: string) =>
+  (await rpc<(TeamLink | { role: 'parent' })[]>('team_links', { p_team: teamId })).filter((l): l is TeamLink => l.role === 'player');
 export const teamCoaches = (teamId: string) => rpc<TeamCoach[]>('team_coaches', { p_team: teamId });
-export const decideLink = (teamId: string, userId: string, role: 'player' | 'parent', approve: boolean) =>
+export const decideLink = (teamId: string, userId: string, role: 'player', approve: boolean) =>
   rpc<void>('decide_link', { p_team: teamId, p_user: userId, p_role: role, p_approve: approve });
 
 /** Coach: renames the team and/or replaces its codes. Throws CodeTakenError if another team uses a code. */

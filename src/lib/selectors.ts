@@ -1,5 +1,5 @@
 import { COACH, DEFAULT_PRICE, DEFAULT_TEAM } from './seed';
-import type { AppState, Match, Player, Post } from './types';
+import type { AppState, Match, Player, Post, Role } from './types';
 
 type S = Pick<AppState, 'data' | 'prof'>;
 
@@ -11,6 +11,12 @@ export const matchTitle = (s: S, m: Match) =>
 
 /** "Mot Lørenskog" — shown when a custom title hides who the opponent is. */
 export const opponentText = (m: Match) => (m.title && m.opp ? 'Mot ' + m.opp : '');
+
+/**
+ * Practical team info (meeting time, messages to the team, training changes) is for those on the team:
+ * coaches and players. Subscribers follow the team and don't need it.
+ */
+export const seesTeamInfo = (role: Role | null) => role !== 'sub';
 
 export const price = (s: S) => s.data.price ?? DEFAULT_PRICE;
 export const priceText = (s: S) => price(s) + ' kr';
@@ -25,18 +31,22 @@ export const playerMap = (players: Player[]) => {
   return P;
 };
 
-/** Under 15, the player's own signature isn't enough: a parent must say yes from their own login. */
-export const waitsForParent = (p: Player | undefined) => !!(p?.consent && p.consent.adult === false && !p.consent.parentBy);
-export const hasConsent = (p: Player | undefined) => !!(p && p.consent && p.consent.photo && !waitsForParent(p));
+/**
+ * Under 15, the player's own signature isn't enough: a parent must also sign the form. Older consents
+ * where a parent said yes from their own login still count.
+ */
+export const missingParent = (p: Player | undefined) =>
+  !!(p?.consent && p.consent.adult === false && !p.consent.parentSig && !p.consent.parentBy);
+export const hasConsent = (p: Player | undefined) => !!(p && p.consent && p.consent.photo && !missingParent(p));
 
-/** For the coach's overview: photos allowed, someone said no, waiting for a parent, or nothing given yet. */
+/** For the coach's overview: photos allowed, someone said no, a parent's signature missing, or nothing given yet. */
 export type ConsentStatus = 'given' | 'declined' | 'parent' | 'none';
 export const consentStatus = (p: Player): ConsentStatus =>
-  hasConsent(p) ? 'given' : p.declined ? 'declined' : waitsForParent(p) ? 'parent' : 'none';
+  hasConsent(p) ? 'given' : p.declined ? 'declined' : missingParent(p) ? 'parent' : 'none';
 export const CONSENT_LABEL: Record<ConsentStatus, string> = {
   given: 'Samtykke gitt',
   declined: 'Sa nei',
-  parent: 'Venter på foresatt',
+  parent: 'Mangler foresatt',
   none: 'Ikke gitt',
 };
 export const CONSENT_INK: Record<ConsentStatus, string> = {
@@ -46,7 +56,10 @@ export const CONSENT_INK: Record<ConsentStatus, string> = {
   none: 'var(--muted)',
 };
 
-/** A post is hidden as soon as anyone tagged in it lacks consent (or video consent for videos). */
+/**
+ * Older posts marked players in focus. Such a post is hidden as soon as one of them lacks consent
+ * (or video consent for videos). New posts mark nobody.
+ */
 export const postAllowed = (P: Record<string, Player>, post: Post) =>
   post.tagged.every((id) => {
     const p = P[id];
@@ -59,22 +72,24 @@ export const postAllowed = (P: Record<string, Player>, post: Post) =>
 type PostState = Pick<AppState, 'data' | 'prof' | 'role'>;
 
 /**
- * Players aged 15 or more and parents may post about a match the coaches made (the database checks the same).
+ * Players aged 15 or more may post about a match the coaches made (the database checks the same).
  * A player counts as 15 or more when they signed the consent form as 15 or more, unless the year of birth says otherwise.
  */
 export const canPost = (s: PostState) => {
   if (s.role === 'coach') return true;
-  if (s.role === 'parent') return !!s.prof.parent.childId;
   if (s.role !== 'player') return false;
   const me = s.data.players.find((p) => p.id === s.prof.player.playerId);
   return !!me?.consent?.adult && (me.born == null || new Date().getFullYear() - me.born >= 15);
 };
 
-/** The name on a post from a player or parent. Without consent to show the name, only the role. Set again by the database. */
+/** Subscribers and players aged 15 or more may comment, like coaches (the database checks the same). */
+export const canComment = (s: PostState) => s.role === 'sub' || canPost(s);
+
+/** The name on a post from a player. Without consent to show the name, only the role. Set again by the database. */
 export const memberAuthor = (s: PostState) => {
-  const id = s.role === 'player' ? s.prof.player.playerId : s.prof.parent.childId;
-  const p = s.data.players.find((x) => x.id === id);
-  const named = !!p?.consent?.name;
-  if (s.role === 'player') return { author: named ? p!.name : 'Spiller', authorRole: 'Spiller' };
-  return { author: named ? 'Foresatt til ' + p!.name.split(' ')[0] : 'Foresatt', authorRole: 'Foresatt' };
+  const p = s.data.players.find((x) => x.id === s.prof.player.playerId);
+  return { author: p?.consent?.name ? p.name : 'Spiller', authorRole: 'Spiller' };
 };
+
+/** Players who must not be in photos: no consent, they said no, or a parent's signature is missing. */
+export const notInPhotos = (players: Player[]) => players.filter((p) => !hasConsent(p));

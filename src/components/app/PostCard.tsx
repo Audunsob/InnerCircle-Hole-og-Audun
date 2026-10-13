@@ -1,16 +1,17 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { OUTCOME_COLOR, outcomeOf, scoreTitle } from '@/lib/derive';
-import { firstName, initials, rel, stripe } from '@/lib/format';
+import { initials, rel, stripe } from '@/lib/format';
 import { TYPES } from '@/lib/seed';
 import { findEvent } from '@/lib/trainings';
+import { canComment } from '@/lib/selectors';
 import { useStore } from '@/lib/store';
 import type { Player, Post } from '@/lib/types';
 import { Icon } from '../ui';
 import { MediaView } from '../MediaView';
 
-export function PostCard({ post, P }: { post: Post; P: Record<string, Player> }) {
+export function PostCard({ post }: { post: Post; P?: Record<string, Player> }) {
   const role = useStore((s) => s.role);
   const uid = useStore((s) => s.uid);
   const dark = useStore((s) => s.theme === 'dark');
@@ -20,28 +21,34 @@ export function PostCard({ post, P }: { post: Post; P: Record<string, Player> })
   const toggleLike = useStore((s) => s.toggleLike);
   const openViewer = useStore((s) => s.openViewer);
   const openReport = useStore((s) => s.openReport);
+  const openLikes = useStore((s) => s.openLikes);
+  const addComment = useStore((s) => s.addComment);
+  const deleteComment = useStore((s) => s.deleteComment);
+  const mayComment = useStore((s) => s.role === 'coach' || canComment(s));
   const [pop, setPop] = useState(false);
+  const [talk, setTalk] = useState(false);
+  const [text, setText] = useState('');
   const popTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(popTimer.current), []);
 
   const outcome = resultTitle && match ? outcomeOf(match) : null;
   const liked = post.likedBy.includes(uid);
   const mine = role !== 'coach' && post.authorId === uid;
-  // Coaches can remove any post; players and parents their own.
+  // Coaches can remove any post; players their own.
   const hasMenu = role === 'coach' || mine;
-
-  const tagged = post.tagged.map((id) => P[id]).filter(Boolean);
-  const shown = tagged.filter((x) => x.consent?.name).map((x) => firstName(x.name));
-  const hidden = tagged.length - shown.length;
-  const tagText = tagged.length
-    ? 'Med: ' + shown.join(', ') + (hidden ? (shown.length ? ' + ' : '') + hidden + (hidden === 1 ? ' spiller' : ' spillere') : '')
-    : '';
 
   const typeLabel =
     (TYPES[post.type] || TYPES.beskjed).label +
     (match && post.type === 'kamp' && match.opp ? ' mot ' + match.opp : '') +
     (eventTitle && post.type !== 'kamp' ? ' · ' + eventTitle : '');
   const many = post.media.length > 1;
+  const comments = post.comments || [];
+  const hearts = post.likes + post.likedBy.length;
+
+  const send = (e: FormEvent) => {
+    e.preventDefault();
+    if (addComment(post.id, text)) setText('');
+  };
 
   const like = () => {
     toggleLike(post.id);
@@ -170,11 +177,6 @@ export function PostCard({ post, P }: { post: Post; P: Record<string, Player> })
       )}
 
       {post.text && <p style={{ margin: 0, padding: '12px 14px 0', font: '400 15px/1.5 var(--body)', textWrap: 'pretty' }}>{post.text}</p>}
-      {tagText && (
-        <p className="note" style={{ padding: '6px 14px 0', fontSize: 13 }}>
-          {tagText}
-        </p>
-      )}
 
       <div style={{ display: 'flex', alignItems: 'center', padding: '2px 14px 4px' }}>
         <button
@@ -200,10 +202,37 @@ export function PostCard({ post, P }: { post: Post; P: Record<string, Player> })
           <span className={'heart' + (pop ? ' pop' : '')}>
             <Icon name="favorite" size={26} filled={liked} />
           </span>
-          <span key={post.likes + post.likedBy.length} style={{ display: 'inline-block', animation: 'ic-rise 200ms var(--ease-out)' }}>
-            {post.likes + post.likedBy.length}
+          <span key={hearts} style={{ display: 'inline-block', animation: 'ic-rise 200ms var(--ease-out)' }}>
+            {hearts}
           </span>
         </button>
+        <button
+          type="button"
+          onClick={() => setTalk((v) => !v)}
+          aria-expanded={talk}
+          aria-label={comments.length ? 'Kommentarer: ' + comments.length : 'Kommentarer'}
+          className="tnum"
+          style={{
+            minHeight: 48,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '0 10px',
+            border: 'none',
+            background: 'none',
+            color: 'var(--muted)',
+            font: '600 15px var(--body)',
+            cursor: 'pointer',
+          }}
+        >
+          <Icon name="chat_bubble" size={24} filled={talk} />
+          {comments.length > 0 && <span>{comments.length}</span>}
+        </button>
+        {role === 'coach' && post.likedBy.length > 0 && (
+          <button type="button" className="link-btn quiet small" style={{ padding: '0 6px' }} onClick={() => openLikes(post.id)}>
+            Se hvem
+          </button>
+        )}
         {post.edited && <span style={{ marginLeft: 'auto', font: '400 13px var(--body)', color: 'var(--muted)' }}>Redigert</span>}
         {role !== 'coach' && !mine && (
           <button
@@ -218,6 +247,57 @@ export function PostCard({ post, P }: { post: Post; P: Record<string, Player> })
           </button>
         )}
       </div>
+
+      {talk && (
+        <div style={{ borderTop: '1px solid var(--line)', padding: '4px 14px 12px' }}>
+          {comments.map((c) => (
+            <div key={c.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 0' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ font: '600 14px/1.3 var(--body)' }}>
+                  {c.author}{' '}
+                  <span style={{ fontWeight: 400, color: 'var(--muted)' }}>
+                    {c.authorRole} · {rel(c.ts)}
+                  </span>
+                </div>
+                <p style={{ margin: '2px 0 0', font: '400 15px/1.45 var(--body)', textWrap: 'pretty', overflowWrap: 'anywhere' }}>{c.text}</p>
+              </div>
+              {(role === 'coach' || c.authorId === uid) && (
+                <button
+                  type="button"
+                  className="icon-btn"
+                  aria-label={'Slett kommentaren fra ' + c.author}
+                  title="Slett"
+                  style={{ marginRight: -10, color: 'var(--muted)' }}
+                  onClick={() => deleteComment(post.id, c.id)}
+                >
+                  <Icon name="delete" size={20} />
+                </button>
+              )}
+            </div>
+          ))}
+          {!comments.length && (
+            <p className="note" style={{ padding: '8px 0', fontSize: 14 }}>
+              Ingen kommentarer ennå.
+            </p>
+          )}
+          {mayComment && (
+            <form onSubmit={send} style={{ display: 'flex', gap: 8, alignItems: 'center', paddingTop: 4 }}>
+              <input
+                className="input"
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                maxLength={1000}
+                placeholder="Skriv en kommentar"
+                aria-label="Skriv en kommentar"
+                style={{ flex: 1, minWidth: 0 }}
+              />
+              <button type="submit" className="icon-btn" aria-label="Send kommentaren" disabled={!text.trim()} style={{ color: 'var(--accent-ink)' }}>
+                <Icon name="send" />
+              </button>
+            </form>
+          )}
+        </div>
+      )}
     </article>
   );
 }

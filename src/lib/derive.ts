@@ -31,15 +31,9 @@ export function splitMatches(matches: Match[]) {
   return { upcoming, past, next, later };
 }
 
-/** Posts the current viewer may see: consent rules, plus child-only for parents without a subscription. */
-export function visiblePosts(s: Pick<AppState, 'role' | 'prof'>, posts: Post[], P: Record<string, Player>) {
-  let src = posts.filter((p) => postAllowed(P, p));
-  if (s.role === 'parent' && !s.prof.parent.subscribed) {
-    const childId = s.prof.parent.childId;
-    src = src.filter((p) => !!childId && p.tagged.includes(childId));
-  }
-  return src;
-}
+/** Posts the viewer may see: older posts with a player in focus who lacks consent are hidden. */
+export const visiblePosts = (_viewer: Pick<AppState, 'role'>, posts: Post[], P: Record<string, Player>) =>
+  posts.filter((p) => postAllowed(P, p));
 
 export const matchPhotoCount = (allowed: Post[], matchId: string) =>
   allowed.filter((p) => p.matchId === matchId).reduce((n, p) => n + p.media.length, 0);
