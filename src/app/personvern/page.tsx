@@ -14,10 +14,10 @@ export default function Page() {
       <LegalSection title="Hva vi lagrer">
         <ul className="bullets">
           <li>E-postadressen du logger inn med.</li>
-          <li>Hvilke lag du er med på, og som hva: administrator, spiller, foresatt eller abonnent.</li>
+          <li>Hvilke lag du er med på, og som hva: administrator, spiller eller abonnent.</li>
           <li>Navn og draktnummer på spillerne, lagt inn av administratoren.</li>
-          <li>Bilder, videoer og tekst som administratoren legger ut, og hvem som er merket.</li>
-          <li>Samtykker og signaturer fra spillere, foresatte og administratorer.</li>
+          <li>Bilder, videoer og tekst som legges ut på laget.</li>
+          <li>Samtykker og signaturer fra spillere, foresatte (for spillere under 15 år) og administratorer. For spillere under 15 år lagres også navnet til den foresatte som signerte.</li>
           <li>Hjertene du gir, og navnet du oppgir som abonnent.</li>
           <li>Abonnement og betalinger: beløp og dato. Kortnummer lagres ikke i InnerCircle.</li>
           <li>Adressen telefonen din bruker for varsler, hvis du har slått på varsler.</li>
@@ -27,7 +27,7 @@ export default function Page() {
       <LegalSection title="Hvorfor">
         <ul className="bullets">
           <li>For å gi deg tilgang til laget ditt og holde kontoen din i gang.</li>
-          <li>Bilder og video av en spiller vises bare når spilleren (fra 15 år) eller en foresatt har gitt samtykke. Uten samtykke skjules innlegg der spilleren er merket.</li>
+          <li>Bare spillere som har sagt ja, kan være med på bilder og video. Under 15 år må også en foresatt ha signert samtykket.</li>
           <li>Betalinger tas vare på fordi laget må føre regnskap.</li>
         </ul>
       </LegalSection>
@@ -35,8 +35,7 @@ export default function Page() {
       <LegalSection title="Hvem ser hva">
         <p className="body-text">
           Ingenting er offentlig. Bare de som er med på laget, ser innleggene. Bildene ligger i en privat mappe for laget og åpnes bare med lenker som
-          slutter å virke etter en time. Administratorene ser e-posten til kontoer som er koblet til en spiller, slik at de kan godkjenne dem. Foresatte
-          ser bare innlegg der barnet deres er merket, med mindre de abonnerer på hele laget.
+          slutter å virke etter en time. Administratorene ser e-posten til kontoer som er koblet til en spiller, slik at de kan godkjenne dem.
         </p>
         <p className="body-text">
           Opplysningene lagres hos leverandørene som driver appen: Supabase (database, innlogging og filer) og leverandøren som kjører nettsiden. De

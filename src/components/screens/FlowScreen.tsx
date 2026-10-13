@@ -172,10 +172,10 @@ function PlayerKind() {
   const choose = useStore((s) => s.choosePlayerKind);
   return (
     <>
-      <Intro title="Hvem er du?" text="Alle spillere må godkjenne samtykket selv. Er du under 15 år, må en foresatt også signere." />
+      <Intro title="Hvem er du?" text="Alle spillere svarer på samtykket én gang. Er du under 15 år, signerer en foresatt sammen med deg." />
       <div className="stagger" style={{ marginTop: 8 }}>
         <ChevronRow title="Jeg er spiller (over 15 år)" sub="Du signerer samtykket selv" onClick={() => choose(true)} />
-        <ChevronRow title="Jeg er spiller (under 15 år)" sub="Du og en foresatt signerer samtykket" onClick={() => choose(false)} />
+        <ChevronRow title="Jeg er spiller (under 15 år)" sub="Du og en foresatt signerer samtykket på din telefon" onClick={() => choose(false)} />
       </div>
     </>
   );
@@ -265,7 +265,7 @@ function PickPlayer() {
   const list = players.filter((p) => !q || p.name.toLowerCase().includes(q)).sort((a, b) => a.name.localeCompare(b.name, NB));
   return (
     <>
-      <h1 className="h1">{flow.role === 'parent' ? 'Hvem er barnet ditt?' : 'Hvem er du?'}</h1>
+      <h1 className="h1">Hvem er du?</h1>
       <p className="note">
         {name} · {players.length} spillere
       </p>
@@ -273,8 +273,8 @@ function PickPlayer() {
       <div className="bleed list">
         {list.map((p) => {
           const on = flow.pickId === p.id;
-          // Already linked to someone else as the player. Parents can still pick their child.
-          const taken = flow.role === 'player' && !!p.taken;
+          // Already linked to someone else as the player.
+          const taken = !!p.taken;
           return (
             <button
               key={p.id}
@@ -308,10 +308,7 @@ function PickPlayer() {
 function Pending() {
   const pt = useStore((s) => s.flow.pendingTeam);
   const who = pt?.playerName || '';
-  const text =
-    pt?.role === 'parent'
-      ? `Administratoren på ${pt.name} må godkjenne at du er foresatt${who ? ' til ' + who : ''}.`
-      : `Administratoren på ${pt?.name || 'laget'} må godkjenne at du er ${who || 'spilleren du valgte'}.`;
+  const text = `Administratoren på ${pt?.name || 'laget'} må godkjenne at du er ${who || 'spilleren du valgte'}.`;
   return (
     <>
       <Intro title="Venter på administratoren" text={text} />
@@ -361,7 +358,7 @@ function Terms() {
         <p style={{ margin: 0, font: 'italic 800 24px/1.1 var(--display)', textTransform: 'uppercase', textWrap: 'pretty' }}>
           Bildene er bare for deg. Ikke del eller legg ut bilder av barna andre steder.
         </p>
-        <p className="note">Foresatte har gitt samtykke til at du kan se bildene i InnerCircle, ikke til at de spres videre.</p>
+        <p className="note">Spillerne (og foresatte for de under 15) har gitt samtykke til at du kan se bildene i InnerCircle, ikke til at de spres videre.</p>
       </div>
       <Checkbox checked={flow.terms} onToggle={() => setFlow({ terms: !flow.terms, err: '' })}>
         Jeg forstår og godtar vilkårene
@@ -439,7 +436,7 @@ function CreateTeam() {
       <Field label="Administratorkode" hint="Bare for administratorer. Del den med de andre administratorene, så kan de logge inn.">
         <FlowInput field="newCoachCode" format={codeChars} autoCapitalize="characters" placeholder="F.eks. SOLBERG-ADMIN" />
       </Field>
-      <Field label="Lagkode" hint="For spillere, foresatte og abonnenter.">
+      <Field label="Lagkode" hint="For spillere og abonnenter.">
         <FlowInput field="newTeamCode" format={codeChars} autoCapitalize="characters" placeholder="F.eks. SOLBERG12" />
       </Field>
       <button type="button" className="link-btn start" onClick={suggest}>

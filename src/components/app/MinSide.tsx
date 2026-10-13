@@ -2,26 +2,22 @@
 
 import Link from 'next/link';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { CKEYS, TYPES } from '@/lib/seed';
-import { firstName, fmtDate, fmtShort, initials, inviteLink, nextChargeText, rel, stripe } from '@/lib/format';
+import { fmtDate, fmtShort, initials, inviteLink, nextChargeText } from '@/lib/format';
 import {
   CONSENT_INK,
   CONSENT_LABEL,
   codes,
   coachName,
   consentStatus,
-  hasConsent,
-  matchTitle,
+  missingParent,
   playerMap,
   priceText,
   teamName,
-  waitsForParent,
 } from '@/lib/selectors';
 import { pushPrefs, useStore } from '@/lib/store';
 import { disablePush, enablePush, isStandalone, needsHomeScreen, phoneKind, updatePushPrefs } from '@/lib/push';
-import type { Consent, Player } from '@/lib/types';
+import type { Player } from '@/lib/types';
 import { Icon, SwitchRow } from '../ui';
-import { MediaView } from '../MediaView';
 import { Rings } from '../screens/RoleScreen';
 
 export const METHOD_NAMES = (last4: string) => ({
@@ -59,22 +55,6 @@ function ValueRow({ label, value, ink }: { label: string; value: ReactNode; ink?
   );
 }
 
-function ConsentRows({ consent }: { consent: Consent | null | undefined }) {
-  return (
-    <div className="list" style={{ marginTop: 4 }}>
-      {CKEYS.map(([k, label]) => {
-        const on = !!consent?.[k];
-        return (
-          <div key={k} className="row">
-            <span className="row-label">{label}</span>
-            <span style={{ font: '600 15px var(--body)', color: on ? 'var(--ok)' : 'var(--muted)' }}>{on ? 'Ja' : 'Nei'}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 function InviteLinkBox({ link }: { link: string }) {
   const copied = useStore((s) => s.copied);
   const copyInvite = useStore((s) => s.copyInvite);
@@ -92,21 +72,18 @@ export function MinSide() {
   const st = useStore();
   const { data, role, prof, theme } = st;
   const P = playerMap(data.players);
-  const child = role === 'parent' ? P[prof.parent.childId || ''] : undefined;
   const me = role === 'player' ? P[prof.player.playerId || ''] : undefined;
   const via = role === 'sub' ? P[prof.sub.viaId || ''] : undefined;
   const team = teamName(st);
 
   const name =
-    role === 'coach' ? coachName(st) : role === 'player' ? me?.name || 'Spiller' : role === 'parent' ? child?.parent.name || 'Foresatt' : prof.sub.name || 'Abonnent';
+    role === 'coach' ? coachName(st) : role === 'player' ? me?.name || 'Spiller' : prof.sub.name || 'Abonnent';
   const subtitle =
     role === 'coach'
       ? 'Administrator · ' + team
       : role === 'player'
         ? 'Spiller · ' + team
-        : role === 'parent'
-          ? 'Foresatt til ' + (child?.name || '')
-          : 'Du følger laget via ' + (via ? via.name : 'en spiller');
+        : 'Du følger laget via ' + (via ? via.name : 'en spiller');
 
   return (
     <>
@@ -145,7 +122,6 @@ export function MinSide() {
       {role === 'coach' && <CoachSections />}
       {role === 'sub' && <SubSections />}
       {role === 'player' && me && <PlayerSections me={me} />}
-      {role === 'parent' && child && <ParentSections child={child} />}
 
       <TeamsSection />
       <PushSection />
@@ -220,13 +196,14 @@ function CoachSections() {
   }, [loadLinks]);
   const coaches = st.coaches || [];
   const linked = (id: string) => links.filter((l) => l.playerId === id && l.status === 'active');
-  const unanswered = players.filter((p) => consentStatus(p) === 'none');
+  // Not answered yet, or under 15 without a parent's signature.
+  const unanswered = players.filter((p) => consentStatus(p) === 'none' || consentStatus(p) === 'parent');
   const reminded = st.data.reminders || {};
   const reports = [...(st.data.reports || [])].sort((a, b) => b.at - a.at);
   const postOf = (id?: string | null) => (id ? st.data.posts.find((x) => x.id === id) : undefined);
   const codeRows = [
     { key: 'coach', label: 'Administratorkode', code: C.coach, hint: 'Kun for administratorer. Andre administratorer logger inn med denne.', copyLabel: 'Administratorkoden' },
-    { key: 'team', label: 'Lagkode', code: C.team, hint: 'For spillere, foresatte og abonnenter.', copyLabel: 'Lagkoden' },
+    { key: 'team', label: 'Lagkode', code: C.team, hint: 'For spillere og abonnenter.', copyLabel: 'Lagkoden' },
   ];
   return (
     <>
@@ -276,7 +253,7 @@ function CoachSections() {
               return (
                 <div key={l.userId + l.role} className="row" style={{ alignItems: 'flex-start', padding: '12px 0', gap: 8 }}>
                   <span className="row-text" style={{ gap: 2 }}>
-                    <span style={{ font: '500 16px var(--body)' }}>{l.role === 'parent' ? 'Foresatt til ' + pn : pn}</span>
+                    <span style={{ font: '500 16px var(--body)' }}>{pn}</span>
                     <span className="row-meta" style={{ wordBreak: 'break-all' }}>
                       {l.email || 'Ukjent e-post'}
                     </span>
@@ -361,7 +338,7 @@ function CoachSections() {
               <span style={{ font: '600 15px var(--body)' }}>
                 {unanswered.length === 1 ? '1 har ikke svart' : unanswered.length + ' har ikke svart'}
               </span>
-              <span className="row-sub">Spilleren og foresatte får en påminnelse i appen og på mobilen.</span>
+              <span className="row-sub">Spilleren får en påminnelse i appen og på mobilen.</span>
             </span>
             <button
               type="button"
@@ -407,14 +384,14 @@ function CoachSections() {
                     </button>
                     <span className="row-meta" style={{ color: CONSENT_INK[consentStatus(p)], fontWeight: 600 }}>
                       {CONSENT_LABEL[consentStatus(p)]}
-                      {consentStatus(p) === 'none' && reminded[p.id] ? (
+                      {(consentStatus(p) === 'none' || consentStatus(p) === 'parent') && reminded[p.id] ? (
                         <span style={{ fontWeight: 400 }}>{' · påminnet ' + fmtShort(reminded[p.id])}</span>
                       ) : null}
                     </span>
                     {linked(p.id).map((l) => (
                       <span key={l.userId + l.role} className="row-meta" style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                         <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {(l.role === 'parent' ? 'Foresatt: ' : 'Spiller: ') + (l.email || 'ukjent e-post')}
+                          {'Spiller: ' + (l.email || 'ukjent e-post')}
                         </span>
                         <button
                           type="button"
@@ -515,20 +492,21 @@ function PlayerSections({ me }: { me: Player }) {
   const c = me.consent;
   const link = inviteLink(codes(st).team, me);
   const nVia = st.data.subs.filter((x) => x.via === me.id).length;
-  const text = waitsForParent(me)
-    ? 'Du har signert. En foresatt må også si ja fra sin egen telefon: de åpner appen med lagkoden og velger «Jeg er foresatt». Til da er du ikke med på bilder.'
+  const text = missingParent(me)
+    ? 'Du har signert, men fordi du er under 15, må en foresatt også signere. Fyll ut samtykket på nytt sammen med en foresatt. Til da er du ikke med på bilder.'
     : c
-      ? 'Du har signert samtykket' + (c.adult === false ? ', og en foresatt har også sagt ja' : '') + '. Du kan ombestemme deg når som helst.'
+      ? 'Du har sagt ja til bilder og video' + (c.adult === false ? ', og en foresatt har signert' : '') + '. Du kan ombestemme deg når som helst.'
       : me.declined === 'parent'
-      ? 'En foresatt har ikke godkjent bilder. Administratorene passer på at du ikke er med på bildene.'
-      : 'Du er ikke med på bilder. Administratorene passer på at du ikke er med på bildene.';
+        ? 'En foresatt sa nei til bilder. Administratorene passer på at du ikke er med på bildene.'
+        : me.declined
+          ? 'Du har sagt nei til bilder. Administratorene passer på at du ikke er med på bildene.'
+          : 'Du har ikke svart på samtykket ennå. Til da er du ikke med på bilder.';
   return (
     <>
       <Section title="Samtykke">
         <p className="note">{text}</p>
-        <ConsentRows consent={c} />
         <button type="button" className="link-btn start" onClick={st.openPlayerConsent}>
-          {c ? 'Endre samtykke' : 'Fyll ut samtykke'}
+          {c || me.declined ? 'Endre samtykke' : 'Fyll ut samtykke'}
         </button>
       </Section>
       <Section title="Inviter familien">
@@ -541,153 +519,6 @@ function PlayerSections({ me }: { me: Player }) {
         </button>
         <p className="note">{followText(nVia)}</p>
       </Section>
-    </>
-  );
-}
-
-function ParentSections({ child }: { child: Player }) {
-  const st = useStore();
-  const { data, theme } = st;
-  const kf = firstName(child.name);
-  const cc = child.consent;
-  const waiting = waitsForParent(child);
-  const given = hasConsent(child);
-  const nOn = CKEYS.filter(([k]) => cc?.[k]).length;
-  const age = child.born ? new Date().getFullYear() - child.born : null;
-  const link = inviteLink(codes(st).team, child);
-  const posts = data.posts.filter((p) => p.tagged.includes(child.id)).sort((x, y) => y.ts - x.ts);
-  const family = data.subs.filter((x) => x.via === child.id);
-  const tooYoung = age != null && age < 13;
-
-  return (
-    <>
-      <Section
-        title={'Samtykke for ' + kf}
-        aside={
-          <span style={{ font: '600 14px var(--body)', color: given ? 'var(--ok)' : 'var(--accent-ink)' }}>
-            {waiting ? 'Venter på deg' : !given ? 'Ikke gitt' : nOn === 4 ? 'Gitt' : 'Delvis'}
-          </span>
-        }
-      >
-        {waiting && <p className="note">{kf} har signert sin del. Bildene kan brukes når du også har gitt samtykke.</p>}
-        <ConsentRows consent={given ? cc : null} />
-        {given ? (
-          <div className="btn-pair" style={{ marginTop: 8 }}>
-            <button type="button" className="btn btn-secondary" onClick={st.editParentConsent}>
-              Endre samtykke
-            </button>
-            <button type="button" className="btn btn-secondary" style={{ color: 'var(--accent-ink)' }} onClick={st.withdrawConsent}>
-              Trekk samtykke
-            </button>
-          </div>
-        ) : (
-          <button type="button" className="btn btn-primary btn-block" style={{ marginTop: 8 }} onClick={st.editParentConsent}>
-            Gi samtykke
-          </button>
-        )}
-      </Section>
-
-      <Section title={'Der ' + kf + ' er med'}>
-        {posts.length ? (
-          <div className="list">
-            {posts.map((p) => {
-              const m = p.media[0];
-              const mt = p.matchId ? data.matches.find((x) => x.id === p.matchId) : undefined;
-              return (
-                <div key={p.id} className="row">
-                  <span
-                    style={{
-                      position: 'relative',
-                      width: 48,
-                      height: 48,
-                      flex: 'none',
-                      borderRadius: 4,
-                      overflow: 'hidden',
-                      background: m ? stripe(m.hue ?? 20, theme === 'dark') : 'var(--surface2)',
-                    }}
-                  >
-                    {m?.src && <MediaView src={m.src} kind={m.kind} />}
-                  </span>
-                  <span className="row-text">
-                    <span style={{ font: '500 15px/1.3 var(--body)' }}>
-                      {(TYPES[p.type] || TYPES.beskjed).label + (mt ? ' · ' + matchTitle(st, mt) : '')}
-                    </span>
-                    <span className="row-meta">
-                      {rel(p.ts)} · {p.media.length === 1 ? '1 bilde' : p.media.length + ' bilder'}
-                    </span>
-                  </span>
-                  <button type="button" className="link-btn" style={{ fontSize: 14 }} onClick={() => st.removeChildFromPost(p.id)}>
-                    Fjern {kf}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="note">{kf} er ikke merket i noen innlegg.</p>
-        )}
-      </Section>
-
-      <Section title="Invitasjonslenke">
-        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={'https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=0&data=' + encodeURIComponent(link)}
-            alt="QR-kode for invitasjonslenken"
-            width={112}
-            height={112}
-            style={{ flex: 'none', width: 112, height: 112, padding: 6, background: '#fff', border: '1px solid var(--line)', borderRadius: 4 }}
-          />
-          <p className="note">Besteforeldre kan skanne koden, eller du kan sende lenken. Bare de med lenken kommer inn.</p>
-        </div>
-        <InviteLinkBox link={link} />
-        <button type="button" className="btn btn-secondary" onClick={() => st.shareInvite(link)}>
-          Del lenken
-        </button>
-      </Section>
-
-      <Section title="Familiens krets">
-        {family.length ? (
-          <div className="list">
-            {family.map((x) => (
-              <div key={x.id} className="row">
-                <span className="row-text">
-                  <span style={{ font: '500 16px var(--body)' }}>{x.name}</span>
-                  <span className="row-meta">
-                    {(x.rel ? x.rel + ' · ' : '') + 'siden ' + fmtShort(x.since)}
-                  </span>
-                </span>
-                <button type="button" className="link-btn quiet" onClick={() => st.removeSub(x.id)}>
-                  Fjern
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="note">Ingen abonnerer via {kf} ennå. Del lenken over.</p>
-        )}
-      </Section>
-
-      <div style={{ marginTop: 16 }}>
-        <SwitchRow
-          label={kf + ' logger inn selv'}
-          sub={tooYoung ? 'Kan slås på fra 13 år' : 'Får egen innlogging og ser bildene der ' + kf + ' er med'}
-          on={child.selfLogin}
-          disabled={tooYoung}
-          onToggle={() => st.updPlayer(child.id, { selfLogin: !child.selfLogin })}
-        />
-      </div>
-
-      {!st.prof.parent.subscribed && (
-        <Section title="Følg hele laget">
-          <p className="note" style={{ fontSize: 15 }}>
-            Se alle innlegg fra {teamName(st)}, ikke bare der {kf} er med. {priceText(st)} i måneden.
-          </p>
-          <button type="button" className="btn btn-primary" style={{ alignSelf: 'flex-start', marginTop: 4 }} onClick={() => st.openPay('parent')}>
-            Abonner
-          </button>
-        </Section>
-      )}
     </>
   );
 }
@@ -783,7 +614,7 @@ function HelpSection() {
   );
 }
 
-const ROLE_NAME: Record<string, string> = { coach: 'Administrator', player: 'Spiller', parent: 'Foresatt', sub: 'Abonnent' };
+const ROLE_NAME: Record<string, string> = { coach: 'Administrator', player: 'Spiller', sub: 'Abonnent' };
 
 /** Other teams and roles this account has. Shown only when there is somewhere else to go. */
 function TeamsSection() {

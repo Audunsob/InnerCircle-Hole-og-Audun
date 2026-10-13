@@ -14,7 +14,7 @@ type Body = {
   matchId?: string | null;
   /** posts: only those who asked to hear about the match, not everyone who wants new posts. */
   onlyWatchers?: boolean;
-  /** reminders: the players whose accounts (the player and their parents) get it. */
+  /** reminders: the players whose accounts get it. */
   playerIds?: string[];
 };
 

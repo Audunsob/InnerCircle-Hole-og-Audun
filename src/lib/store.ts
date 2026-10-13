@@ -20,7 +20,6 @@ import {
 import {
   blankFlow,
   COACH,
-  defCons,
   emptyTeam,
   ephemeral,
   freshState,
@@ -43,7 +42,6 @@ import {
   LastCoachError,
   leaveTeam,
   myTeams,
-  ParentLimitError,
   peekTeam,
   PlayerTakenError,
   saveTeam,
@@ -60,7 +58,7 @@ import {
 } from './supabase';
 import { scoreTitle } from './derive';
 import { disablePush, enablePush, isStandalone, needsHomeScreen, phoneKind, updatePushPrefs, type PushPrefs } from './push';
-import { canPost, coachName, hasConsent, matchTitle, memberAuthor, price, shortTeam, teamName } from './selectors';
+import { canPost, coachName, matchTitle, memberAuthor, price, shortTeam, teamName } from './selectors';
 
 const MAX_VIDEO = 50 * 1024 * 1024;
 
@@ -105,14 +103,12 @@ function videoDuration(file: File): Promise<string> {
 }
 import type {
   AppState,
-  ConsentKey,
   Draft,
   EphemeralState,
   Flow,
   Match,
   Media,
   MemberRole,
-  ParentConsentDraft,
   PayForm,
   PayMethod,
   PersistedState,
@@ -138,6 +134,9 @@ function loadState(): AppState {
     s = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
   } catch {}
   if (!s || s.v !== 3) s = freshState();
+  // The parent role is gone: a device that was signed in as a parent starts over (still signed in).
+  if ((s.role as string) === 'parent' || (s.team?.role as string) === 'parent' || (s.screen as string) === 'consent')
+    s = { ...freshState(), uid: s.uid, theme: s.theme, homeTip: s.homeTip, pushOn: s.pushOn };
   if (!['all', 'kamp', 'trening', 'beskjed'].includes(s.filter)) s = { ...s, filter: 'all' };
   return { ...s, ...ephemeral() };
 }
@@ -181,16 +180,6 @@ export interface Actions {
   /** Waiting for a coach: checks whether the request was approved (or turned down). */
   checkPending: (manual?: boolean) => Promise<void>;
 
-  // Parent consent wizard
-  setCons: (p: Partial<ParentConsentDraft>) => void;
-  consNext: () => void;
-  consBack: () => void;
-  consToggle: (k: ConsentKey) => void;
-  consGive: () => void;
-  consLater: () => void;
-  editParentConsent: () => void;
-  withdrawConsent: () => void;
-
   // Signed forms (player and coach)
   setPC: (p: Partial<SignedForm>) => void;
   pcNext: () => void;
@@ -201,7 +190,7 @@ export interface Actions {
 
   // Payment
   setPay: (p: Partial<PayForm>) => void;
-  openPay: (ctx: 'parent' | 'resub') => void;
+  openPay: (ctx: 'resub') => void;
   payBack: () => void;
   setCard: (field: 'num' | 'exp' | 'cvc', raw: string) => void;
   paySubmit: () => void;
@@ -264,7 +253,7 @@ export interface Actions {
   /** New random code in the team settings form. */
   newCode: (which: 'teamCode' | 'coachCode') => void;
   saveTeamSettings: () => Promise<void>;
-  /** Coach: reminds the players (and their parents) who haven't answered the consent form. */
+  /** Coach: reminds the players who haven't answered the consent form (or lack a parent's signature). */
   remindConsent: (ids: string[]) => void;
   /** Coach: marks a report or question as handled. */
   dismissReport: (id: string) => void;
@@ -290,14 +279,13 @@ export interface Actions {
   removeCoach: (userId: string) => void;
   /** Coach: deletes the team for everyone, after typing its name in the deleteTeam sheet. */
   deleteTeam: () => Promise<void>;
-  /** Coach: approves a waiting player or parent, or removes the link. */
-  decide: (userId: string, role: 'player' | 'parent', approve: boolean) => void;
+  /** Coach: approves a waiting player, or removes the link. */
+  decide: (userId: string, role: 'player', approve: boolean) => void;
 
   // Subscriber / family
   cancelSub: () => void;
   copyInvite: (link: string) => void;
   shareInvite: (link: string) => void;
-  removeChildFromPost: (postId: string) => void;
 
   // Everyone
   /** Report a post to the coaches, or (without a post) ask them something. */
@@ -417,7 +405,7 @@ export const useStore = create<Store>()((set, get) => {
       if (!server || !pending.length) applyServer(p);
       if (pending.length) void flush();
       // Removed from the list by a coach whose app didn't also unlink the account.
-      const mine = team.role === 'player' ? s().prof.player.playerId : team.role === 'parent' ? s().prof.parent.childId : null;
+      const mine = team.role === 'player' ? s().prof.player.playerId : null;
       if (mine && s().screen === 'app' && !p.data.players.some((x) => x.id === mine)) removedFromTeam();
     } catch (e) {
       signedOutError(e);
@@ -497,9 +485,10 @@ export const useStore = create<Store>()((set, get) => {
   /** A message with only an OK button. */
   const inform = (title: string, body: string) =>
     set({ sheet: 'confirm', confirm: { title, body, label: 'OK', action: () => {}, info: true } });
+  /** An empty player consent form. Under 15 it has a second part for a parent. */
+  const newPlayerForm = (adult: boolean): SignedForm => ({ step: 1, adult, p: null, g: null, ps: null, gs: null, gn: '', err: '' });
   const setPC = (p: Partial<SignedForm>) =>
     set((st) => ({ pcons: { ...(st.pcons || { step: 1, p: null, ps: null, err: '' }), ...p, err: p.err || '' } }));
-  const setCons = (p: Partial<ParentConsentDraft>) => set((st) => ({ cons: { ...(st.cons || defCons()), ...p } }));
   const setPay = (p: Partial<PayForm>) => set((st) => ({ pay: { ...(st.pay || newPay()), ...p } }));
 
   /** Files among these that no post uses (uploaded for a draft that wasn't published). */
@@ -540,8 +529,6 @@ export const useStore = create<Store>()((set, get) => {
       filter: 'all',
       openMatch: null,
       openEvent: null,
-      cons: null,
-      consCtx: null,
       sheet: null,
       payCtx: null,
       pay: null,
@@ -645,7 +632,6 @@ export const useStore = create<Store>()((set, get) => {
           const p = await getTeam(pick.teamId, wanted);
           connect(p);
           if (wanted === 'player') setProf('player', { playerId: pick.playerId });
-          if (wanted === 'parent') setProf('parent', { childId: pick.playerId });
           if (wanted === 'sub') {
             const own = p.data.subs.find((x) => x.id === mySubId());
             if (!own) {
@@ -665,7 +651,6 @@ export const useStore = create<Store>()((set, get) => {
     }
     const next: Record<Role, Screen> = {
       player: 'teamCode',
-      parent: 'teamCode',
       sub: 'invite',
       coach: st.flow.coachMode === 'create' ? 'createTeam' : 'coachCode',
     };
@@ -686,7 +671,7 @@ export const useStore = create<Store>()((set, get) => {
   };
 
   /**
-   * Joins the team in flow.peek with the given role. Players and parents usually have to wait
+   * Joins the team in flow.peek with the given role. Players usually have to wait
    * for a coach: then this returns 'pending' and nothing is connected yet.
    */
   const join = async (role: MemberRole, playerId: string | null): Promise<'ok' | 'pending' | false> => {
@@ -699,7 +684,7 @@ export const useStore = create<Store>()((set, get) => {
       setFlow({ busy: false });
       if ('pending' in p) {
         const name = peek.players.find((x) => x.id === playerId)?.name || '';
-        if (playerId && (role === 'player' || role === 'parent'))
+        if (playerId && role === 'player')
           setFlow({ pendingTeam: { id: p.teamId, name: p.teamName, role, playerId, playerName: name } });
         return 'pending';
       }
@@ -710,33 +695,25 @@ export const useStore = create<Store>()((set, get) => {
       const err =
         e instanceof PlayerTakenError
           ? name + ' er allerede koblet til en annen konto. Si fra til administratoren, så kan administratoren koble den fra.'
-          : e instanceof ParentLimitError
-            ? 'To foresatte er allerede koblet til ' + firstName(name) + '. Si fra til administratoren hvis det er feil.'
-            : e instanceof Error && /unknown_player/.test(e.message)
-              ? name + ' står ikke lenger på lista til laget. Snakk med administratoren.'
-              : e instanceof Error && e.message === 'not_found'
-                ? 'Fant ikke laget lenger. Sjekk koden med administratoren.'
-                : errorText(e);
+          : e instanceof Error && /unknown_player/.test(e.message)
+            ? name + ' står ikke lenger på lista til laget. Snakk med administratoren.'
+            : e instanceof Error && e.message === 'not_found'
+              ? 'Fant ikke laget lenger. Sjekk koden med administratoren.'
+              : errorText(e);
       setFlow({ busy: false, err });
       return false;
     }
   };
 
   /** Approved by the coach: show the team and sign the consent if it isn't signed yet. */
-  const continueApproved = (p: TeamPayload, role: 'player' | 'parent', playerId: string) => {
+  const continueApproved = (p: TeamPayload, playerId: string) => {
     connect(p);
     setFlow({ pendingTeam: null });
     const player = p.data.players.find((x) => x.id === playerId);
-    if (role === 'player') {
-      setProf('player', { playerId });
-      if (player?.consent || player?.declined) return enterApp('player');
-      set({ pcons: { step: 1, adult: !!s().flow.adult, p: null, g: null, ps: null, gs: null, err: '' }, pcCtx: null });
-      return go('pconsent');
-    }
-    setProf('parent', { childId: playerId });
-    if (hasConsent(player)) return enterApp('parent');
-    set({ cons: defCons(), consCtx: null });
-    go('consent');
+    setProf('player', { playerId });
+    if (player?.consent || player?.declined) return enterApp('player');
+    set({ pcons: newPlayerForm(!!s().flow.adult), pcCtx: null });
+    go('pconsent');
   };
 
   let checking = false;
@@ -756,7 +733,7 @@ export const useStore = create<Store>()((set, get) => {
         if (manual) toast('Administratoren har ikke godkjent ennå');
         return;
       }
-      continueApproved(await getTeam(pt.id, pt.role), pt.role, pt.playerId);
+      continueApproved(await getTeam(pt.id, pt.role), pt.playerId);
       toast('Administratoren har godkjent deg!');
     } catch (e) {
       if (manual) toast(errorText(e));
@@ -767,7 +744,7 @@ export const useStore = create<Store>()((set, get) => {
 
   /** Waiting for approval on a team found after login (for example on a new phone). */
   const waitFor = (m: Membership) => {
-    if (m.role !== 'player' && m.role !== 'parent') return;
+    if (m.role !== 'player') return;
     setFlow({ pendingTeam: { id: m.teamId, name: m.teamName, role: m.role, playerId: m.playerId || '', playerName: '' } });
     go('pending');
   };
@@ -795,9 +772,7 @@ export const useStore = create<Store>()((set, get) => {
     const m = (s().teams || []).find((x) => x.teamId === teamId && x.role === role);
     connect(p);
     set({ links: null, coaches: null, sheet: null, form: {}, openMatch: null, openEvent: null, notifyMatch: {} });
-    const uid = s().uid;
     if (role === 'player') setProf('player', { playerId: m?.playerId || null });
-    if (role === 'parent') setProf('parent', { childId: m?.playerId || null, subscribed: p.data.subs.some((x) => x.id === 'par-' + uid) });
     if (role === 'coach') {
       const session = await currentSession();
       const signed = (p.data.coachConsents || []).filter((x) => x.contact === session?.email).pop()?.name;
@@ -848,20 +823,13 @@ export const useStore = create<Store>()((set, get) => {
   const submitPick = async () => {
     const st = s();
     const id = st.flow.pickId;
-    if (!id) return setFlow({ err: st.flow.role === 'player' ? 'Velg deg selv fra lista.' : 'Velg barnet ditt fra lista.' });
-    const role: MemberRole = st.flow.role === 'parent' ? 'parent' : 'player';
-    const joined = await join(role, id);
+    if (!id) return setFlow({ err: 'Velg deg selv fra lista.' });
+    const joined = await join('player', id);
     if (!joined) return;
     if (joined === 'pending') return go('pending');
-    if (role === 'player') {
-      setProf('player', { playerId: id });
-      set({ pcons: { step: 1, adult: !!st.flow.adult, p: null, g: null, ps: null, gs: null, err: '' }, pcCtx: null });
-      go('pconsent');
-    } else {
-      setProf('parent', { childId: id });
-      set({ cons: defCons(), consCtx: null });
-      go('consent');
-    }
+    setProf('player', { playerId: id });
+    set({ pcons: newPlayerForm(!!st.flow.adult), pcCtx: null });
+    go('pconsent');
   };
 
   const submitInvite = async () => {
@@ -952,34 +920,36 @@ export const useStore = create<Store>()((set, get) => {
     }
   };
 
+  /** One yes covers photos, video and the name in posts. Under 15 the parent's part is signed on the same form. */
   const pcFinish = async (ok: boolean, by: 'player' | 'parent' | null) => {
     const st = s();
     const c = st.pcons || ({} as SignedForm);
     const id = st.prof.player.playerId;
+    const minor = !c.adult;
     setPC({ busy: true });
-    const playerSig = ok ? await storeSignature(c.ps) : null;
-    // A parent who already said yes from their own login keeps their approval and their choices.
-    const prev = st.data.players.find((p) => p.id === id)?.consent;
-    const base = prev?.parentBy ? prev : { photo: true, video: true, name: true, tag: true };
+    const [playerSig, parentSig] = ok ? await Promise.all([storeSignature(c.ps), minor ? storeSignature(c.gs) : null]) : [null, null];
     if (id)
       updPlayer(id, {
-        consent: ok ? { ...base, at: Date.now(), adult: !!c.adult, playerSig } : null,
+        consent: ok
+          ? {
+              photo: true,
+              video: true,
+              name: true,
+              at: Date.now(),
+              adult: !minor,
+              playerSig,
+              parentSig,
+              parentName: minor ? (c.gn || '').trim().replace(/\s+/g, ' ') : null,
+            }
+          : null,
         declined: ok ? null : by,
       });
-    const needParent = ok && !c.adult && !prev?.parentBy;
     const inApp = st.pcCtx === 'app';
     set({ pcons: null, pcCtx: null });
-    if (inApp) return toast(!ok ? 'Du er ikke med på bilder' : needParent ? 'Lagret. En foresatt må også godkjenne.' : 'Samtykket er lagret');
+    const no = by === 'parent' ? 'Lagret. En foresatt sa nei, så du er ikke med på bilder.' : 'Lagret. Du er ikke med på bilder.';
+    if (inApp) return toast(ok ? 'Samtykket er lagret' : no);
     enterApp('player');
-    toast(
-      !ok
-        ? by === 'parent'
-          ? 'Lagret. Foresatt har ikke godkjent bilder.'
-          : 'Lagret. Du er ikke med på bilder.'
-        : needParent
-          ? 'Takk! Nå må en foresatt godkjenne fra sin egen innlogging.'
-          : 'Takk! Samtykket er signert.',
-    );
+    toast(ok ? 'Takk! Samtykket er signert.' : no);
   };
 
   const payDone = () => {
@@ -1009,12 +979,6 @@ export const useStore = create<Store>()((set, get) => {
       addSub(mySubId(), subName, '', via);
       enterApp('sub');
       toast('Velkommen! Du følger nå laget.');
-    } else if (ctx === 'parent') {
-      const c = st.data.players.find((x) => x.id === st.prof.parent.childId);
-      setProf('parent', { subscribed: true });
-      addSub('par-' + st.uid, c ? c.parent.name || 'Foresatt' : 'Foresatt', 'forelder', c ? c.id : null);
-      set({ payCtx: null, pay: null });
-      toast('Nå følger du hele laget!');
     } else {
       setProf('sub', { active: true, cancelled: false, method: p.method, last4, startedAt: now, autoRenew });
       addSub(mySubId(), subName, '', st.prof.sub.viaId);
@@ -1052,7 +1016,6 @@ export const useStore = create<Store>()((set, get) => {
     updPlayer,
     ask,
     setPC,
-    setCons,
     setPay,
     enterApp,
     toggleTheme: () => set((st) => ({ theme: st.theme === 'dark' ? 'light' : 'dark' })),
@@ -1122,7 +1085,6 @@ export const useStore = create<Store>()((set, get) => {
         coachCode: 'login',
         createTeam: 'login',
         pay: 'terms',
-        consent: 'pickPlayer',
         pending: 'teamCode',
       };
       setFlow({ err: '' });
@@ -1184,7 +1146,7 @@ export const useStore = create<Store>()((set, get) => {
       // Opened on another device or browser: go into the account's team if it has one.
       try {
         const mine = await myTeams();
-        const order: MemberRole[] = ['coach', 'player', 'parent', 'sub'];
+        const order: MemberRole[] = ['coach', 'player', 'sub'];
         const m = order.map((r) => mine.find((x) => x.role === r)).find(Boolean);
         if (m) {
           set({ flow: { ...blankFlow(), contact: email, role: m.role, coachMode: 'join' } });
@@ -1204,85 +1166,38 @@ export const useStore = create<Store>()((set, get) => {
       void afterLogin();
     },
 
-    // ---------- Parent consent wizard ----------
-
-    consNext: () => setCons({ step: Math.min(4, (s().cons || defCons()).step + 1) }),
-    consBack: () => {
-      const c = s().cons || defCons();
-      if (c.step > 1) return setCons({ step: c.step - 1 });
-      if (s().consCtx === 'app') return set({ consCtx: null, cons: null });
-      go('pickPlayer');
-    },
-    consToggle: (k) => {
-      const c = s().cons || defCons();
-      setCons({ draft: { ...c.draft, [k]: !c.draft[k] } });
-    },
-    consGive: () => {
-      const st = s();
-      const c = st.cons || defCons();
-      const inApp = st.consCtx === 'app';
-      if (!c.check) return toast('Kryss av for at du er foresatt først');
-      const any = Object.values(c.draft).some(Boolean);
-      const childId = st.prof.parent.childId;
-      const prev = st.data.players.find((p) => p.id === childId)?.consent;
-      const now = Date.now();
-      // Keeps the player's own signature. The database records which parent account said yes.
-      if (childId)
-        updPlayer(childId, { consent: any ? { ...prev, ...c.draft, at: now, parentAt: now, parentBy: st.uid } : null });
-      if (inApp) {
-        set({ consCtx: null, cons: null });
-        toast('Samtykket er oppdatert');
-      } else {
-        enterApp('parent');
-        toast('Takk! Samtykket er lagret.');
-      }
-    },
-    consLater: () => {
-      if (s().consCtx === 'app') return set({ consCtx: null, cons: null });
-      enterApp('parent');
-      toast('Du kan gi samtykke senere under Min side');
-    },
-    editParentConsent: () => {
-      const st = s();
-      const child = st.data.players.find((p) => p.id === st.prof.parent.childId);
-      // The child's own yes doesn't switch anything on for the parent: they choose each item themselves.
-      const cc = hasConsent(child) ? child?.consent : null;
-      set({
-        cons: { step: 1, draft: { photo: !!cc?.photo, video: !!cc?.video, name: !!cc?.name, tag: !!cc?.tag }, check: false },
-        consCtx: 'app',
-      });
-    },
-    withdrawConsent: () => {
-      const st = s();
-      const child = st.data.players.find((p) => p.id === st.prof.parent.childId);
-      if (!child) return;
-      const kf = firstName(child.name);
-      ask('Trekke samtykket?', 'Innlegg der ' + kf + ' er merket, blir skjult med en gang. Du kan gi samtykke igjen senere.', 'Trekk samtykke', () => {
-        updPlayer(child.id, { consent: null });
-        toast('Samtykket er trukket');
-      });
-    },
-
     // ---------- Signed forms ----------
 
-    // Under 15, a parent says yes from their own login (Jeg er foresatt), not on the player's phone.
+    // Under 15, part 2 is for a parent, filled in on the player's phone.
     pcNext: () => {
       const c = s().pcons || ({ step: 1 } as SignedForm);
-      if (!c.p) return setPC({ err: 'Velg ett av alternativene.' });
-      if (c.p === 'yes' && !c.ps) return setPC({ err: 'Skriv signaturen din i feltet.' });
-      pcFinish(c.p === 'yes', c.p === 'yes' ? null : 'player');
+      if (c.step === 1) {
+        if (!c.p) return setPC({ err: 'Velg ett av alternativene.' });
+        if (c.p === 'yes' && !c.ps) return setPC({ err: 'Skriv signaturen din i feltet.' });
+        if (c.p === 'no') return pcFinish(false, 'player');
+        if (!c.adult) {
+          setPC({ step: 2 });
+          scrollTop();
+          return;
+        }
+        return pcFinish(true, null);
+      }
+      if (!c.g) return setPC({ err: 'Velg ett av alternativene.' });
+      if (c.g === 'yes' && !(c.gn || '').trim()) return setPC({ err: 'Skriv navnet til den foresatte.' });
+      if (c.g === 'yes' && !c.gs) return setPC({ err: 'Foresatt må signere i feltet.' });
+      pcFinish(c.g === 'yes', c.g === 'yes' ? null : 'parent');
     },
     pcBack: () => {
+      if (s().pcons?.step === 2) return setPC({ step: 1 });
       if (s().pcCtx === 'app') return set({ pcCtx: null, pcons: null });
       get().back();
     },
     openPlayerConsent: () => {
       const st = s();
-      const pc = st.data.players.find((p) => p.id === st.prof.player.playerId)?.consent;
-      set({
-        pcCtx: 'app',
-        pcons: { step: 1, adult: pc?.adult ?? !!st.flow.adult, p: null, g: null, ps: null, gs: null, err: '' },
-      });
+      const me = st.data.players.find((p) => p.id === st.prof.player.playerId);
+      // The year of birth decides when the coach has entered it; otherwise what the player said last time.
+      const adult = me?.born != null ? new Date().getFullYear() - me.born >= 15 : (me?.consent?.adult ?? !!st.flow.adult);
+      set({ pcCtx: 'app', pcons: newPlayerForm(adult) });
     },
     ccNext: async () => {
       const st = s();
@@ -1865,12 +1780,12 @@ export const useStore = create<Store>()((set, get) => {
       const p = postId ? st.data.posts.find((x) => x.id === postId) : null;
       const ev = findEvent(st.data, eventId);
       if (p) {
-        dr = { id: p.id, type: p.type, matchId: p.matchId || '', eventId: p.eventId || '', media: p.media.slice(), tagged: p.tagged.slice(), text: p.text, notify: false };
+        dr = { id: p.id, type: p.type, matchId: p.matchId || '', eventId: p.eventId || '', media: p.media.slice(), text: p.text, notify: false };
       } else if (ev) {
-        dr = { id: null, type: ev.kind === 'Trening' ? 'trening' : 'beskjed', matchId: '', eventId: ev.id, media: [], tagged: [], text: '', notify: true };
+        dr = { id: null, type: ev.kind === 'Trening' ? 'trening' : 'beskjed', matchId: '', eventId: ev.id, media: [], text: '', notify: true };
       } else {
         const last = st.data.matches.filter(isPlayed).sort((a, b) => matchTime(b) - matchTime(a))[0];
-        dr = { id: null, type: 'kamp', matchId: last ? last.id : '', media: [], tagged: [], text: '', notify: true };
+        dr = { id: null, type: 'kamp', matchId: last ? last.id : '', media: [], text: '', notify: true };
       }
       set({ draft: dr, sheet: 'composer', menuPost: null });
     },
@@ -1914,7 +1829,7 @@ export const useStore = create<Store>()((set, get) => {
       if (dr.loading) return toast('Vent til opplastingen er ferdig');
       if (!dr.text.trim() && !dr.media.length) return toast('Legg til tekst, bilder eller video først');
       const coach = st.role === 'coach';
-      // Players and parents post about a match, training or event the coaches made, never on their own.
+      // Players post about a match, training or event the coaches made, never on their own.
       const ev = findEvent(st.data, dr.eventId);
       if (!coach && !st.data.matches.some((m) => m.id === dr.matchId) && (!ev || (isTraining(ev) && ev.cancelled)))
         return toast('Velg kampen, treningen eller hendelsen innlegget gjelder');
@@ -1927,7 +1842,7 @@ export const useStore = create<Store>()((set, get) => {
         setData((d) => ({
           ...d,
           posts: d.posts.map((p) =>
-            p.id === dr.id ? { ...p, type: dr.type, matchId, eventId, media: dr.media, tagged: dr.tagged, text: dr.text.trim(), edited: true } : p,
+            p.id === dr.id ? { ...p, type: dr.type, matchId, eventId, media: dr.media, text: dr.text.trim(), edited: true } : p,
           ),
         }));
         set({ sheet: null, draft: null });
@@ -1947,7 +1862,7 @@ export const useStore = create<Store>()((set, get) => {
         matchId,
         eventId,
         media: dr.media,
-        tagged: dr.tagged,
+        tagged: [],
         text: dr.text.trim(),
         likes: 0,
         likedBy: [],
@@ -2127,7 +2042,7 @@ export const useStore = create<Store>()((set, get) => {
             posts: d.posts.map((q) => ({ ...q, tagged: q.tagged.filter((t) => t !== id) })),
           }));
           toast('Spilleren er fjernet');
-          // Unlink the player's own account and parents too, so they no longer get into the team.
+          // Unlink the player's own account too, so it no longer gets into the team.
           const team = s().team;
           if (!team) return;
           try {
@@ -2224,7 +2139,7 @@ export const useStore = create<Store>()((set, get) => {
       const who = l?.email || 'kontoen';
       ask(
         l?.status === 'pending' ? 'Avvise forespørselen?' : 'Koble fra kontoen?',
-        who + (role === 'parent' ? ' blir ikke foresatt til ' : ' blir ikke koblet til ') + name + ' og ser ikke laget. De kan prøve på nytt med lagkoden.',
+        who + ' blir ikke koblet til ' + name + ' og ser ikke laget. De kan prøve på nytt med lagkoden.',
         l?.status === 'pending' ? 'Avvis' : 'Koble fra',
         () => void run(),
       );
@@ -2257,14 +2172,6 @@ export const useStore = create<Store>()((set, get) => {
       if (typeof navigator.share === 'function') navigator.share(data).catch(() => {});
       else get().copyInvite(link);
     },
-    removeChildFromPost: (postId) => {
-      const childId = s().prof.parent.childId;
-      const child = s().data.players.find((p) => p.id === childId);
-      if (!child) return;
-      setData((d) => ({ ...d, posts: d.posts.map((q) => (q.id === postId ? { ...q, tagged: q.tagged.filter((t) => t !== child.id) } : q)) }));
-      toast(firstName(child.name) + ' er fjernet fra innlegget');
-    },
-
     // ---------- Everyone ----------
 
     openReport: (postId) => set({ sheet: 'report', menuPost: null, form: { postId: postId || '', text: '', err: '' } }),
@@ -2281,9 +2188,7 @@ export const useStore = create<Store>()((set, get) => {
       const name =
         st.role === 'player'
           ? P.find((p) => p.id === st.prof.player.playerId)?.name
-          : st.role === 'parent'
-            ? 'Foresatt til ' + (P.find((p) => p.id === st.prof.parent.childId)?.name || 'en spiller')
-            : st.prof.sub.name;
+          : st.prof.sub.name;
       const now = Date.now();
       setData((d) => ({
         ...d,

@@ -2,12 +2,12 @@
 
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { download, firstName, fmtAcct, fmtDate, fmtDay, fmtLong, fmtShort, iso, krd, matchTime, NB, rel, stripe } from '@/lib/format';
-import { CKEYS, EVENT_ICONS, TYPES } from '@/lib/seed';
+import { EVENT_ICONS, TYPES } from '@/lib/seed';
 import { allEvents, isTraining, WEEK_ORDER, WEEKDAYS } from '@/lib/trainings';
-import { canPost, CONSENT_INK, CONSENT_LABEL, consentStatus, waitsForParent, matchTitle, playerMap, price, shortTeam, teamName } from '@/lib/selectors';
+import { canPost, CONSENT_INK, CONSENT_LABEL, consentStatus, hasConsent, matchTitle, notInPhotos, playerMap, price, shortTeam, teamName } from '@/lib/selectors';
 import { canInstall, installApp, phoneKind } from '@/lib/push';
 import { receiptText, useStore } from '@/lib/store';
-import type { Draft, Media, PayMethod, Player, PostType, SheetName } from '@/lib/types';
+import type { Draft, Media, PayMethod, PostType, SheetName } from '@/lib/types';
 import { economy } from '../app/OkonomiView';
 import { METHOD_NAMES } from '../app/MinSide';
 import { Field, Icon, SwitchRow, Tabs } from '../ui';
@@ -293,7 +293,7 @@ function Composer() {
         </div>
       </div>
 
-      <FocusPicker dr={dr} />
+      <NotInPhotos dr={dr} />
 
       <Field label="Tekst">
         <textarea
@@ -359,60 +359,29 @@ function Chip({ label, on, onClick, disabled }: { label: string; on: boolean; on
   );
 }
 
-/** Why a player can't be in focus in this post, or null if they can. */
-function focusBlock(p: Player, hasVideo: boolean): string | null {
-  const c = p.consent;
-  if (waitsForParent(p)) return 'venter på foresatt';
-  if (!c || !c.photo) return 'mangler samtykke';
-  if (!c.tag) return 'kan ikke merkes';
-  if (hasVideo && !c.video) return 'ikke video';
-  return null;
-}
-
-/** "Ola N." — short enough for a row of chips. */
+/** "Ola N." — short enough for a list of names. */
 const shortName = (name: string) => {
   const w = name.trim().split(/\s+/);
   return w.length > 1 ? w[0] + ' ' + w[w.length - 1][0] + '.' : w[0];
 };
 
-/** The players in focus in a post. Parents see posts with their child tagged here for free. */
-function FocusPicker({ dr }: { dr: Draft }) {
+/** Who must not be in the photos: players without a yes on the consent form (or without a yes to video, on older forms). */
+function NotInPhotos({ dr }: { dr: Draft }) {
   const players = useStore((s) => s.data.players);
-  const setDraft = useStore((s) => s.setDraft);
   if (!players.length) return null;
   const hasVideo = dr.media.some((m) => m.kind === 'video');
-  const sorted = [...players].sort((a, b) => a.name.localeCompare(b.name, NB));
-  const blocked = sorted.filter((p) => dr.tagged.includes(p.id) && focusBlock(p, hasVideo));
-  const toggle = (id: string) =>
-    setDraft({ tagged: dr.tagged.includes(id) ? dr.tagged.filter((x) => x !== id) : [...dr.tagged, id] });
+  const out = notInPhotos(players)
+    .concat(hasVideo ? players.filter((p) => hasConsent(p) && !p.consent!.video) : [])
+    .sort((a, b) => a.name.localeCompare(b.name, NB));
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <span className="field-label">I fokus</span>
+      <span className="field-label">Ikke med på bildene</span>
       <p className="note" style={{ fontSize: 13 }}>
-        Merk spillerne som er i fokus på bildene. Foresatte ser gratis bare innlegg der barnet deres er merket. Spillere uten samtykke skal ikke
-        være i fokus.
+        {out.length
+          ? out.map((p) => shortName(p.name)).join(', ') +
+            ' har ikke samtykket. Bare spillere som har sagt ja, kan være med på bilder og video.'
+          : 'Alle spillerne har sagt ja til bilder og video.'}
       </p>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        {sorted.map((p) => {
-          const on = dr.tagged.includes(p.id);
-          const why = focusBlock(p, hasVideo);
-          return (
-            <Chip
-              key={p.id}
-              label={shortName(p.name) + (why ? ' · ' + why : '')}
-              on={on}
-              disabled={!!why && !on}
-              onClick={() => toggle(p.id)}
-            />
-          );
-        })}
-      </div>
-      {blocked.length > 0 && (
-        <p role="alert" className="error">
-          {blocked.map((p) => firstName(p.name)).join(', ')} har ikke samtykket til dette. Innlegget blir skjult for alle så lenge{' '}
-          {blocked.length === 1 ? firstName(blocked[0].name) : 'de'} er merket.
-        </p>
-      )}
     </div>
   );
 }
@@ -742,7 +711,7 @@ function PostMenu() {
   const id = useStore((s) => s.menuPost);
   const openComposer = useStore((s) => s.openComposer);
   const deletePost = useStore((s) => s.deletePost);
-  // Coaches edit their own posts and delete any post; players and parents edit and delete their own.
+  // Coaches edit their own posts and delete any post; players edit and delete their own.
   const canEdit = useStore((s) => {
     const p = s.data.posts.find((x) => x.id === id);
     return !!p && (s.role === 'coach' ? p.authorId === 'coach' : p.authorId === s.uid && canPost(s));
@@ -1084,6 +1053,12 @@ function Signature({ label, src }: { label: string; src: string }) {
   );
 }
 
+const CONSENT_ITEMS: ['photo' | 'video' | 'name', string][] = [
+  ['photo', 'Bilder'],
+  ['video', 'Videoklipp'],
+  ['name', 'Navn i innlegg'],
+];
+
 /** Coach: one player's consent, who gave it and when, and the signatures. */
 function ConsentView() {
   const id = useStore((s) => s.consentPlayer);
@@ -1091,19 +1066,21 @@ function ConsentView() {
   if (!p) return <p className="note">Fant ikke spilleren.</p>;
   const status = consentStatus(p);
   const c = p.consent;
-  // The player form records the signatures (and the age group); the parent's form in the app does not.
+  // The player form records the signatures (and the age group); the old parent form in the app did not.
   const signedForm = !!c && ('playerSig' in c || c.adult !== undefined);
   const who = !c
     ? null
     : signedForm
       ? c.adult
-        ? 'Signert av spilleren (over 15 år)'
-        : c.parentBy
-          ? 'Signert av spilleren (under 15 år) og godkjent av en foresatt fra egen innlogging'
-          : c.parentSig
-            ? 'Signert av spilleren og en foresatt på spillerens telefon (under 15 år). En foresatt må godkjenne fra egen innlogging'
-            : 'Signert av spilleren (under 15 år). Venter på at en foresatt godkjenner fra egen innlogging'
+        ? 'Signert av spilleren (15 år eller eldre)'
+        : c.parentSig
+          ? 'Signert av spilleren og ' + (c.parentName ? 'foresatt ' + c.parentName : 'en foresatt') + ' (under 15 år)'
+          : c.parentBy
+            ? 'Signert av spilleren (under 15 år) og godkjent av en foresatt i appen'
+            : 'Signert av spilleren (under 15 år), men ikke av en foresatt. Spilleren skal ikke være med på bilder før en foresatt har signert'
       : 'Gitt av en foresatt i appen';
+  // One yes covers photos, video and the name. Older forms could say yes to some of it.
+  const partial = !!c && !(c.photo && c.video && c.name);
   const no =
     p.declined === 'parent' ? 'En foresatt sa nei til bilder.' : p.declined === 'player' ? 'Spilleren sa nei til bilder.' : null;
   return (
@@ -1117,20 +1094,22 @@ function ConsentView() {
           <p className="note">
             {who}, {fmtDate(c.at)}.
           </p>
-          <div className="sheet-flush">
-            {CKEYS.map(([k, label]) => (
-              <div key={k} className="row">
-                <span className="row-label">{label}</span>
-                <span style={{ font: '600 15px var(--body)', color: c[k] ? 'var(--ok)' : 'var(--muted)' }}>{c[k] ? 'Ja' : 'Nei'}</span>
-              </div>
-            ))}
-          </div>
+          {partial && (
+            <div className="sheet-flush">
+              {CONSENT_ITEMS.map(([k, label]) => (
+                <div key={k} className="row">
+                  <span className="row-label">{label}</span>
+                  <span style={{ font: '600 15px var(--body)', color: c[k] ? 'var(--ok)' : 'var(--muted)' }}>{c[k] ? 'Ja' : 'Nei'}</span>
+                </div>
+              ))}
+            </div>
+          )}
           {c.playerSig && <Signature label="Signatur, spiller" src={c.playerSig} />}
           {c.parentSig && <Signature label="Signatur, foresatt" src={c.parentSig} />}
         </>
       ) : (
         <p className="note">
-          {no || 'Ingen har fylt ut samtykket ennå.'} {firstName(p.name)} kan ikke merkes og skal ikke være i fokus på bildene.
+          {no || 'Ingen har fylt ut samtykket ennå.'} {firstName(p.name)} skal ikke være med på bildene.
         </p>
       )}
     </>
@@ -1160,7 +1139,7 @@ function TeamSettings() {
       <Field label="Lagets navn">
         <input className="input" {...bind('name')} autoComplete="off" />
       </Field>
-      <Field label="Lagkode" hint="For spillere, foresatte og abonnenter.">
+      <Field label="Lagkode" hint="For spillere og abonnenter.">
         <input className="input" {...bind('teamCode')} autoCapitalize="characters" autoComplete="off" />
       </Field>
       {newBtn('teamCode')}
@@ -1227,11 +1206,11 @@ function Report() {
 const HELP: [string, string][] = [
   [
     'Hvem ser bildene?',
-    'Bare de som er med på laget: administratorene, spillerne, foresatte og de som abonnerer. Strømmen er lukket og kan ikke ses uten innlogging.',
+    'Bare de som er med på laget: administratorene, spillerne og de som abonnerer. Strømmen er lukket og kan ikke ses uten innlogging.',
   ],
   [
-    'Hvorfor ser jeg ikke alle bildene?',
-    'Innlegg med spillere som ikke har gitt samtykke, blir skjult. Foresatte uten abonnement ser bare innlegg der barnet deres er med.',
+    'Hvem kan være med på bildene?',
+    'Bare spillere som har sagt ja i samtykket. Er spilleren under 15 år, må en foresatt også signere. De som legger ut, ser hvem som ikke skal være med.',
   ],
   [
     'Hvordan endrer eller trekker jeg samtykket?',

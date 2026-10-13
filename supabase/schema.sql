@@ -1,10 +1,10 @@
--- InnerCircle database setup, version 5 (accounts, approval of players and parents, list of coaches,
+-- InnerCircle database setup, version 6 (accounts, approval of players, list of coaches,
 -- team name and codes, reports, notifications for one match or some players,
 -- leaving a team, deleting your account and deleting files, removing coaches and deleting a team,
--- parents say yes to under-15 consent from their own login, players aged 15 or more and parents post
--- about matches and events the coaches made).
+-- players aged 15 or more post about matches and events the coaches made, and no parent role:
+-- under 15 a parent signs the player's own consent form).
 -- Paste all of this into Supabase: SQL Editor -> New query -> Run.
--- Safe to run more than once, and safe to run on top of version 1, 2, 3 and 4.
+-- Safe to run more than once, and safe to run on top of version 1, 2, 3, 4 and 5.
 
 create extension if not exists pgcrypto;
 
@@ -41,6 +41,9 @@ do $$ begin
   alter table public.team_members add constraint team_members_status_check check (status in ('pending', 'active'));
 exception when duplicate_object then null; end $$;
 create index if not exists team_members_player_idx on public.team_members (team_id, player_id) where player_id is not null;
+-- Version 6: the parent role is gone. Accounts linked to a player as a parent are removed; they can
+-- follow the team as subscribers instead.
+delete from public.team_members where role = 'parent';
 
 -- Phones and browsers that want push notifications.
 create table if not exists public.push_subscriptions (
@@ -107,29 +110,26 @@ language sql immutable set search_path = public as $$
   select coalesce(jsonb_agg(x), '[]'::jsonb) from jsonb_array_elements(coalesce(p_arr, '[]'::jsonb)) x where x #>> '{}' <> p_value
 $$;
 
--- A consent saved by a player or parent. Under 15 a parent must say yes from their own login, so
--- parentBy is set here, never taken from the app: a parent who saves a new parentAt is recorded as the
--- parent who said yes. Otherwise the parent's yes (and the choices they made) is kept as it was.
+-- A consent saved by a player. Under 15 a parent signs the same form (parentSig and parentName).
+-- Older consents where a parent said yes from their own login carry parentBy and parentAt. Those are
+-- kept while the app sends them back unchanged, and never taken from the app otherwise.
 create or replace function public.ic_consent(p_role text, p_uid text, p_prev jsonb, p_next jsonb) returns jsonb
 language sql immutable set search_path = public as $$
   select case
     when coalesce(jsonb_typeof(p_next), 'null') <> 'object' then p_next
-    when p_role = 'parent' and p_next -> 'parentAt' is not null and jsonb_typeof(p_next -> 'parentAt') <> 'null'
-         and (p_next -> 'parentAt') is distinct from (p_prev -> 'parentAt')
-      then p_next || jsonb_build_object('parentBy', p_uid)
-    when coalesce(jsonb_typeof(p_prev -> 'parentBy'), 'null') = 'string'
-      then p_next || jsonb_build_object('parentBy', p_prev -> 'parentBy', 'parentAt', p_prev -> 'parentAt',
-             'photo', p_prev -> 'photo', 'video', p_prev -> 'video', 'name', p_prev -> 'name', 'tag', p_prev -> 'tag')
+    when coalesce(jsonb_typeof(p_prev), 'null') = 'object'
+         and (p_next -> 'parentBy') is not distinct from (p_prev -> 'parentBy')
+         and (p_next -> 'parentAt') is not distinct from (p_prev -> 'parentAt')
+      then p_next
     else p_next - 'parentBy' - 'parentAt'
   end
 $$;
 
--- Players aged 15 or more and parents may post about something the coaches made. A player counts as 15 or
+-- Players aged 15 or more may post about something the coaches made. A player counts as 15 or
 -- more when they signed the consent form as 15 or more, unless the year of birth the coach entered says otherwise.
 create or replace function public.ic_can_post(p_data jsonb, p_role text, p_player text) returns boolean
 language sql stable set search_path = public as $$
   select p_player is not null and case
-    when p_role = 'parent' then true
     when p_role = 'player' then exists (
       select 1 from jsonb_array_elements(coalesce(p_data -> 'players', '[]'::jsonb)) p
       where p ->> 'id' = p_player
@@ -272,8 +272,8 @@ begin
 end $$;
 
 -- Joins a team. Coaches need the coach code; everyone else uses the team code.
--- A player can be linked to one account, and to at most two parents. Players and parents
--- wait for a coach to approve them; until then this returns {pending: true} instead of the team.
+-- A player can be linked to one account. Players wait for a coach to approve them; until then
+-- this returns {pending: true} instead of the team. There is no parent role any more.
 create or replace function public.join_team(p_code text, p_role text, p_player_id text) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare
@@ -282,7 +282,7 @@ declare
   t teams;
   m team_members;
 begin
-  if p_role not in ('coach', 'player', 'parent', 'sub') then raise exception 'invalid_role'; end if;
+  if p_role not in ('coach', 'player', 'sub') then raise exception 'invalid_role'; end if;
   if p_role = 'coach' then
     t := (select x from teams x where x.coach_code = c);
   else

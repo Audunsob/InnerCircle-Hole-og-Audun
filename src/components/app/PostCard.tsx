@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { OUTCOME_COLOR, outcomeOf, scoreTitle } from '@/lib/derive';
-import { firstName, initials, rel, stripe } from '@/lib/format';
+import { initials, rel, stripe } from '@/lib/format';
 import { TYPES } from '@/lib/seed';
 import { findEvent } from '@/lib/trainings';
 import { useStore } from '@/lib/store';
@@ -10,7 +10,7 @@ import type { Player, Post } from '@/lib/types';
 import { Icon } from '../ui';
 import { MediaView } from '../MediaView';
 
-export function PostCard({ post, P }: { post: Post; P: Record<string, Player> }) {
+export function PostCard({ post }: { post: Post; P?: Record<string, Player> }) {
   const role = useStore((s) => s.role);
   const uid = useStore((s) => s.uid);
   const dark = useStore((s) => s.theme === 'dark');
@@ -27,15 +27,8 @@ export function PostCard({ post, P }: { post: Post; P: Record<string, Player> })
   const outcome = resultTitle && match ? outcomeOf(match) : null;
   const liked = post.likedBy.includes(uid);
   const mine = role !== 'coach' && post.authorId === uid;
-  // Coaches can remove any post; players and parents their own.
+  // Coaches can remove any post; players their own.
   const hasMenu = role === 'coach' || mine;
-
-  const tagged = post.tagged.map((id) => P[id]).filter(Boolean);
-  const shown = tagged.filter((x) => x.consent?.name).map((x) => firstName(x.name));
-  const hidden = tagged.length - shown.length;
-  const tagText = tagged.length
-    ? 'Med: ' + shown.join(', ') + (hidden ? (shown.length ? ' + ' : '') + hidden + (hidden === 1 ? ' spiller' : ' spillere') : '')
-    : '';
 
   const typeLabel =
     (TYPES[post.type] || TYPES.beskjed).label +
@@ -170,11 +163,6 @@ export function PostCard({ post, P }: { post: Post; P: Record<string, Player> })
       )}
 
       {post.text && <p style={{ margin: 0, padding: '12px 14px 0', font: '400 15px/1.5 var(--body)', textWrap: 'pretty' }}>{post.text}</p>}
-      {tagText && (
-        <p className="note" style={{ padding: '6px 14px 0', fontSize: 13 }}>
-          {tagText}
-        </p>
-      )}
 
       <div style={{ display: 'flex', alignItems: 'center', padding: '2px 14px 4px' }}>
         <button

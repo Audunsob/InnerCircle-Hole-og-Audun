@@ -1,9 +1,8 @@
 import type { Membership, TeamCoach, TeamLink } from './supabase';
 
-export type Role = 'player' | 'parent' | 'sub' | 'coach';
+export type Role = 'player' | 'sub' | 'coach';
 export type Theme = 'light' | 'dark';
 export type PostType = 'kamp' | 'trening' | 'beskjed';
-export type ConsentKey = 'photo' | 'video' | 'name' | 'tag';
 
 export type Screen =
   | 'role'
@@ -19,7 +18,6 @@ export type Screen =
   | 'createTeam'
   | 'pending'
   | 'pay'
-  | 'consent'
   | 'pconsent'
   | 'cconsent'
   | 'app';
@@ -30,16 +28,19 @@ export interface Consent {
   photo: boolean;
   video: boolean;
   name: boolean;
-  tag: boolean;
+  /** Older consents only: posts no longer tag players. */
+  tag?: boolean;
   at: number;
   by?: 'self';
   adult?: boolean;
   playerSig?: string | null;
-  /** Older forms only: a parent signed on the player's phone. No longer counts on its own. */
+  /** Under 15: a parent's signature on the player's form. */
   parentSig?: string | null;
-  /** When a parent gave consent from their own login. */
+  /** Under 15: the name of the parent who signed. */
+  parentName?: string | null;
+  /** Older consents only: when a parent said yes from their own login. */
   parentAt?: number | null;
-  /** The parent's account. Set by the database, so a player can't fill it in. */
+  /** Older consents only: the account of the parent who said yes. */
   parentBy?: string | null;
 }
 
@@ -51,7 +52,7 @@ export interface Player {
   parent: { name: string; phone: string; email: string };
   consent: Consent | null;
   selfLogin: boolean;
-  /** Who said no on the consent form, if anyone. */
+  /** Who said no on the consent form, if anyone: the player, or the parent in the form's second part. */
   declined?: 'player' | 'parent' | null;
 }
 
@@ -142,6 +143,7 @@ export interface Post {
   eventId?: string | null;
   media: Media[];
   text: string;
+  /** Older posts only: players marked as in focus. New posts mark nobody; the consent list decides who may be in photos. */
   tagged: string[];
   likes: number;
   /** Device user ids that gave a heart. */
@@ -244,19 +246,12 @@ export interface Flow {
   busy?: boolean;
   /** Team found from a code, before joining it. */
   peek?: { code: string; teamName: string; isCoachCode: boolean; players: { id: string; name: string; taken?: boolean }[] } | null;
-  /** Joined as a player or parent, waiting for a coach to approve it. */
-  pendingTeam?: { id: string; name: string; role: 'player' | 'parent'; playerId: string; playerName: string } | null;
+  /** Joined as a player, waiting for a coach to approve it. */
+  pendingTeam?: { id: string; name: string; role: 'player'; playerId: string; playerName: string } | null;
   err: string;
 }
 
-/** Parent consent wizard (four steps with switches). */
-export interface ParentConsentDraft {
-  step: number;
-  draft: Record<ConsentKey, boolean>;
-  check: boolean;
-}
-
-/** Signed consent form for players, and the coach rules form. */
+/** Signed consent form for players (under 15 with a second part for a parent), and the coach rules form. */
 export interface SignedForm {
   step: number;
   adult?: boolean;
@@ -267,6 +262,8 @@ export interface SignedForm {
   g?: 'yes' | 'no' | null;
   ps: string | null;
   gs?: string | null;
+  /** The parent's name, in the second part for players under 15. */
+  gn?: string;
   busy?: boolean;
   err: string;
 }
@@ -285,7 +282,6 @@ export interface SubProfile {
 
 export interface Profiles {
   player: { playerId: string | null };
-  parent: { childId: string | null; subscribed: boolean };
   sub: SubProfile;
   coach: { name?: string };
 }
@@ -333,7 +329,6 @@ export interface Draft {
   matchId: string;
   eventId?: string;
   media: Media[];
-  tagged: string[];
   text: string;
   notify: boolean;
   loading?: boolean;
@@ -349,7 +344,7 @@ export interface Confirm {
 }
 
 /** Saved to localStorage. */
-export type MemberRole = 'coach' | 'player' | 'parent' | 'sub';
+export type MemberRole = 'coach' | 'player' | 'sub';
 
 export interface PersistedState {
   v: 3;
@@ -368,8 +363,6 @@ export interface PersistedState {
   theme: Theme;
   screen: Screen;
   flow: Flow;
-  cons: ParentConsentDraft | null;
-  consCtx: 'app' | null;
   pcons: SignedForm | null;
   pcCtx: 'app' | null;
   role: Role | null;
@@ -394,7 +387,7 @@ export interface EphemeralState {
   confirm: Confirm | null;
   form: Record<string, string | number | boolean | undefined>;
   pay: PayForm | null;
-  payCtx: 'parent' | 'resub' | null;
+  payCtx: 'resub' | null;
   allPlayers: boolean;
   copied: boolean;
   menuPost: string | null;

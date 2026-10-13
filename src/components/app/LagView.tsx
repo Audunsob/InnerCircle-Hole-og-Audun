@@ -1,8 +1,8 @@
 'use client';
 
 import { homeAway, splitMatches, visiblePosts } from '@/lib/derive';
-import { firstName, inviteLink, nextChargeText } from '@/lib/format';
-import { canPost, codes, matchTitle, opponentText, playerMap, priceText, teamName } from '@/lib/selectors';
+import { inviteLink, nextChargeText } from '@/lib/format';
+import { canPost, codes, hasConsent, matchTitle, missingParent, opponentText, playerMap, priceText, teamName } from '@/lib/selectors';
 import { useStore } from '@/lib/store';
 import type { AppState, Player, Post } from '@/lib/types';
 import { Chips, DateCol, Icon } from '../ui';
@@ -36,18 +36,14 @@ export function LagView() {
   const { data, role, prof, filter } = st;
   const P = playerMap(data.players);
   const isCoach = role === 'coach';
-  const child = role === 'parent' ? P[prof.parent.childId || ''] : undefined;
   const me = role === 'player' ? P[prof.player.playerId || ''] : undefined;
-  const parentFree = role === 'parent' && !prof.parent.subscribed;
-  const childFirst = child ? firstName(child.name) : 'barnet';
   const unread = data.notifs.filter((n) => n.ts > st.seenNotifsAt && !(isCoach && n.from === 'coach')).length;
   const { next } = splitMatches(data.matches);
   const price = priceText(st);
   const waiting = isCoach ? (st.links || []).filter((l) => l.status === 'pending').length : 0;
   const nReports = isCoach ? (data.reports || []).length : 0;
-  // A coach asked this player (or this parent's child) to answer the consent form.
-  const mine = me || child;
-  const reminded = !!mine && !!data.reminders?.[mine.id] && !mine.consent && !(role === 'player' && mine.declined);
+  // A coach asked this player to answer the consent form (or to have a parent sign it too).
+  const reminded = !!me && !!data.reminders?.[me.id] && !hasConsent(me) && !me.declined;
 
   let list = visiblePosts(st, data.posts, P);
   if (filter !== 'all') list = list.filter((p) => p.type === filter);
@@ -106,7 +102,7 @@ export function LagView() {
               <span style={{ font: '600 16px var(--body)', color: 'var(--accent-ink)' }}>
                 {waiting === 1 ? '1 venter på godkjenning' : waiting + ' venter på godkjenning'}
               </span>
-              <span className="row-sub">Spillere og foresatte som vil inn på laget.</span>
+              <span className="row-sub">Spillere som vil inn på laget.</span>
             </span>
             <Icon name="arrow_forward" size={20} style={{ color: 'var(--accent-ink)' }} />
           </button>
@@ -124,19 +120,19 @@ export function LagView() {
           </button>
         )}
 
-        {reminded && mine && (
+        {reminded && (
           <button
             type="button"
             className="card card-btn"
             style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', color: 'var(--ink)', textAlign: 'left', cursor: 'pointer' }}
-            onClick={role === 'player' ? st.openPlayerConsent : st.editParentConsent}
+            onClick={st.openPlayerConsent}
           >
             <span className="row-text">
               <span style={{ font: '600 16px var(--body)', color: 'var(--accent-ink)' }}>Svar på samtykket</span>
               <span className="row-sub">
-                {role === 'player'
-                  ? 'Administratoren minner deg om å svare på om du vil være med på bilder.'
-                  : 'Administratoren minner deg om å svare på om ' + firstName(mine.name) + ' kan være med på bilder.'}
+                {missingParent(me)
+                  ? 'Du er under 15, så en foresatt må også signere. Fyll ut samtykket sammen med en foresatt.'
+                  : 'Administratoren minner deg om å svare på om du vil være med på bilder.'}
               </span>
             </span>
             <Icon name="arrow_forward" size={20} style={{ color: 'var(--accent-ink)' }} />
@@ -183,18 +179,6 @@ export function LagView() {
               ? `Abonnementet er sagt opp. Du ser bildene til ${nextChargeText(prof.sub.startedAt)}.`
               : `Du støtter laget med ${price} i måneden. Takk for at du heier!`}
           </p>
-        )}
-
-        {parentFree && (
-          <div className="card" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <span style={{ font: 'italic 800 22px/1.05 var(--display)', textTransform: 'uppercase' }}>Følg hele laget</span>
-            <p className="note" style={{ fontSize: 15 }}>
-              Nå ser du bare innlegg der {childFirst} er med. For {price} i måneden ser du alt.
-            </p>
-            <button type="button" className="btn btn-primary" style={{ alignSelf: 'flex-start' }} onClick={() => st.openPay('parent')}>
-              Abonner
-            </button>
-          </div>
         )}
 
         {role === 'player' && (
@@ -245,12 +229,7 @@ export function LagView() {
         <Chips label="Filter" value={filter} items={FILTERS} onChange={st.setFilter} />
       </div>
 
-      <Feed
-        key={filter}
-        posts={list}
-        P={P}
-        emptyText={parentFree ? 'Ingen innlegg med ' + childFirst + ' ennå.' : 'Ingen innlegg her ennå.'}
-      />
+      <Feed key={filter} posts={list} P={P} emptyText="Ingen innlegg her ennå." />
     </>
   );
 }
