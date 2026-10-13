@@ -21,6 +21,7 @@ const TITLES: Record<Exclude<SheetName, 'confirm'>, string> = {
   trainingDay: 'Endre én trening',
   result: 'Resultat',
   postMenu: 'Innlegg',
+  likes: 'Hjerter',
   notifs: 'Varsler',
   price: 'Pris på abonnement',
   earnings: 'Tjent denne måneden',
@@ -84,6 +85,7 @@ export function SheetHost() {
           {sheet === 'trainingDay' && <TrainingDay />}
           {sheet === 'result' && <Result />}
           {sheet === 'postMenu' && <PostMenu />}
+          {sheet === 'likes' && <Likes />}
           {sheet === 'confirm' && <Confirm />}
           {sheet === 'notifs' && <Notifs />}
           {sheet === 'price' && <Price />}
@@ -763,6 +765,54 @@ function PostMenu() {
       >
         Slett innlegg
       </button>
+    </div>
+  );
+}
+
+/** Coaches: who gave a post a heart, by the name the team knows them by. */
+function Likes() {
+  const post = useStore((s) => s.data.posts.find((x) => x.id === s.menuPost));
+  const players = useStore((s) => s.data.players);
+  const subs = useStore((s) => s.data.subs);
+  const links = useStore((s) => s.links);
+  const coaches = useStore((s) => s.coaches);
+  const uid = useStore((s) => s.uid);
+  if (!post) return null;
+  const name = (id: string) => players.find((p) => p.id === id)?.name || 'en spiller';
+  const who = (u: string): { name: string; role: string } => {
+    const coach = coaches?.find((c) => c.userId === u) || (u === uid ? { name: 'Deg', me: true } : null);
+    if (coach) return { name: coach.me ? 'Deg' : coach.name || 'Administrator', role: 'Administrator' };
+    const link = links?.find((l) => l.userId === u && l.status === 'active');
+    if (link?.role === 'player') return { name: name(link.playerId), role: 'Spiller' };
+    if (link?.role === 'parent') {
+      const own = subs.find((x) => x.id === 'par-' + u)?.name;
+      return { name: (own ? own + ', f' : 'F') + 'oresatt til ' + firstName(name(link.playerId)), role: 'Foresatt' };
+    }
+    const sub = subs.find((x) => x.id === 'sub-' + u || x.id === 'par-' + u);
+    if (sub) return { name: sub.name, role: 'Abonnent' };
+    return { name: 'Tidligere medlem', role: '' };
+  };
+  const rows = post.likedBy.map((u) => ({ u, ...who(u) }));
+  if (!rows.length && !post.likes)
+    return (
+      <p className="note" style={{ textAlign: 'center' }}>
+        Ingen har gitt hjerte ennå.
+      </p>
+    );
+  return (
+    <div className="sheet-flush">
+      {rows.map((r) => (
+        <div key={r.u} className="row-btn" style={{ cursor: 'default' }}>
+          <Icon name="favorite" filled size={20} style={{ color: 'var(--heart)' }} />
+          <span style={{ flex: 1, font: '500 16px var(--body)' }}>{r.name}</span>
+          <span style={{ font: '400 14px var(--body)', color: 'var(--muted)' }}>{r.role}</span>
+        </div>
+      ))}
+      {post.likes > 0 && (
+        <p className="note" style={{ padding: '12px 0 0' }}>
+          {rows.length ? 'Og ' + post.likes + ' til' : post.likes + (post.likes === 1 ? ' hjerte' : ' hjerter')} uten navn
+        </p>
+      )}
     </div>
   );
 }

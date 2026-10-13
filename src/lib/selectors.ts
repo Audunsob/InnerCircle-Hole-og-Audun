@@ -70,6 +70,9 @@ export const canPost = (s: PostState) => {
   return !!me?.consent?.adult && (me.born == null || new Date().getFullYear() - me.born >= 15);
 };
 
+/** Subscribers, parents and players aged 15 or more may comment, like coaches (the database checks the same). */
+export const canComment = (s: PostState) => s.role === 'sub' || canPost(s);
+
 /** The name on a post from a player or parent. Without consent to show the name, only the role. Set again by the database. */
 export const memberAuthor = (s: PostState) => {
   const id = s.role === 'player' ? s.prof.player.playerId : s.prof.parent.childId;

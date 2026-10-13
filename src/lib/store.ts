@@ -60,7 +60,7 @@ import {
 } from './supabase';
 import { scoreTitle } from './derive';
 import { disablePush, enablePush, isStandalone, needsHomeScreen, phoneKind, updatePushPrefs, type PushPrefs } from './push';
-import { canPost, coachName, hasConsent, matchTitle, memberAuthor, price, shortTeam, teamName } from './selectors';
+import { canComment, canPost, coachName, hasConsent, matchTitle, memberAuthor, price, shortTeam, teamName } from './selectors';
 
 const MAX_VIDEO = 50 * 1024 * 1024;
 
@@ -105,6 +105,7 @@ function videoDuration(file: File): Promise<string> {
 }
 import type {
   AppState,
+  Comment,
   ConsentKey,
   Draft,
   EphemeralState,
@@ -215,6 +216,10 @@ export interface Actions {
   closeMatch: () => void;
   goKamper: () => void;
   toggleLike: (id: string) => void;
+  /** Coaches: who gave a post a heart. */
+  openLikes: (id: string) => void;
+  addComment: (postId: string, text: string) => boolean;
+  deleteComment: (postId: string, commentId: string) => void;
   openViewer: (postId: string, i: number) => void;
   closeViewer: () => void;
   stepViewer: (dir: number) => void;
@@ -1401,6 +1406,36 @@ export const useStore = create<Store>()((set, get) => {
         ),
       }));
     },
+    openLikes: (id) => {
+      set({ sheet: 'likes', menuPost: id });
+      if (!s().links || !s().coaches) void loadLinks();
+    },
+    addComment: (postId, text) => {
+      const st = s();
+      const t = text.trim().slice(0, 1000);
+      if (!t) return false;
+      if (st.role !== 'coach' && !canComment(st)) {
+        toast('Du kan ikke kommentere ennå');
+        return false;
+      }
+      const by =
+        st.role === 'coach'
+          ? { author: coachName(st), authorRole: 'Administrator' }
+          : st.role === 'sub'
+            ? { author: st.prof.sub.name || 'Abonnent', authorRole: 'Abonnent' }
+            : memberAuthor(st);
+      const c: Comment = { id: 'c' + Date.now() + Math.random().toString(36).slice(2, 6), authorId: st.uid, ...by, ts: Date.now(), text: t };
+      setData((d) => ({ ...d, posts: d.posts.map((p) => (p.id === postId ? { ...p, comments: [...(p.comments || []), c] } : p)) }));
+      return true;
+    },
+    deleteComment: (postId, commentId) =>
+      ask('Slette kommentaren?', 'Kommentaren forsvinner for alle.', 'Slett', () => {
+        setData((d) => ({
+          ...d,
+          posts: d.posts.map((p) => (p.id === postId ? { ...p, comments: (p.comments || []).filter((c) => c.id !== commentId) } : p)),
+        }));
+        toast('Kommentaren er slettet');
+      }),
     openViewer: (postId, i) => set({ viewer: { postId, i } }),
     closeViewer: () => set({ viewer: null }),
     stepViewer: (dir) => {

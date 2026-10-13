@@ -2,7 +2,7 @@
 -- team name and codes, reports, notifications for one match or some players,
 -- leaving a team, deleting your account and deleting files, removing coaches and deleting a team,
 -- parents say yes to under-15 consent from their own login, players aged 15 or more and parents post
--- about matches and events the coaches made).
+-- about matches and events the coaches made, comments on posts).
 -- Paste all of this into Supabase: SQL Editor -> New query -> Run.
 -- Safe to run more than once, and safe to run on top of version 1, 2, 3 and 4.
 
@@ -212,6 +212,34 @@ language sql stable set search_path = public as $$
   from c
 $$;
 
+-- The comments on a post after a player, parent or subscriber saved it. Other people's comments stay as
+-- they were; your own you may delete; new ones are added as yours (at most 5 at a time), with your name and
+-- the time set here, never taken from the app. p_author is null for someone who may not comment.
+create or replace function public.ic_comments(p_old jsonb, p_new jsonb, p_uid text, p_author text, p_author_role text) returns jsonb
+language sql stable set search_path = public as $$
+  with old as (
+    select x, ord from jsonb_array_elements(case when jsonb_typeof(p_old) = 'array' then p_old else '[]'::jsonb end) with ordinality o(x, ord)
+  ), nw as (
+    select x, ord from jsonb_array_elements(case when jsonb_typeof(p_new) = 'array' then p_new else '[]'::jsonb end) with ordinality n(x, ord)
+  ), kept as (
+    select old.x, old.ord from old
+    where old.x ->> 'authorId' is distinct from p_uid or exists (select 1 from nw where nw.x ->> 'id' = old.x ->> 'id')
+  ), added as (
+    select distinct on (nw.x ->> 'id') nw.x, nw.ord from nw
+    where p_author is not null and jsonb_typeof(nw.x) = 'object'
+      and nw.x ->> 'authorId' = p_uid
+      and nw.x ->> 'id' is not null and length(nw.x ->> 'id') <= 80
+      and not exists (select 1 from old where old.x ->> 'id' = nw.x ->> 'id')
+      and length(trim(coalesce(nw.x ->> 'text', ''))) between 1 and 1000
+    order by nw.x ->> 'id', nw.ord
+  )
+  select coalesce((select jsonb_agg(x order by ord) from kept), '[]'::jsonb)
+    || coalesce((select jsonb_agg(jsonb_build_object(
+         'id', x ->> 'id', 'authorId', p_uid, 'author', p_author, 'authorRole', p_author_role,
+         'ts', (extract(epoch from now()) * 1000)::bigint, 'text', trim(x ->> 'text')) order by ord)
+       from (select x, ord from added order by ord limit 5) a), '[]'::jsonb)
+$$;
+
 -- What a member gets back. Coaches see everything; others don't see the coach code,
 -- payout account, coach signatures or other people's payments.
 create or replace function public.ic_payload(t public.teams, p_role text) returns jsonb
@@ -370,7 +398,8 @@ $$;
 -- Coaches may change everything. Everyone else may only change their own things:
 -- their own hearts, their own player's consent (or their child's), their own subscription and payments,
 -- and their own reports to the coaches. Players aged 15 or more and parents may also add posts about a
--- match, training or event the coaches made, and change or delete their own posts.
+-- match, training or event the coaches made, and change or delete their own posts. Subscribers, parents and
+-- players aged 15 or more may comment on posts and delete their own comments.
 -- Returns ok=false with the current document if someone else saved first.
 create or replace function public.save_team(p_team uuid, p_role text, p_version integer, p_data jsonb) returns jsonb
 language plpgsql security definer set search_path = public as $$
@@ -383,6 +412,9 @@ declare
   own text[];
   can_post boolean;
   author text;
+  commenter text;
+  commenter_role text;
+  oc jsonb;
   posts jsonb := '[]'::jsonb;
   op jsonb;
   np jsonb;
@@ -423,6 +455,17 @@ begin
         from jsonb_array_elements(coalesce(prev -> 'players', '[]'::jsonb)) p where p ->> 'id' = m.player_id limit 1);
     end if;
 
+    -- Who may comment, and the name shown on their comments. Subscribers go by the name they signed up with;
+    -- players and parents by the same name as on their posts. Players under 15 don't comment.
+    if p_role = 'sub' then
+      commenter := (select coalesce(nullif(left(trim(x ->> 'name'), 60), ''), 'Abonnent')
+                    from jsonb_array_elements(coalesce(prev -> 'subs', '[]'::jsonb)) x where x ->> 'id' = 'sub-' || uid limit 1);
+      commenter_role := 'Abonnent';
+    elsif can_post then
+      commenter := author;
+      commenter_role := case when p_role = 'player' then 'Spiller' else 'Foresatt' end;
+    end if;
+
     -- New posts, at most 10 at a time, on top like the app shows them. Posts that aren't allowed are left out.
     if can_post then
       for np in
@@ -439,9 +482,11 @@ begin
     end if;
 
     -- Existing posts. Your own posts you may delete, and change if you may still post.
-    -- On every post only your own heart can be added or removed, and a parent may untag their own child.
+    -- On every post only your own heart can be added or removed, only your own comments added or deleted,
+    -- and a parent may untag their own child.
     for op in select x from jsonb_array_elements(coalesce(prev -> 'posts', '[]'::jsonb)) x loop
       np := (select x from jsonb_array_elements(coalesce(p_data -> 'posts', '[]'::jsonb)) x where x ->> 'id' = op ->> 'id' limit 1);
+      oc := op -> 'comments';
       if op ->> 'authorId' = uid then
         continue when np is null;
         if can_post then
@@ -455,6 +500,11 @@ begin
       if p_role = 'parent' and m.player_id is not null and np is not null
          and not coalesce(np -> 'tagged', '[]'::jsonb) @> to_jsonb(m.player_id) then
         op := op || jsonb_build_object('tagged', ic_without(op -> 'tagged', m.player_id));
+      end if;
+      if np is not null then
+        op := op || jsonb_build_object('comments', ic_comments(oc, np -> 'comments', uid, commenter, commenter_role));
+      elsif oc is not null then
+        op := op || jsonb_build_object('comments', oc);
       end if;
       posts := posts || jsonb_build_array(op);
     end loop;
@@ -652,13 +702,17 @@ end $$;
 
 -- ---------- Leaving and deleting your account ----------
 
--- Removes an account's own things from a team document: its hearts and its subscription.
+-- Removes an account's own things from a team document: its hearts, its comments and its subscription.
 -- Payments stay, since the team needs them for its accounts.
 create or replace function public.ic_forget(p_data jsonb, p_uid text) returns jsonb
 language sql immutable set search_path = public as $$
   select p_data
     || jsonb_build_object('posts', coalesce((
-      select jsonb_agg(p || jsonb_build_object('likedBy', ic_without(p -> 'likedBy', p_uid)) order by ord)
+      select jsonb_agg(p || jsonb_build_object('likedBy', ic_without(p -> 'likedBy', p_uid))
+        || case when jsonb_typeof(p -> 'comments') = 'array' then jsonb_build_object('comments', coalesce((
+             select jsonb_agg(c) from jsonb_array_elements(p -> 'comments') c where c ->> 'authorId' is distinct from p_uid), '[]'::jsonb))
+           else '{}'::jsonb end
+        order by ord)
       from jsonb_array_elements(coalesce(p_data -> 'posts', '[]'::jsonb)) with ordinality x(p, ord)
     ), '[]'::jsonb))
     || jsonb_build_object('subs', coalesce((
@@ -754,6 +808,7 @@ revoke all on function public.ic_can_post(jsonb, text, text) from public, anon, 
 revoke all on function public.ic_targets(jsonb) from public, anon, authenticated;
 revoke all on function public.ic_target_ok(jsonb, text) from public, anon, authenticated;
 revoke all on function public.ic_member_post(jsonb, jsonb, jsonb, uuid, text, text, text) from public, anon, authenticated;
+revoke all on function public.ic_comments(jsonb, jsonb, text, text, text) from public, anon, authenticated;
 revoke all on function public.ic_is_member(text) from public, anon;
 revoke all on function public.ic_is_coach(text) from public, anon;
 revoke all on function public.leave_team(uuid, text) from public, anon;
