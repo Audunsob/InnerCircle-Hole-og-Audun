@@ -7,6 +7,7 @@ import { useStore } from '@/lib/store';
 import type { AppState, Player, Post } from '@/lib/types';
 import { Chips, DateCol, Icon } from '../ui';
 import { PostCard } from './PostCard';
+import { allEvents } from '@/lib/trainings';
 
 const FILTERS: [AppState['filter'], string][] = [
   ['all', 'Alle'],
@@ -28,6 +29,36 @@ export function Feed({ posts, P, emptyText }: { posts: Post[]; P: Record<string,
         </p>
       )}
     </div>
+  );
+}
+
+/** The dashed "share something" button that opens the composer. */
+export function PostPrompt({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className="card-btn"
+      onClick={onClick}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        minHeight: 54,
+        padding: '0 8px 0 16px',
+        border: '1px dashed var(--line-strong)',
+        borderRadius: 16,
+        background: 'var(--field)',
+        color: 'var(--muted)',
+        font: '400 15px var(--body)',
+        textAlign: 'left',
+        cursor: 'pointer',
+      }}
+    >
+      <span style={{ flex: 1 }}>{label}</span>
+      <span style={{ width: 38, height: 38, borderRadius: 12, background: 'var(--accent)', color: 'var(--on-accent)', display: 'grid', placeItems: 'center' }}>
+        <Icon name="add_photo_alternate" size={22} />
+      </span>
+    </button>
   );
 }
 
@@ -199,31 +230,8 @@ export function LagView() {
           </div>
         )}
 
-        {canPost(st) && (isCoach || data.matches.length > 0) && (
-          <button
-            type="button"
-            className="card-btn"
-            onClick={() => st.openComposer(null)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              minHeight: 54,
-              padding: '0 8px 0 16px',
-              border: '1px dashed var(--line-strong)',
-              borderRadius: 16,
-              background: 'var(--field)',
-              color: 'var(--muted)',
-              font: '400 15px var(--body)',
-              textAlign: 'left',
-              cursor: 'pointer',
-            }}
-          >
-            <span style={{ flex: 1 }}>{isCoach ? 'Del noe med laget …' : 'Del bilder fra en kamp …'}</span>
-            <span style={{ width: 38, height: 38, borderRadius: 12, background: 'var(--accent)', color: 'var(--on-accent)', display: 'grid', placeItems: 'center' }}>
-              <Icon name="add_photo_alternate" size={22} />
-            </span>
-          </button>
+        {canPost(st) && (isCoach || data.matches.length > 0 || allEvents(data).length > 0) && (
+          <PostPrompt label={isCoach ? 'Del noe med laget …' : 'Del bilder fra en kamp eller et arrangement …'} onClick={() => st.openComposer(null)} />
         )}
 
         <Chips label="Filter" value={filter} items={FILTERS} onChange={st.setFilter} />
