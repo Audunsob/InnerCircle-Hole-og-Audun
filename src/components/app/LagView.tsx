@@ -2,7 +2,7 @@
 
 import { homeAway, splitMatches, visiblePosts } from '@/lib/derive';
 import { inviteLink, nextChargeText } from '@/lib/format';
-import { canPost, codes, hasConsent, matchTitle, missingParent, opponentText, playerMap, priceText, teamName } from '@/lib/selectors';
+import { canPost, codes, hasConsent, matchTitle, missingParent, opponentText, playerMap, priceText, seesTeamInfo, teamName } from '@/lib/selectors';
 import { useStore } from '@/lib/store';
 import type { AppState, Player, Post } from '@/lib/types';
 import { Chips, DateCol, Icon } from '../ui';
@@ -37,7 +37,7 @@ export function LagView() {
   const P = playerMap(data.players);
   const isCoach = role === 'coach';
   const me = role === 'player' ? P[prof.player.playerId || ''] : undefined;
-  const unread = data.notifs.filter((n) => n.ts > st.seenNotifsAt && !(isCoach && n.from === 'coach')).length;
+  const unread = data.notifs.filter((n) => n.ts > st.seenNotifsAt && !(isCoach && n.from === 'coach') && !(n.team && !seesTeamInfo(role))).length;
   const { next } = splitMatches(data.matches);
   const price = priceText(st);
   const waiting = isCoach ? (st.links || []).filter((l) => l.status === 'pending').length : 0;

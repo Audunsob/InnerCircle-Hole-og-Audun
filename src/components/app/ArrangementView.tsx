@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { eventHours, splitEvents, visiblePosts } from '@/lib/derive';
 import { fmtLong } from '@/lib/format';
-import { canPost, playerMap } from '@/lib/selectors';
+import { canPost, playerMap, seesTeamInfo } from '@/lib/selectors';
 import { useStore } from '@/lib/store';
 import { allEvents, findEvent, isRunning, isTraining, repeatText, timeText, type TrainingEvent } from '@/lib/trainings';
 import type { TeamEvent } from '@/lib/types';
@@ -189,7 +189,7 @@ export function EventDetail({ id }: { id: string }) {
             {e.venue}
           </span>
         </div>
-        {e.note && <p style={{ margin: 0, font: '400 14px/1.5 var(--body)', color: 'var(--muted)', whiteSpace: 'pre-wrap' }}>{e.note}</p>}
+        {e.note && seesTeamInfo(st.role) && <p style={{ margin: 0, font: '400 14px/1.5 var(--body)', color: 'var(--muted)', whiteSpace: 'pre-wrap' }}>{e.note}</p>}
         <div className="btn-pair">
           <button type="button" className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} onClick={() => st.addEventToCal(e)}>
             <Icon name="event" size={18} />

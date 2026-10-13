@@ -166,6 +166,8 @@ export interface Notif {
   ts: number;
   read: boolean;
   from?: 'coach';
+  /** Practical news for the team only (a moved or cancelled training). Subscribers don't see it. */
+  team?: boolean;
 }
 
 export interface Payment {
