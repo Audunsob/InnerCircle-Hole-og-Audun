@@ -49,11 +49,11 @@ export function RoleScreen() {
         </button>
       </div>
       <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: 14, padding: '48px 0 32px' }}>
-        <div className="eyebrow" style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, letterSpacing: '.22em' }}>
+        <div className="eyebrow" style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
           <span style={{ width: 28, height: 1.5, background: 'var(--gold)' }} />
           Privat lagstrøm
         </div>
-        <h1 style={{ margin: 0, font: 'italic 800 60px/0.9 var(--display)', textTransform: 'uppercase', maxWidth: 340, textWrap: 'balance' }}>
+        <h1 style={{ margin: 0, font: '700 60px/0.9 var(--display)', maxWidth: 340, textWrap: 'balance' }}>
           Lagets egen bildestrøm
         </h1>
         <p style={{ margin: 0, font: 'italic 500 24px/1.2 var(--serif)', color: 'var(--muted)' }}>– bare for familien</p>

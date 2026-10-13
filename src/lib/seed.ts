@@ -72,8 +72,8 @@ export function freshState(): PersistedState {
     team: null,
     version: 0,
     seenNotifsAt: 0,
-    // The design is dark first; light mode is a choice on Min side.
-    theme: 'dark',
+    // Light like the iPhone's own apps; dark mode is a choice on Min side.
+    theme: 'light',
     screen: 'role',
     flow: blankFlow(),
     pcons: null,

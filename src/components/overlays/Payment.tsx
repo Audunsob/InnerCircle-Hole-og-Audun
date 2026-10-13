@@ -32,7 +32,7 @@ export function Payment() {
             <div style={{ font: '600 16px var(--body)' }}>{teamName(st)}</div>
             <div className="note">Trekkes automatisk hver måned</div>
           </div>
-          <div className="tnum" style={{ font: 'italic 800 26px var(--display)', whiteSpace: 'nowrap' }}>
+          <div className="tnum" style={{ font: '700 26px var(--display)', whiteSpace: 'nowrap' }}>
             {priceText(st)}
             <span style={{ font: '400 14px var(--body)', color: 'var(--muted)' }}> / mnd</span>
           </div>

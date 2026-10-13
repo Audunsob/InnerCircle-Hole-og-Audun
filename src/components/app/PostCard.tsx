@@ -101,7 +101,7 @@ export function PostCard({ post }: { post: Post; P?: Record<string, Player> }) {
       </div>
 
       {outcome && (
-        <div className="tnum" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px 12px', font: 'italic 800 20px/1.1 var(--display)', textTransform: 'uppercase' }}>
+        <div className="tnum" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px 12px', font: '600 20px/1.1 var(--display)' }}>
           <span className="outcome" style={{ background: OUTCOME_COLOR[outcome], fontStyle: 'normal' }}>
             {outcome}
           </span>

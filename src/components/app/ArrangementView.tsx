@@ -71,7 +71,7 @@ function TrainingSeriesList() {
         {running.map((t) => (
           <div key={t.id} className="row">
             <span className="row-text">
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6, font: 'italic 800 18px/1.15 var(--display)', textTransform: 'uppercase' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6, font: '600 18px/1.15 var(--display)' }}>
                 <Icon name="directions_run" size={20} style={{ color: 'var(--accent-ink)' }} />
                 <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{t.title}</span>
               </span>
@@ -119,7 +119,7 @@ function EventRow({ e }: { e: TeamEvent | TrainingEvent }) {
     <button type="button" className="row-btn" style={{ minHeight: 72 }} onClick={() => open(e.id)}>
       <DateCol date={e.date} />
       <span className="row-text">
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6, font: 'italic 800 18px/1.15 var(--display)', textTransform: 'uppercase' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6, font: '600 18px/1.15 var(--display)' }}>
           <Icon name={e.icon || 'event'} size={20} style={{ color: 'var(--accent-ink)' }} />
           <span style={{ minWidth: 0, overflowWrap: 'anywhere', ...(cancelled ? { textDecoration: 'line-through', color: 'var(--muted)' } : {}) }}>{e.title}</span>
         </span>
@@ -156,19 +156,17 @@ export function EventDetail({ id }: { id: string }) {
             padding: '0 8px',
             border: 'none',
             background: 'none',
-            color: 'var(--ink)',
-            font: '700 14px var(--display)',
-            letterSpacing: '.14em',
-            textTransform: 'uppercase',
+            color: 'var(--accent-ink)',
+            font: '400 17px var(--body)',
             cursor: 'pointer',
           }}
         >
-          <Icon name="arrow_back" />
+          <Icon name="arrow_back_ios_new" size={20} />
           Annet
         </button>
       </header>
       <section className="card" style={{ padding: '18px 16px', display: 'flex', flexDirection: 'column', gap: 12, animation: 'ic-rise 320ms var(--ease-out) both' }}>
-        <div className="eyebrow" style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--accent-ink)', textTransform: 'uppercase' }}>
+        <div className="eyebrow" style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--accent-ink)' }}>
           <Icon name={e.icon || 'event'} size={18} />
           {e.kind !== e.title ? e.kind : training ? 'Trening' : 'Hendelse'}
         </div>

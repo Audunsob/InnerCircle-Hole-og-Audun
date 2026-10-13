@@ -659,7 +659,7 @@ function ScoreBox({ label, value, onStep }: { label: string; value: number; onSt
   return (
     <div style={{ background: 'var(--surface)', padding: '16px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
       <span style={{ font: '500 15px var(--body)' }}>{label}</span>
-      <span className="tnum" style={{ font: 'italic 800 56px/1 var(--display)' }}>
+      <span className="tnum" style={{ font: '700 56px/1 var(--display)' }}>
         {value}
       </span>
       <div style={{ display: 'flex', gap: 8 }}>
@@ -813,7 +813,7 @@ function Notifs() {
   return (
     <div className="sheet-flush">
       {notifs.map((n) => (
-        <div key={n.id} className="row" style={{ padding: '14px 0' }}>
+        <div key={n.id} className="row" style={{ paddingTop: 14, paddingBottom: 14 }}>
           <span style={{ width: 8, height: 8, flex: 'none', borderRadius: '50%', background: n.ts <= seenAt ? 'transparent' : 'var(--accent)' }} />
           <span style={{ flex: 1, font: '400 15px/1.4 var(--body)' }}>{n.text}</span>
           <span className="row-meta">{rel(n.ts)}</span>
@@ -850,7 +850,7 @@ function Price() {
               background: 'none',
               color: 'var(--ink)',
               textAlign: 'center',
-              font: 'italic 800 48px/1.1 var(--display)',
+              font: '700 48px/1.1 var(--display)',
               outline: 'none',
               padding: 0,
             }}
@@ -971,7 +971,7 @@ function Subscribers() {
       {st.subView === 'player' ? (
         <div style={{ marginTop: -18 }}>
           {byPlayer.map((r) => (
-            <div key={r.key} className="row" style={{ alignItems: 'flex-start', padding: '12px 0' }}>
+            <div key={r.key} className="row" style={{ alignItems: 'flex-start', paddingTop: 12, paddingBottom: 12 }}>
               <span className="row-text" style={{ gap: 3 }}>
                 <span style={{ font: '500 15px var(--body)' }}>{r.name}</span>
                 <span className="row-meta" style={{ lineHeight: 1.4 }}>
@@ -1054,7 +1054,7 @@ function Receipts() {
   return (
     <div className="sheet-flush">
       {mine.map((p) => (
-        <div key={p.id} className="row" style={{ padding: '4px 0' }}>
+        <div key={p.id} className="row" style={{ paddingTop: 4, paddingBottom: 4 }}>
           <span style={{ flex: 1, font: '400 15px var(--body)' }}>{fmtDate(p.at)}</span>
           <span className="tnum" style={{ font: '600 15px var(--body)' }}>
             {krd(p.amount)}
@@ -1126,7 +1126,7 @@ function ConsentView() {
   return (
     <>
       <div>
-        <div style={{ font: 'italic 800 24px/1.05 var(--display)', textTransform: 'uppercase' }}>{p.name}</div>
+        <div style={{ font: '700 24px/1.05 var(--display)' }}>{p.name}</div>
         <div style={{ marginTop: 4, font: '600 15px var(--body)', color: CONSENT_INK[status] }}>{CONSENT_LABEL[status]}</div>
       </div>
       {c ? (

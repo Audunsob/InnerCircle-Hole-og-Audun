@@ -108,13 +108,13 @@ export function MinSide() {
             color: 'var(--on-gold)',
             display: 'grid',
             placeItems: 'center',
-            font: '800 22px var(--display)',
+            font: '600 22px var(--display)',
           }}
         >
           {initials(name)}
         </span>
         <div style={{ position: 'relative', minWidth: 0 }}>
-          <div style={{ font: 'italic 800 24px/1.05 var(--display)', textTransform: 'uppercase' }}>{name}</div>
+          <div style={{ font: '700 24px/1.05 var(--display)' }}>{name}</div>
           <div style={{ marginTop: 3, font: '500 13px var(--body)', color: 'var(--on-brand-muted)' }}>{subtitle}</div>
         </div>
       </div>
@@ -214,7 +214,7 @@ function CoachSections() {
             {reports.map((r) => {
               const post = postOf(r.postId);
               return (
-                <div key={r.id} className="row" style={{ alignItems: 'flex-start', padding: '12px 0', gap: 8 }}>
+                <div key={r.id} className="row" style={{ alignItems: 'flex-start', paddingTop: 12, paddingBottom: 12, gap: 8 }}>
                   <span className="row-text" style={{ gap: 2 }}>
                     <span style={{ font: '500 16px var(--body)' }}>{r.postId ? 'Meldt fra om et innlegg' : 'Spørsmål'}</span>
                     <span style={{ font: '400 15px/1.4 var(--body)', whiteSpace: 'pre-wrap' }}>{r.text}</span>
@@ -251,7 +251,7 @@ function CoachSections() {
             {waiting.map((l) => {
               const pn = P[l.playerId]?.name || 'Ukjent spiller';
               return (
-                <div key={l.userId + l.role} className="row" style={{ alignItems: 'flex-start', padding: '12px 0', gap: 8 }}>
+                <div key={l.userId + l.role} className="row" style={{ alignItems: 'flex-start', paddingTop: 12, paddingBottom: 12, gap: 8 }}>
                   <span className="row-text" style={{ gap: 2 }}>
                     <span style={{ font: '500 16px var(--body)' }}>{pn}</span>
                     <span className="row-meta" style={{ wordBreak: 'break-all' }}>
@@ -274,7 +274,7 @@ function CoachSections() {
         <Section title="Administratorer" aside={<span className="note">{coaches.length}</span>}>
           <div className="list">
             {coaches.map((c) => (
-              <div key={c.userId} className="row" style={{ alignItems: 'flex-start', padding: '12px 0' }}>
+              <div key={c.userId} className="row" style={{ alignItems: 'flex-start', paddingTop: 12, paddingBottom: 12 }}>
                 <span className="row-text" style={{ gap: 2 }}>
                   <span style={{ font: '500 16px var(--body)' }}>
                     {(c.name || 'Navn mangler') + (c.me ? ' (deg)' : '')}
@@ -305,14 +305,14 @@ function CoachSections() {
         }
       >
         <div>
-          <div className="row" style={{ padding: '12px 0' }}>
+          <div className="row" style={{ paddingTop: 12, paddingBottom: 12 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div className="row-meta">Lagets navn</div>
               <div style={{ marginTop: 2, font: '600 17px var(--body)' }}>{teamName(st)}</div>
             </div>
           </div>
           {codeRows.map((c) => (
-            <div key={c.key} className="row" style={{ alignItems: 'flex-start', padding: '12px 0' }}>
+            <div key={c.key} className="row" style={{ alignItems: 'flex-start', paddingTop: 12, paddingBottom: 12 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="row-meta">{c.label}</div>
                 <div style={{ marginTop: 2, font: '600 17px var(--body)', letterSpacing: '.04em' }}>{c.code}</div>
@@ -372,7 +372,7 @@ function CoachSections() {
           <>
             <div className="list" style={{ marginTop: 4 }}>
               {shown.map((p) => (
-                <div key={p.id} className="row" style={{ padding: '4px 0', alignItems: 'flex-start' }}>
+                <div key={p.id} className="row" style={{ paddingTop: 4, paddingBottom: 4, alignItems: 'flex-start' }}>
                   <span className="row-text" style={{ paddingTop: 10 }}>
                     <button
                       type="button"

@@ -192,7 +192,7 @@ export function LagView() {
               <span className="eyebrow" style={{ color: 'var(--brand-accent)' }}>
                 Neste kamp · {homeAway(next)}
               </span>
-              <span style={{ font: 'italic 800 22px/1.05 var(--display)', textTransform: 'uppercase' }}>{matchTitle(st, next)}</span>
+              <span style={{ font: '600 22px/1.05 var(--display)' }}>{matchTitle(st, next)}</span>
               {opponentText(next) && <span style={{ font: '500 14px var(--body)' }}>{opponentText(next)}</span>}
               <span style={{ font: '400 13px var(--body)', color: 'var(--on-brand-muted)' }}>
                 {next.time} · {next.venue}

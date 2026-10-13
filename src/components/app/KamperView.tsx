@@ -74,7 +74,7 @@ export function KamperView() {
                   <div key={m.id} className="row">
                     <DateCol date={m.date} />
                     <div className="row-text">
-                      <span style={{ font: 'italic 800 18px/1.15 var(--display)', textTransform: 'uppercase' }}>{matchTitle(st, m)}</span>
+                      <span style={{ font: '600 18px/1.15 var(--display)' }}>{matchTitle(st, m)}</span>
                       {opponentText(m) && <span className="row-sub">{opponentText(m)}</span>}
                       <span className="row-sub">
                         {m.time} · {m.venue}
@@ -120,7 +120,7 @@ export function KamperView() {
                   <button type="button" className="row-btn" style={{ borderBottom: 'none', minHeight: 72 }} onClick={() => st.openMatchView(m.id)}>
                     <DateCol date={m.date} />
                     <span className="row-text">
-                      <span style={{ font: 'italic 800 18px/1.15 var(--display)', textTransform: 'uppercase' }}>{matchTitle(st, m)}</span>
+                      <span style={{ font: '600 18px/1.15 var(--display)' }}>{matchTitle(st, m)}</span>
                       <span className="row-sub">
                         {opponentText(m) && opponentText(m) + ' · '}
                         {photoText(matchPhotoCount(allowed, m.id))} · {m.kind}
@@ -128,7 +128,7 @@ export function KamperView() {
                     </span>
                     {o ? (
                       <>
-                        <span className="tnum" style={{ font: 'italic 800 24px var(--display)' }}>
+                        <span className="tnum" style={{ font: '700 24px var(--display)' }}>
                           {scoreText(m)}
                         </span>
                         <span className="outcome" style={{ background: OUTCOME_COLOR[o] }}>
@@ -171,7 +171,7 @@ function Crest({ text, us }: { text: string; us?: boolean }) {
         placeItems: 'center',
         ...(us
           ? { background: '#0f0a0b', border: '1.5px solid var(--gold)', color: 'var(--gold)', font: '500 20px var(--serif)' }
-          : { background: '#f5ede3', color: 'var(--brand)', font: '800 22px var(--display)' }),
+          : { background: '#f5ede3', color: 'var(--brand)', font: '600 22px var(--display)' }),
       }}
     >
       {text}
@@ -183,7 +183,7 @@ function Side({ name, us }: { name: string; us: boolean }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, textAlign: 'center', minWidth: 0 }}>
       <Crest us={us} text={us ? 'IC' : name.trim().charAt(0).toUpperCase()} />
-      <span style={{ font: 'italic 800 18px/1.05 var(--display)', textTransform: 'uppercase', overflowWrap: 'anywhere' }}>{name}</span>
+      <span style={{ font: '600 18px/1.05 var(--display)', overflowWrap: 'anywhere' }}>{name}</span>
     </div>
   );
 }
@@ -203,19 +203,19 @@ function NextMatch({ m }: { m: Match }) {
           <span className="eyebrow" style={{ color: 'var(--brand-accent)' }}>
             Neste kamp · {m.kind}
           </span>
-          <span className="eyebrow" style={{ padding: '4px 10px', borderRadius: 10, background: 'rgba(15,10,11,.35)', color: 'var(--on-brand)', letterSpacing: '.14em' }}>
+          <span className="eyebrow" style={{ padding: '4px 10px', borderRadius: 10, background: 'rgba(15,10,11,.35)', color: 'var(--on-brand)' }}>
             {homeAway(m)}
           </span>
         </div>
         {m.opp ? (
           <div style={{ position: 'relative', padding: '18px 16px 4px', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto minmax(0,1fr)', alignItems: 'center', gap: 8 }}>
             <Side name={m.home ? us : m.opp} us={m.home} />
-            <span style={{ font: 'italic 800 26px var(--display)', color: 'var(--brand-accent)' }}>VS</span>
+            <span style={{ font: '700 26px var(--display)', color: 'var(--brand-accent)' }}>VS</span>
             <Side name={m.home ? m.opp : us} us={!m.home} />
           </div>
         ) : null}
         {(m.title || !m.opp) && (
-          <h2 style={{ position: 'relative', margin: '14px 16px 0', font: 'italic 800 26px/1.05 var(--display)', textTransform: 'uppercase' }}>{matchTitle(st, m)}</h2>
+          <h2 style={{ position: 'relative', margin: '14px 16px 0', font: '700 26px/1.05 var(--display)' }}>{matchTitle(st, m)}</h2>
         )}
         <div style={{ position: 'relative', margin: '14px 16px 0', display: 'grid', gridTemplateColumns: meet ? 'repeat(3,minmax(0,1fr))' : 'repeat(2,minmax(0,1fr))', gap: 8 }}>
           <Stat label="Dato" value={<span style={{ textTransform: 'capitalize' }}>{shortDate(m.date)}</span>} />
@@ -237,7 +237,7 @@ function NextMatch({ m }: { m: Match }) {
           <button
             type="button"
             className="btn"
-            style={{ border: 'none', background: 'var(--gold)', color: 'var(--on-gold)', font: '800 15px var(--display)', letterSpacing: '.12em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+            style={{ border: 'none', background: 'var(--gold)', color: 'var(--on-gold)', font: '600 15px var(--display)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
             onClick={() => st.addToCal(m)}
           >
             <Icon name="event" size={18} />
@@ -246,7 +246,7 @@ function NextMatch({ m }: { m: Match }) {
           <button
             type="button"
             className="btn"
-            style={{ border: '1px solid rgba(245,237,227,.4)', background: 'none', color: 'var(--on-brand)', font: '800 15px var(--display)', letterSpacing: '.12em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+            style={{ border: '1px solid rgba(245,237,227,.4)', background: 'none', color: 'var(--on-brand)', font: '600 15px var(--display)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
             onClick={() => st.showMap(m)}
           >
             <Icon name="location_on" size={18} />
@@ -270,7 +270,7 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div style={{ padding: 10, borderRadius: 14, background: 'rgba(15,10,11,.35)', display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
       <span style={{ font: '600 11px var(--body)', color: 'var(--on-brand-muted)' }}>{label}</span>
-      <span className="tnum" style={{ font: '800 18px var(--display)', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+      <span className="tnum" style={{ font: '600 18px var(--display)', whiteSpace: 'nowrap' }}>
         {value}
       </span>
     </div>
@@ -305,33 +305,31 @@ export function MatchDetail({ id }: { id: string }) {
             padding: '0 8px',
             border: 'none',
             background: 'none',
-            color: 'var(--ink)',
-            font: '700 14px var(--display)',
-            letterSpacing: '.14em',
-            textTransform: 'uppercase',
+            color: 'var(--accent-ink)',
+            font: '400 17px var(--body)',
             cursor: 'pointer',
           }}
         >
-          <Icon name="arrow_back" />
+          <Icon name="arrow_back_ios_new" size={20} />
           Spilte kamper
         </button>
       </header>
       <section className="card" style={{ position: 'relative', overflow: 'hidden', padding: '18px 16px', display: 'flex', flexDirection: 'column', gap: 12, animation: 'ic-rise 320ms var(--ease-out) both' }}>
         <Rings size={260} style={{ top: -100, right: -100 }} />
-        <div className="eyebrow" style={{ position: 'relative', color: 'var(--muted)', textTransform: 'uppercase' }}>
+        <div className="eyebrow" style={{ position: 'relative', color: 'var(--muted)' }}>
           {fmtLong(m.date)} · {homeAway(m)} · {m.kind}
         </div>
         {o && m.opp ? (
           <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto minmax(0,1fr)', alignItems: 'center', gap: 6 }}>
-            <span style={{ font: 'italic 800 20px/1.05 var(--display)', textTransform: 'uppercase', textAlign: 'center', overflowWrap: 'anywhere', color: m.home ? 'var(--ink)' : 'var(--muted)' }}>
+            <span style={{ font: '600 20px/1.05 var(--display)', textAlign: 'center', overflowWrap: 'anywhere', color: m.home ? 'var(--ink)' : 'var(--muted)' }}>
               {m.home ? shortTeam(st) : m.opp}
             </span>
-            <span className="tnum" style={{ font: 'italic 800 72px/0.9 var(--display)', animation: 'ic-pop 520ms var(--ease-out) 120ms both' }}>
+            <span className="tnum" style={{ font: '700 72px/0.9 var(--display)', animation: 'ic-pop 520ms var(--ease-out) 120ms both' }}>
               <span style={{ color: m.home ? 'var(--gold)' : 'inherit' }}>{m.home ? m.us : m.them}</span>
               <span style={{ color: 'var(--muted)' }}>–</span>
               <span style={{ color: m.home ? 'inherit' : 'var(--gold)' }}>{m.home ? m.them : m.us}</span>
             </span>
-            <span style={{ font: 'italic 800 20px/1.05 var(--display)', textTransform: 'uppercase', textAlign: 'center', overflowWrap: 'anywhere', color: m.home ? 'var(--muted)' : 'var(--ink)' }}>
+            <span style={{ font: '600 20px/1.05 var(--display)', textAlign: 'center', overflowWrap: 'anywhere', color: m.home ? 'var(--muted)' : 'var(--ink)' }}>
               {m.home ? m.opp : shortTeam(st)}
             </span>
           </div>
@@ -341,20 +339,20 @@ export function MatchDetail({ id }: { id: string }) {
               {matchTitle(st, m)}
             </h1>
             {o && (
-              <span className="tnum" style={{ position: 'relative', font: 'italic 800 56px/0.9 var(--display)' }}>
+              <span className="tnum" style={{ position: 'relative', font: '700 56px/0.9 var(--display)' }}>
                 {scoreText(m)}
               </span>
             )}
           </>
         )}
         {o && m.opp
-          ? m.title && <div style={{ position: 'relative', font: 'italic 800 18px var(--display)', textTransform: 'uppercase', textAlign: 'center' }}>{m.title}</div>
+          ? m.title && <div style={{ position: 'relative', font: '600 18px var(--display)', textAlign: 'center' }}>{m.title}</div>
           : opponentText(m) && <div style={{ position: 'relative', font: '600 15px var(--body)' }}>{opponentText(m)}</div>}
         {o && (
           <div style={{ position: 'relative', display: 'flex', justifyContent: o && m.opp ? 'center' : 'flex-start' }}>
             <span
               className="eyebrow"
-              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', borderRadius: 14, background: OUTCOME_COLOR[o], color: '#fff', fontSize: 14, letterSpacing: '.18em' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', borderRadius: 14, background: OUTCOME_COLOR[o], color: '#fff', fontSize: 14 }}
             >
               {OUTCOME_WORD[o]}
             </span>

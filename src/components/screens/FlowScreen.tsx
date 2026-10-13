@@ -355,7 +355,7 @@ function Terms() {
         </select>
       </Field>
       <div style={{ padding: '16px 0', borderTop: '1px solid var(--line)', borderBottom: '1px solid var(--line)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <p style={{ margin: 0, font: 'italic 800 24px/1.1 var(--display)', textTransform: 'uppercase', textWrap: 'pretty' }}>
+        <p style={{ margin: 0, font: '700 24px/1.1 var(--display)', textWrap: 'pretty' }}>
           Bildene er bare for deg. Ikke del eller legg ut bilder av barna andre steder.
         </p>
         <p className="note">Spillerne (og foresatte for de under 15) har gitt samtykke til at du kan se bildene i InnerCircle, ikke til at de spres videre.</p>
