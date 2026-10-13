@@ -1,5 +1,5 @@
 import { COACH, DEFAULT_PRICE, DEFAULT_TEAM } from './seed';
-import type { AppState, Match, Player, Post } from './types';
+import type { AppState, Match, Player, Post, Role } from './types';
 
 type S = Pick<AppState, 'data' | 'prof'>;
 
@@ -11,6 +11,12 @@ export const matchTitle = (s: S, m: Match) =>
 
 /** "Mot Lørenskog" — shown when a custom title hides who the opponent is. */
 export const opponentText = (m: Match) => (m.title && m.opp ? 'Mot ' + m.opp : '');
+
+/**
+ * Practical team info (meeting time, messages to the team, training changes) is for those on the team:
+ * coaches, players and parents. Subscribers follow the team and don't need it.
+ */
+export const seesTeamInfo = (role: Role | null) => role !== 'sub';
 
 export const price = (s: S) => s.data.price ?? DEFAULT_PRICE;
 export const priceText = (s: S) => price(s) + ' kr';

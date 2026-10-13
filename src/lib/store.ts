@@ -60,7 +60,7 @@ import {
 } from './supabase';
 import { scoreTitle } from './derive';
 import { disablePush, enablePush, isStandalone, needsHomeScreen, phoneKind, updatePushPrefs, type PushPrefs } from './push';
-import { canPost, coachName, hasConsent, matchTitle, memberAuthor, price, shortTeam, teamName } from './selectors';
+import { canPost, coachName, hasConsent, matchTitle, memberAuthor, price, seesTeamInfo, shortTeam, teamName } from './selectors';
 
 const MAX_VIDEO = 50 * 1024 * 1024;
 
@@ -112,6 +112,7 @@ import type {
   Match,
   Media,
   MemberRole,
+  Notif,
   ParentConsentDraft,
   PayForm,
   PayMethod,
@@ -460,9 +461,10 @@ export const useStore = create<Store>()((set, get) => {
   };
 
   /** Adds a line to the team's list of notifications (the bell). */
-  const addNotif = (text: string) => {
+  const addNotif = (text: string, team = false) => {
     const now = Date.now();
-    setData((d) => ({ ...d, notifs: [{ id: 'n' + now, text, ts: now, read: false, from: 'coach' as const }, ...d.notifs].slice(0, 100) }));
+    const n: Notif = { id: 'n' + now, text, ts: now, read: false, from: 'coach', ...(team ? { team } : {}) };
+    setData((d) => ({ ...d, notifs: [n, ...d.notifs].slice(0, 100) }));
   };
 
   /** Saves the change to one training in a series; an empty change removes it. */
@@ -1497,7 +1499,7 @@ export const useStore = create<Store>()((set, get) => {
           'DTEND:' + f(end),
           'SUMMARY:' + esc(e.title + ' (' + shortTeam(s()) + ')'),
           'LOCATION:' + esc(e.venue),
-          ...(e.note ? ['DESCRIPTION:' + esc(e.note)] : []),
+          ...(e.note && seesTeamInfo(s().role) ? ['DESCRIPTION:' + esc(e.note)] : []),
           'END:VEVENT',
           'END:VCALENDAR',
         ].join('\r\n'),
@@ -1745,14 +1747,14 @@ export const useStore = create<Store>()((set, get) => {
         toast('Treningen er endret');
         if (old.weekday === t.weekday && old.every === t.every && old.time === t.time && old.end === t.end && old.venue === t.venue) return;
         const text = 'Endret trening: ' + t.title + ' ' + when;
-        addNotif(text);
+        addNotif(text, true);
         void notify('matches', teamName(s()), text);
         return;
       }
       scrollTop();
       toast(t.title + ' er lagt inn ' + repeatText(t).toLowerCase());
       const text = 'Ny fast trening: ' + t.title + ' ' + when;
-      addNotif(text);
+      addNotif(text, true);
       void notify('matches', teamName(s()), text);
     },
     endTraining: (id) => {
@@ -1775,7 +1777,7 @@ export const useStore = create<Store>()((set, get) => {
           set({ openEvent: null });
           toast(never ? 'Treningen er slettet' : 'Treningen er avsluttet');
           const text = 'Ingen flere ' + t.title.toLowerCase() + ' ' + repeatText(t).toLowerCase();
-          addNotif(text);
+          addNotif(text, true);
           void notify('matches', teamName(s()), text);
         },
       );
@@ -1812,7 +1814,7 @@ export const useStore = create<Store>()((set, get) => {
       toast('Treningen ' + fmtDay(date) + ' er endret');
       if (!moved) return;
       const text = 'Endret trening ' + fmtDay(date) + ': kl. ' + timeText({ time: c.time || t.time, end: c.end ?? t.end }) + ', ' + (c.venue || t.venue);
-      addNotif(text);
+      addNotif(text, true);
       void notify('matches', teamName(s()), text);
     },
     cancelTrainingDay: (cancel) => {
@@ -1826,13 +1828,13 @@ export const useStore = create<Store>()((set, get) => {
       set({ sheet: null });
       toast(cancel ? 'Treningen ' + fmtDay(date) + ' er avlyst' : 'Treningen ' + fmtDay(date) + ' blir likevel');
       const text = (cancel ? 'Avlyst: ' : 'Blir likevel: ') + t.title.toLowerCase() + ' ' + fmtDay(date) + ' kl. ' + t.time;
-      addNotif(text);
+      addNotif(text, true);
       void notify('matches', teamName(s()), text);
     },
     trainingToCal: (id) => {
       const t = (s().data.trainings || []).find((x) => x.id === id);
       if (!t) return;
-      download('trening-' + WEEKDAYS[t.weekday].replace('ø', 'o') + '.ics', seriesIcs(t, shortTeam(s())), 'text/calendar');
+      download('trening-' + WEEKDAYS[t.weekday].replace('ø', 'o') + '.ics', seriesIcs(seesTeamInfo(s().role) ? t : { ...t, note: '' }, shortTeam(s())), 'text/calendar');
       toast(isRunning(t) ? 'Treningene er lagt i kalenderen' : 'Treningen er lagt i kalenderen');
     },
     openResult: (id) => {

@@ -4,7 +4,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { download, firstName, fmtAcct, fmtDate, fmtDay, fmtLong, fmtShort, iso, krd, matchTime, NB, rel, stripe } from '@/lib/format';
 import { CKEYS, EVENT_ICONS, TYPES } from '@/lib/seed';
 import { allEvents, isTraining, WEEK_ORDER, WEEKDAYS } from '@/lib/trainings';
-import { canPost, CONSENT_INK, CONSENT_LABEL, consentStatus, waitsForParent, matchTitle, playerMap, price, shortTeam, teamName } from '@/lib/selectors';
+import { canPost, CONSENT_INK, CONSENT_LABEL, consentStatus, waitsForParent, matchTitle, playerMap, price, seesTeamInfo, shortTeam, teamName } from '@/lib/selectors';
 import { canInstall, installApp, phoneKind } from '@/lib/push';
 import { receiptText, useStore } from '@/lib/store';
 import type { Draft, Media, PayMethod, Player, PostType, SheetName } from '@/lib/types';
@@ -460,15 +460,10 @@ function AddMatch() {
       <Field label="Sted">
         <input className="input" {...bind('venue')} placeholder="F.eks. Solberg kunstgress" />
       </Field>
-      <Field label="Tekst">
-        <textarea
-          className="input"
-          {...bind('note')}
-          rows={3}
-          placeholder="F.eks. Husk leggskinn. Vi kjører samlet fra klubbhuset."
-          style={{ minHeight: 96 }}
-        />
+      <Field label="Beskjed til laget">
+        <textarea className="input" {...bind('note')} rows={3} placeholder="F.eks. Vi kjører samlet fra klubbhuset." style={{ minHeight: 96 }} />
       </Field>
+      <p className="note" style={{ margin: '-8px 0 0' }}>Bare administratorer, spillere og foresatte ser beskjeden. Abonnenter ser den ikke.</p>
       <FormError text={f.err} />
       <button type="submit" className="btn btn-primary btn-block">
         {f.matchId ? 'Lagre endringer' : 'Legg til kamp'}
@@ -545,15 +540,10 @@ function AddEvent() {
       <Field label="Sted">
         <input className="input" {...bind('venue')} placeholder="F.eks. Klubbhuset" />
       </Field>
-      <Field label="Beskrivelse">
-        <textarea
-          className="input"
-          {...bind('note')}
-          rows={3}
-          placeholder="F.eks. Laget spanderer pizza. Si fra til en voksen om allergier."
-          style={{ minHeight: 96 }}
-        />
+      <Field label="Beskjed til laget">
+        <textarea className="input" {...bind('note')} rows={3} placeholder="F.eks. Laget spanderer pizza." style={{ minHeight: 96 }} />
       </Field>
+      <p className="note" style={{ margin: '-8px 0 0' }}>Bare administratorer, spillere og foresatte ser beskjeden. Abonnenter ser den ikke.</p>
       <FormError text={f.err} />
       <button type="submit" className="btn btn-primary btn-block">
         {f.eventId ? 'Lagre endringer' : 'Legg til'}
@@ -621,9 +611,10 @@ function TrainingForm() {
       <p className="note" style={{ margin: '-8px 0 0' }}>
         La «Til og med» stå tom hvis treningen skal fortsette til du avslutter den.
       </p>
-      <Field label="Tekst">
-        <textarea className="input" {...bind('note')} rows={3} placeholder="F.eks. Ta med vannflaske og leggskinn." style={{ minHeight: 96 }} />
+      <Field label="Beskjed til laget">
+        <textarea className="input" {...bind('note')} rows={3} placeholder="F.eks. Vi trener inne hvis det regner." style={{ minHeight: 96 }} />
       </Field>
+      <p className="note" style={{ margin: '-8px 0 0' }}>Bare administratorer, spillere og foresatte ser beskjeden. Abonnenter ser den ikke.</p>
       <FormError text={f.err} />
       <button type="submit" className="btn btn-primary btn-block">
         {f.trainingId ? 'Lagre endringer' : 'Legg inn fast trening'}
@@ -676,9 +667,10 @@ function TrainingDay() {
           <Field label="Sted">
             <input className="input" {...bind('venue')} />
           </Field>
-          <Field label="Tekst">
+          <Field label="Beskjed til laget">
             <textarea className="input" {...bind('note')} rows={3} style={{ minHeight: 96 }} />
           </Field>
+          <p className="note" style={{ margin: '-8px 0 0' }}>Bare administratorer, spillere og foresatte ser beskjeden. Abonnenter ser den ikke.</p>
           <FormError text={f.err} />
           <button type="submit" className="btn btn-primary btn-block">
             Lagre for denne gangen
@@ -793,7 +785,9 @@ function Confirm() {
 }
 
 function Notifs() {
-  const notifs = useStore((s) => s.data.notifs);
+  const all = useStore((s) => s.data.notifs);
+  const role = useStore((s) => s.role);
+  const notifs = seesTeamInfo(role) ? all : all.filter((n) => !n.team);
   const seenAt = useStore((s) => s.seenNotifsAt);
   if (!notifs.length)
     return (
