@@ -149,6 +149,19 @@ export interface Post {
   /** Device user ids that gave a heart. */
   likedBy: string[];
   edited?: boolean;
+  /** Oldest first. The database sets who wrote each one and when. */
+  comments?: Comment[];
+}
+
+/** A comment on a post. Members may delete their own; coaches may delete any. */
+export interface Comment {
+  id: string;
+  /** Account id of the writer. */
+  authorId: string;
+  author: string;
+  authorRole: string;
+  ts: number;
+  text: string;
 }
 
 export interface Subscriber {
@@ -308,6 +321,7 @@ export type SheetName =
   | 'trainingDay'
   | 'result'
   | 'postMenu'
+  | 'likes'
   | 'confirm'
   | 'notifs'
   | 'price'
