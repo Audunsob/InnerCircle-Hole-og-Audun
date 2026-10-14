@@ -978,7 +978,7 @@ function Subscribers() {
                 <span className="row-text">
                   <span style={{ font: '500 15px var(--body)' }}>{x.name}</span>
                   <span className="row-meta" style={{ lineHeight: 1.35 }}>
-                    {'Vervet av ' + (p ? p.name : 'ukjent spiller') + ' · ' + (x.rel ? x.rel + ' · ' : '') + 'siden ' + fmtShort(x.since)}
+                    {'Vervet av ' + (p ? p.name : 'ukjent spiller') + ' · ' + (x.rel ? x.rel + ' · ' : '') + 'siden ' + fmtShort(x.since) + (x.until ? ' · slutter ' + fmtShort(x.until) : '')}
                   </span>
                 </span>
                 <button type="button" className="link-btn quiet" aria-label={'Fjern tilgang for ' + x.name} onClick={() => st.removeSub(x.id)}>

@@ -359,6 +359,21 @@ export const useStore = create<Store>()((set, get) => {
       'Administratoren har fjernet deg fra laget eller koblet kontoen din fra. Snakk med administratoren hvis det er feil.',
     );
   };
+  /** Takes a subscriber who isn't on the team's list (never finished paying, or the subscription ran out) to the terms and payment. */
+  const payAgain = (p: TeamPayload) => {
+    setFlow({ ...blankFlow(), role: 'sub', peek: { code: p.data.teamCode || '', teamName: p.data.teamName || '', isCoachCode: false, players: p.data.players }, terms: false });
+    set({ role: null });
+    go('terms');
+  };
+  /** The subscription ran out while the app was open: the server no longer sends the team. Not while
+   * changes wait to be saved, since a payment that isn't saved yet isn't on the server's list. */
+  const checkSubEnded = (p: TeamPayload) => {
+    const st = s();
+    if (pending.length || st.team?.role !== 'sub' || st.screen !== 'app' || p.data.subs.some((x) => x.id === mySubId())) return;
+    setProf('sub', { active: false, cancelled: false });
+    payAgain(p);
+    inform('Abonnementet er over', 'Start det igjen for å se bildene fra laget.');
+  };
   const flush = async (): Promise<void> => {
     const team = s().team;
     if (saving || !pending.length || !team || !server) return;
@@ -369,6 +384,7 @@ export const useStore = create<Store>()((set, get) => {
         const res = await saveTeam(team.id, team.role, s().version, replay(server));
         if (res.ok) pending = pending.slice(batch);
         applyServer(res);
+        checkSubEnded(res);
         if (res.ok) break;
       }
       failedOnce = false;
@@ -410,6 +426,7 @@ export const useStore = create<Store>()((set, get) => {
       const p = await getTeam(team.id, team.role);
       if (!server || !pending.length) applyServer(p);
       if (pending.length) void flush();
+      checkSubEnded(p);
       // Removed from the list by a coach whose app didn't also unlink the account.
       const mine = team.role === 'player' ? s().prof.player.playerId : null;
       if (mine && s().screen === 'app' && !p.data.players.some((x) => x.id === mine)) removedFromTeam();
@@ -788,10 +805,8 @@ export const useStore = create<Store>()((set, get) => {
     if (role === 'sub') {
       const own = p.data.subs.find((x) => x.id === mySubId());
       if (!own) {
-        // Joined but never finished paying: continue the sign-up.
-        setFlow({ ...blankFlow(), role: 'sub', peek: { code: p.data.teamCode || '', teamName: p.data.teamName || '', isCoachCode: false, players: p.data.players }, terms: false });
-        set({ role: null });
-        return go('terms');
+        // Joined but never finished paying, or the subscription ran out: continue the sign-up.
+        return payAgain(p);
       }
       setProf('sub', { viaId: own.via, name: own.name, active: true, cancelled: false, startedAt: own.since, autoRenew: own.autoRenew !== false });
     }
@@ -2187,8 +2202,9 @@ export const useStore = create<Store>()((set, get) => {
         'Du blir ikke trukket mer. Du ser bildene til ' + until + '. Det du allerede har betalt, går fortsatt til laget.',
         'Si opp',
         () => {
-          setProf('sub', { cancelled: true });
-          setData((d) => ({ ...d, subs: d.subs.filter((x) => x.id !== mySubId()) }));
+          // Stays on the list without renewing; the database ends the access at the next monthly date.
+          setProf('sub', { cancelled: true, autoRenew: false });
+          setData((d) => ({ ...d, subs: d.subs.map((x) => (x.id === mySubId() ? { ...x, autoRenew: false } : x)) }));
           toast('Abonnementet er sagt opp');
         },
       );
