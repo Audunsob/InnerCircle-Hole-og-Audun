@@ -1,10 +1,11 @@
--- InnerCircle database setup, version 6 (accounts, approval of players, list of coaches,
+-- InnerCircle database setup, version 7 (accounts, approval of players, list of coaches,
 -- team name and codes, reports, notifications for one match or some players,
 -- leaving a team, deleting your account and deleting files, removing coaches and deleting a team,
--- players aged 15 or more post about matches and events the coaches made, comments on posts, and no
--- parent role: under 15 a parent signs the player's own consent form).
+-- players aged 15 or more post about matches and events the coaches made, comments on posts, no
+-- parent role: under 15 a parent signs the player's own consent form, and subscribers who are removed,
+-- cancel or haven't paid don't see the team).
 -- Paste all of this into Supabase: SQL Editor -> New query -> Run.
--- Safe to run more than once, and safe to run on top of version 1, 2, 3, 4 and 5.
+-- Safe to run more than once, and safe to run on top of version 1, 2, 3, 4, 5 and 6.
 
 create extension if not exists pgcrypto;
 
@@ -92,10 +93,57 @@ language sql stable security definer set search_path = public as $$
   select m from team_members m where m.team_id = p_team and m.user_id = auth.uid() and m.role = p_role and m.status = 'active'
 $$;
 
--- Used by the photo storage rules: is the signed-in account on the team whose folder this is?
+-- Milliseconds since 1970, like the app's timestamps.
+create or replace function public.ic_now_ms() returns numeric
+language sql stable set search_path = public as $$ select extract(epoch from now()) * 1000 $$;
+
+-- A subscription in the team's list that hasn't run out. Only cancelled subscriptions (and those paid
+-- for one month) have an end, set by save_team.
+create or replace function public.ic_live(p_sub jsonb) returns boolean
+language sql stable set search_path = public as $$
+  select jsonb_typeof(p_sub -> 'until') is distinct from 'number' or (p_sub ->> 'until')::numeric > ic_now_ms()
+$$;
+
+-- The subscriptions in a team document that haven't run out.
+create or replace function public.ic_live_subs(p_data jsonb) returns jsonb
+language sql stable set search_path = public as $$
+  select coalesce(jsonb_agg(x), '[]'::jsonb) from jsonb_array_elements(coalesce(p_data -> 'subs', '[]'::jsonb)) x where ic_live(x)
+$$;
+
+-- Has the account a subscription to the team that hasn't run out? Joining with the team code isn't enough:
+-- a subscriber sees the team once they are on the list, until a coach removes them or the subscription runs out.
+create or replace function public.ic_sub_ok(p_data jsonb, p_uid text) returns boolean
+language sql stable set search_path = public as $$
+  select exists (
+    select 1 from jsonb_array_elements(coalesce(p_data -> 'subs', '[]'::jsonb)) x
+    where x ->> 'id' = 'sub-' || p_uid and ic_live(x))
+$$;
+
+-- When a subscription that started at p_since (milliseconds) ends if it isn't renewed: the first monthly
+-- anniversary that is still in the future, like the app's nextMonthly.
+create or replace function public.ic_until(p_since text) returns bigint
+language sql stable set search_path = public as $$
+  with s as (
+    select to_timestamp((least(coalesce(case when p_since ~ '^\d{1,15}(\.\d+)?$' then p_since::numeric end, ic_now_ms()), ic_now_ms()) / 1000)::float8) as ts
+  )
+  select (extract(epoch from s.ts + make_interval(months =>
+           (extract(year from age(now(), s.ts)) * 12 + extract(month from age(now(), s.ts)))::int + 1)) * 1000)::bigint
+  from s
+$$;
+
+-- May the account see the team? Approved coaches and players may; subscribers only while subscribed.
+create or replace function public.ic_access(p_team uuid, p_uid uuid) returns boolean
+language sql stable set search_path = public as $$
+  select exists (
+    select 1 from team_members m join teams t on t.id = m.team_id
+    where m.team_id = p_team and m.user_id = p_uid and m.status = 'active'
+      and (m.role <> 'sub' or ic_sub_ok(t.data, p_uid::text)))
+$$;
+
+-- Used by the photo storage rules: may the signed-in account see the team whose folder this is?
 create or replace function public.ic_is_member(p_folder text) returns boolean
 language sql stable security definer set search_path = public as $$
-  select exists (select 1 from team_members m where m.team_id::text = p_folder and m.user_id = auth.uid() and m.status = 'active')
+  select exists (select 1 from teams t where t.id::text = p_folder and ic_access(t.id, auth.uid()))
 $$;
 
 -- Used by the photo storage rules: is the signed-in account a coach on the team whose folder this is?
@@ -241,7 +289,9 @@ language sql stable set search_path = public as $$
 $$;
 
 -- What a member gets back. Coaches see everything; others don't see the coach code,
--- payout account, coach signatures or other people's payments.
+-- payout account, coach signatures or other people's payments. A subscriber who isn't on the list
+-- (hasn't paid yet, or the subscription ran out) gets only what they need to pay: the team's name,
+-- code, price and player names. Subscriptions that ran out are left out of the list.
 create or replace function public.ic_payload(t public.teams, p_role text) returns jsonb
 language sql stable set search_path = public as $$
   select jsonb_build_object(
@@ -250,12 +300,33 @@ language sql stable set search_path = public as $$
     'version', t.version,
     'data',
       case when p_role = 'coach' then
-        t.data || jsonb_build_object('teamName', t.name, 'teamCode', t.team_code, 'coachCode', t.coach_code)
+        t.data || jsonb_build_object('teamName', t.name, 'teamCode', t.team_code, 'coachCode', t.coach_code,
+                                     'subs', ic_live_subs(t.data))
+      when p_role = 'sub' and not ic_sub_ok(t.data, auth.uid()::text) then
+        jsonb_build_object(
+          'teamName', t.name,
+          'teamCode', t.team_code,
+          'price', t.data -> 'price',
+          'players', coalesce((
+            select jsonb_agg(jsonb_build_object(
+              'id', p ->> 'id', 'name', p ->> 'name', 'num', coalesce(p -> 'num', '0'::jsonb), 'born', null,
+              'parent', jsonb_build_object('name', '', 'phone', '', 'email', ''), 'consent', null, 'selfLogin', false)
+              order by ord)
+            from jsonb_array_elements(coalesce(t.data -> 'players', '[]'::jsonb)) with ordinality x(p, ord)
+          ), '[]'::jsonb),
+          'matches', '[]'::jsonb, 'events', '[]'::jsonb, 'trainings', '[]'::jsonb, 'posts', '[]'::jsonb,
+          'subs', '[]'::jsonb, 'notifs', '[]'::jsonb, 'reports', '[]'::jsonb, 'reminders', '{}'::jsonb,
+          'account', jsonb_build_object('connected', false, 'bank', '', 'number', ''), 'ytdBase', 0,
+          'payments', coalesce((
+            select jsonb_agg(x) from jsonb_array_elements(coalesce(t.data -> 'payments', '[]'::jsonb)) x
+            where x ->> 'subId' = 'sub-' || auth.uid()::text
+          ), '[]'::jsonb))
       else
         (t.data - 'payout' - 'coachConsents')
         || jsonb_build_object(
           'teamName', t.name,
           'teamCode', t.team_code,
+          'subs', ic_live_subs(t.data),
           'payments', coalesce((
             select jsonb_agg(x) from jsonb_array_elements(coalesce(t.data -> 'payments', '[]'::jsonb)) x
             where x ->> 'subId' in ('sub-' || auth.uid()::text, 'par-' || auth.uid()::text)
@@ -427,6 +498,7 @@ begin
   if t.version <> p_version then
     return ic_payload(t, p_role) || jsonb_build_object('ok', false);
   end if;
+  prev := t.data;
 
   if p_role = 'coach' then
     merged := coalesce(p_data, '{}'::jsonb) - 'coachCode' - 'teamCode' - 'teamName';
@@ -437,7 +509,6 @@ begin
         select 1 from jsonb_array_elements(coalesce(merged -> 'players', '[]'::jsonb)) p where p ->> 'id' = x.player_id
       );
   else
-    prev := t.data;
     merged := prev;
     own := array['sub-' || uid, 'par-' || uid];
 
@@ -518,10 +589,20 @@ begin
       left join jsonb_array_elements(coalesce(p_data -> 'players', '[]'::jsonb)) np(v) on np.v ->> 'id' = op.v ->> 'id'
     ), '[]'::jsonb));
 
-    -- Subscriptions and payments: only your own.
+    -- Subscriptions and payments: only your own. A subscription without automatic renewal (cancelled, or
+    -- paid for one month) ends at the next monthly anniversary. The database sets that end, and keeps it
+    -- while the subscription is the same one.
     merged := jsonb_set(merged, '{subs}',
       coalesce((select jsonb_agg(x) from jsonb_array_elements(coalesce(prev -> 'subs', '[]'::jsonb)) x where not (x ->> 'id' = any (own))), '[]'::jsonb)
-      || coalesce((select jsonb_agg(x) from jsonb_array_elements(coalesce(p_data -> 'subs', '[]'::jsonb)) x where x ->> 'id' = any (own)), '[]'::jsonb));
+      || coalesce((
+        select jsonb_agg(case
+          when x -> 'autoRenew' = 'false'::jsonb then x || jsonb_build_object('until', coalesce((
+            select o -> 'until' from jsonb_array_elements(coalesce(prev -> 'subs', '[]'::jsonb)) o
+            where o ->> 'id' = x ->> 'id' and (o -> 'since') is not distinct from (x -> 'since')
+              and jsonb_typeof(o -> 'until') = 'number'
+            limit 1), to_jsonb(ic_until(x ->> 'since'))))
+          else x - 'until' end)
+        from jsonb_array_elements(coalesce(p_data -> 'subs', '[]'::jsonb)) x where x ->> 'id' = any (own)), '[]'::jsonb));
     merged := jsonb_set(merged, '{payments}',
       coalesce((select jsonb_agg(x) from jsonb_array_elements(coalesce(prev -> 'payments', '[]'::jsonb)) x where not (x ->> 'subId' = any (own))), '[]'::jsonb)
       || coalesce((select jsonb_agg(x) from jsonb_array_elements(coalesce(p_data -> 'payments', '[]'::jsonb)) x where x ->> 'subId' = any (own)), '[]'::jsonb));
@@ -534,6 +615,18 @@ begin
          ) r(x)), '[]'::jsonb));
   end if;
 
+  -- A subscriber taken off the list (by a coach, or by themselves) is no longer on the team. A subscription
+  -- that ran out is left; that account can pay again.
+  delete from team_members x
+  where x.team_id = p_team and x.role = 'sub'
+    and exists (select 1 from jsonb_array_elements(coalesce(prev -> 'subs', '[]'::jsonb)) o
+                where o ->> 'id' = 'sub-' || x.user_id::text and ic_live(o))
+    and not exists (select 1 from jsonb_array_elements(coalesce(merged -> 'subs', '[]'::jsonb)) n
+                    where n ->> 'id' = 'sub-' || x.user_id::text);
+  -- Phones of accounts that are no longer on the team (removed players and subscribers) stop getting notifications.
+  delete from push_subscriptions s
+  where s.team_id = p_team and not exists (select 1 from team_members x where x.team_id = p_team and x.user_id = s.user_id);
+
   update teams set data = merged, version = version + 1, updated_at = now() where id = p_team;
   return ic_payload((select x from teams x where x.id = p_team), p_role) || jsonb_build_object('ok', true);
 end $$;
@@ -545,9 +638,7 @@ language plpgsql security definer set search_path = public as $$
 declare
   uid uuid := ic_uid();
 begin
-  if not exists (select 1 from team_members m where m.team_id = p_team and m.user_id = uid and m.status = 'active') then
-    raise exception 'not_member';
-  end if;
+  if not ic_access(p_team, uid) then raise exception 'not_member'; end if;
   insert into push_subscriptions (endpoint, user_id, team_id, p256dh, auth_key, prefs)
   values (p_endpoint, uid, p_team, p_p256dh, p_auth, coalesce(p_prefs, '{"posts": true, "matches": true, "results": true}'::jsonb))
   on conflict (endpoint) do update
@@ -573,6 +664,7 @@ begin
     select jsonb_agg(jsonb_build_object('endpoint', s.endpoint, 'p256dh', s.p256dh, 'auth', s.auth_key))
     from push_subscriptions s
     where s.team_id = p_team and s.user_id <> uid and coalesce((s.prefs ->> p_kind)::boolean, true)
+      and ic_access(p_team, s.user_id)
   ), '[]'::jsonb);
 end $$;
 
@@ -671,6 +763,7 @@ begin
     select jsonb_agg(jsonb_build_object('endpoint', s.endpoint, 'p256dh', s.p256dh, 'auth', s.auth_key))
     from push_subscriptions s
     where s.team_id = p_team and s.user_id <> uid and coalesce(s.prefs -> 'matchIds', '[]'::jsonb) @> to_jsonb(p_match)
+      and ic_access(p_team, s.user_id)
   ), '[]'::jsonb);
 end $$;
 
@@ -802,6 +895,12 @@ revoke all on function public.ic_targets(jsonb) from public, anon, authenticated
 revoke all on function public.ic_target_ok(jsonb, text) from public, anon, authenticated;
 revoke all on function public.ic_member_post(jsonb, jsonb, jsonb, uuid, text, text, text) from public, anon, authenticated;
 revoke all on function public.ic_comments(jsonb, jsonb, text, text, text) from public, anon, authenticated;
+revoke all on function public.ic_now_ms() from public, anon, authenticated;
+revoke all on function public.ic_live(jsonb) from public, anon, authenticated;
+revoke all on function public.ic_live_subs(jsonb) from public, anon, authenticated;
+revoke all on function public.ic_sub_ok(jsonb, text) from public, anon, authenticated;
+revoke all on function public.ic_until(text) from public, anon, authenticated;
+revoke all on function public.ic_access(uuid, uuid) from public, anon, authenticated;
 revoke all on function public.ic_is_member(text) from public, anon;
 revoke all on function public.ic_is_coach(text) from public, anon;
 revoke all on function public.leave_team(uuid, text) from public, anon;

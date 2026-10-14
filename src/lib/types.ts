@@ -171,6 +171,8 @@ export interface Subscriber {
   via: string | null;
   since: number;
   autoRenew?: boolean;
+  /** When access ends, for a subscription that doesn't renew. Set by the database. */
+  until?: number;
 }
 
 export interface Notif {
