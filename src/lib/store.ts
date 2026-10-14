@@ -58,7 +58,7 @@ import {
 } from './supabase';
 import { scoreTitle } from './derive';
 import { disablePush, enablePush, isStandalone, needsHomeScreen, phoneKind, updatePushPrefs, type PushPrefs } from './push';
-import { canComment, canPost, coachName, matchTitle, memberAuthor, price, seesTeamInfo, shortTeam, teamName } from './selectors';
+import { canComment, canPost, coachName, matchTitle, memberAuthor, price, shortTeam, teamName } from './selectors';
 
 const MAX_VIDEO = 50 * 1024 * 1024;
 
@@ -1449,7 +1449,6 @@ export const useStore = create<Store>()((set, get) => {
           'DTEND:' + f(end),
           'SUMMARY:' + esc(e.title + ' (' + shortTeam(s()) + ')'),
           'LOCATION:' + esc(e.venue),
-          ...(e.note && seesTeamInfo(s().role) ? ['DESCRIPTION:' + esc(e.note)] : []),
           'END:VEVENT',
           'END:VCALENDAR',
         ].join('\r\n'),
@@ -1477,7 +1476,6 @@ export const useStore = create<Store>()((set, get) => {
             title: m.title || '',
             opp: m.opp,
             date: m.date,
-            meet: m.meet || '',
             time: m.time,
             venue: m.venue,
             home: m.home,
@@ -1493,7 +1491,6 @@ export const useStore = create<Store>()((set, get) => {
           title: '',
           opp: '',
           date: iso(new Date(Date.now() + 7 * DAY)),
-          meet: '11:15',
           time: '12:00',
           venue: '',
           home: true,
@@ -1510,7 +1507,7 @@ export const useStore = create<Store>()((set, get) => {
       const venue = String(f.venue || '').trim();
       if (!title && !opp) return setForm({ err: 'Gi kampen en tittel.' });
       if (!f.date) return setForm({ err: 'Velg dato for kampen.' });
-      if (!f.meet && !f.time) return setForm({ err: 'Legg inn oppmøtetid.' });
+      if (!f.time) return setForm({ err: 'Legg inn når kampen starter.' });
       if (!venue) return setForm({ err: 'Skriv inn hvor kampen spilles.' });
       const old = f.matchId ? s().data.matches.find((x) => x.id === f.matchId) : undefined;
       const m: Match = {
@@ -1518,8 +1515,7 @@ export const useStore = create<Store>()((set, get) => {
         title,
         opp,
         date: String(f.date),
-        time: String(f.time || f.meet),
-        meet: String(f.meet || ''),
+        time: String(f.time),
         venue,
         home: !!f.home,
         kind: f.kind === 'Cup' ? 'Cup' : 'Serie',
@@ -1534,7 +1530,7 @@ export const useStore = create<Store>()((set, get) => {
         set({ sheet: null });
         toast('Kampen er endret');
         // Only a new time or place is worth a notification; a typo fix is not.
-        if (old.date !== m.date || old.time !== m.time || (old.meet || '') !== m.meet || old.venue !== m.venue) {
+        if (old.date !== m.date || old.time !== m.time || old.venue !== m.venue) {
           const text = 'Endret kamp: ' + matchTitle(s(), m) + ', ' + fmtDay(m.date) + ' kl. ' + m.time + ', ' + m.venue;
           addNotif(text);
           void notify('matches', teamName(s()), text);
@@ -1784,7 +1780,7 @@ export const useStore = create<Store>()((set, get) => {
     trainingToCal: (id) => {
       const t = (s().data.trainings || []).find((x) => x.id === id);
       if (!t) return;
-      download('trening-' + WEEKDAYS[t.weekday].replace('ø', 'o') + '.ics', seriesIcs(seesTeamInfo(s().role) ? t : { ...t, note: '' }, shortTeam(s())), 'text/calendar');
+      download('trening-' + WEEKDAYS[t.weekday].replace('ø', 'o') + '.ics', seriesIcs(t, shortTeam(s())), 'text/calendar');
       toast(isRunning(t) ? 'Treningene er lagt i kalenderen' : 'Treningen er lagt i kalenderen');
     },
     openResult: (id) => {
