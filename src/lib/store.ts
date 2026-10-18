@@ -936,7 +936,7 @@ export const useStore = create<Store>()((set, get) => {
     const team = s().team;
     if (!sig || !sig.startsWith('data:') || !team) return sig || null;
     try {
-      return await uploadMedia(team.id, sig);
+      return await uploadMedia(team.id, sig, 'sig');
     } catch {
       return sig;
     }
