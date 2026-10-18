@@ -117,6 +117,7 @@ import type {
   PersistedState,
   Player,
   Post,
+  PostType,
   Profiles,
   Role,
   Screen,
@@ -140,7 +141,9 @@ function loadState(): AppState {
   // The parent role is gone: a device that was signed in as a parent starts over (still signed in).
   if ((s.role as string) === 'parent' || (s.team?.role as string) === 'parent' || (s.screen as string) === 'consent')
     s = { ...freshState(), uid: s.uid, theme: s.theme, homeTip: s.homeTip, pushOn: s.pushOn };
-  if (!['all', 'kamp', 'trening', 'beskjed'].includes(s.filter)) s = { ...s, filter: 'all' };
+  if (!['all', 'kamp', 'arrangement'].includes(s.filter)) s = { ...s, filter: 'all' };
+  // The Annet tab is gone; its events are under Program (the kamper tab) now.
+  if ((s.tab as string) === 'arrangement') s = { ...s, tab: 'kamper' };
   return { ...s, ...ephemeral() };
 }
 
@@ -254,6 +257,8 @@ export interface Actions {
   addFiles: (files: File[]) => Promise<void>;
   removeMedia: (id: string) => void;
   publish: () => void;
+  /** Coaches: lets a player's post be seen by the team. */
+  approvePost: (id: string) => void;
   deletePost: (id: string) => void;
   copyCode: (code: string, label: string) => void;
   openTeamSettings: () => void;
@@ -486,7 +491,7 @@ export const useStore = create<Store>()((set, get) => {
 
   /** Tells the team's phones about something new. Only coaches can; it does nothing for others. */
   const notify = async (
-    kind: 'posts' | 'matches' | 'results' | 'reminders',
+    kind: 'posts' | 'matches' | 'events' | 'results' | 'reminders',
     title: string,
     body: string,
     extra: { matchId?: string | null; onlyWatchers?: boolean; playerIds?: string[] } = {},
@@ -1355,9 +1360,9 @@ export const useStore = create<Store>()((set, get) => {
       scrollTop();
     },
     setFilter: (f) => set({ filter: f }),
-    setKampTab: (t) => set({ kampTab: t, openMatch: null }),
+    setKampTab: (t) => set({ kampTab: t, openMatch: null, openEvent: null }),
     openMatchView: (id) => {
-      set({ tab: 'kamper', openMatch: id });
+      set({ tab: 'kamper', openMatch: id, openEvent: null });
       scrollTop();
     },
     closeMatch: () => {
@@ -1365,7 +1370,7 @@ export const useStore = create<Store>()((set, get) => {
       scrollTop();
     },
     goKamper: () => {
-      set({ tab: 'kamper', kampTab: 'upcoming', openMatch: null });
+      set({ tab: 'kamper', kampTab: 'upcoming', openMatch: null, openEvent: null });
       scrollTop();
     },
     toggleLike: (id) => {
@@ -1478,7 +1483,7 @@ export const useStore = create<Store>()((set, get) => {
       toast('Kampen er lagt i kalenderen');
     },
     openEventView: (id) => {
-      set({ tab: 'arrangement', openEvent: id });
+      set({ tab: 'kamper', openEvent: id, openMatch: null });
       scrollTop();
     },
     closeEvent: () => {
@@ -1660,18 +1665,18 @@ export const useStore = create<Store>()((set, get) => {
         // Only a new time or place is worth a notification; a typo fix is not.
         if (old.date !== e.date || old.time !== e.time || old.venue !== e.venue) {
           const text = 'Endret: ' + e.title + ', ' + when + ', ' + e.venue;
-          addNotif(text);
-          void notify('matches', teamName(s()), text);
+          addNotif(text, true);
+          void notify('events', teamName(s()), text);
         }
         return;
       }
       setData((d) => ({ ...d, events: [...(d.events || []), e] }));
-      set({ sheet: null, tab: 'arrangement', openEvent: null });
+      set({ sheet: null, tab: 'kamper', openEvent: null });
       scrollTop();
       toast(e.title + ' er lagt til');
       const text = 'Ny hendelse: ' + e.title + ', ' + when;
-      addNotif(text);
-      void notify('matches', teamName(s()), text);
+      addNotif(text, true);
+      void notify('events', teamName(s()), text);
     },
     deleteEvent: (id) => {
       const e = (s().data.events || []).find((x) => x.id === id);
@@ -1741,21 +1746,21 @@ export const useStore = create<Store>()((set, get) => {
         changes: old && old.weekday === weekday ? old.changes : {},
       };
       setData((d) => ({ ...d, trainings: old ? (d.trainings || []).map((x) => (x.id === t.id ? t : x)) : [...(d.trainings || []), t] }));
-      set({ sheet: null, tab: 'arrangement', openEvent: null });
+      set({ sheet: null, tab: 'kamper', openEvent: null });
       const when = repeatText(t).toLowerCase() + ' kl. ' + timeText(t) + ', ' + t.venue;
       if (old) {
         toast('Treningen er endret');
         if (old.weekday === t.weekday && old.every === t.every && old.time === t.time && old.end === t.end && old.venue === t.venue) return;
         const text = 'Endret trening: ' + t.title + ' ' + when;
         addNotif(text, true);
-        void notify('matches', teamName(s()), text);
+        void notify('events', teamName(s()), text);
         return;
       }
       scrollTop();
       toast(t.title + ' er lagt inn ' + repeatText(t).toLowerCase());
       const text = 'Ny fast trening: ' + t.title + ' ' + when;
       addNotif(text, true);
-      void notify('matches', teamName(s()), text);
+      void notify('events', teamName(s()), text);
     },
     endTraining: (id) => {
       const t = (s().data.trainings || []).find((x) => x.id === id);
@@ -1778,7 +1783,7 @@ export const useStore = create<Store>()((set, get) => {
           toast(never ? 'Treningen er slettet' : 'Treningen er avsluttet');
           const text = 'Ingen flere ' + t.title.toLowerCase() + ' ' + repeatText(t).toLowerCase();
           addNotif(text, true);
-          void notify('matches', teamName(s()), text);
+          void notify('events', teamName(s()), text);
         },
       );
     },
@@ -1815,7 +1820,7 @@ export const useStore = create<Store>()((set, get) => {
       if (!moved) return;
       const text = 'Endret trening ' + fmtDay(date) + ': kl. ' + timeText({ time: c.time || t.time, end: c.end ?? t.end }) + ', ' + (c.venue || t.venue);
       addNotif(text, true);
-      void notify('matches', teamName(s()), text);
+      void notify('events', teamName(s()), text);
     },
     cancelTrainingDay: (cancel) => {
       const f = s().form as Record<string, string | boolean>;
@@ -1829,7 +1834,7 @@ export const useStore = create<Store>()((set, get) => {
       toast(cancel ? 'Treningen ' + fmtDay(date) + ' er avlyst' : 'Treningen ' + fmtDay(date) + ' blir likevel');
       const text = (cancel ? 'Avlyst: ' : 'Blir likevel: ') + t.title.toLowerCase() + ' ' + fmtDay(date) + ' kl. ' + t.time;
       addNotif(text, true);
-      void notify('matches', teamName(s()), text);
+      void notify('events', teamName(s()), text);
     },
     trainingToCal: (id) => {
       const t = (s().data.trainings || []).find((x) => x.id === id);
@@ -1867,12 +1872,10 @@ export const useStore = create<Store>()((set, get) => {
       const p = postId ? st.data.posts.find((x) => x.id === postId) : null;
       const ev = findEvent(st.data, eventId);
       if (p) {
-        dr = { id: p.id, type: p.type, matchId: p.matchId || '', eventId: p.eventId || '', media: p.media.slice(), text: p.text, notify: false };
-      } else if (ev) {
-        dr = { id: null, type: ev.kind === 'Trening' ? 'trening' : 'beskjed', matchId: '', eventId: ev.id, media: [], text: '', notify: true };
+        dr = { id: p.id, matchId: p.matchId || '', eventId: p.eventId || '', media: p.media.slice(), text: p.text, notify: false };
       } else {
-        const last = st.data.matches.filter(isPlayed).sort((a, b) => matchTime(b) - matchTime(a))[0];
-        dr = { id: null, type: 'kamp', matchId: last ? last.id : '', media: [], text: '', notify: true };
+        // From an event: it belongs there. From the feed: to nothing, unless the poster picks something.
+        dr = { id: null, matchId: '', eventId: ev ? ev.id : '', media: [], text: '', notify: true };
       }
       set({ draft: dr, sheet: 'composer', menuPost: null });
     },
@@ -1916,12 +1919,12 @@ export const useStore = create<Store>()((set, get) => {
       if (dr.loading) return toast('Vent til opplastingen er ferdig');
       if (!dr.text.trim() && !dr.media.length) return toast('Legg til tekst, bilder eller video først');
       const coach = st.role === 'coach';
-      // Players post about a match, training or event the coaches made, never on their own.
-      const ev = findEvent(st.data, dr.eventId);
-      if (!coach && !st.data.matches.some((m) => m.id === dr.matchId) && (!ev || (isTraining(ev) && ev.cancelled)))
-        return toast('Velg kampen, treningen eller hendelsen innlegget gjelder');
-      const matchId = (dr.type === 'kamp' || !coach) && dr.matchId ? dr.matchId : null;
-      const eventId = (dr.type !== 'kamp' || !coach) && dr.eventId ? dr.eventId : null;
+      // A post belongs to one match or one event, or to nothing.
+      const matchId = dr.matchId && st.data.matches.some((m) => m.id === dr.matchId) ? dr.matchId : null;
+      const ev = matchId ? undefined : findEvent(st.data, dr.eventId);
+      const eventId = ev ? ev.id : null;
+      // The type isn't shown any more, but is kept in step with what the post belongs to.
+      const type: PostType = matchId ? 'kamp' : ev && isTraining(ev) ? 'trening' : 'beskjed';
       if (dr.id) {
         const kept = new Set(dr.media.map((m) => m.src));
         const dropped = (st.data.posts.find((p) => p.id === dr.id)?.media || []).filter((m) => !kept.has(m.src));
@@ -1929,11 +1932,13 @@ export const useStore = create<Store>()((set, get) => {
         setData((d) => ({
           ...d,
           posts: d.posts.map((p) =>
-            p.id === dr.id ? { ...p, type: dr.type, matchId, eventId, media: dr.media, text: dr.text.trim(), edited: true } : p,
+            p.id === dr.id
+              ? { ...p, type, matchId, eventId, media: dr.media, text: dr.text.trim(), edited: true, ...(coach ? {} : { pending: true }) }
+              : p,
           ),
         }));
         set({ sheet: null, draft: null });
-        toast('Innlegget er oppdatert');
+        toast(coach ? 'Innlegget er oppdatert' : 'Innlegget er oppdatert. En administrator må godkjenne det igjen.');
         return;
       }
       const now = Date.now();
@@ -1941,7 +1946,7 @@ export const useStore = create<Store>()((set, get) => {
       const author = by.author;
       const post: Post = {
         id: 'post' + now + (coach ? '' : Math.random().toString(36).slice(2, 6)),
-        type: dr.type,
+        type,
         authorId: coach ? 'coach' : st.uid,
         author,
         authorRole: by.authorRole,
@@ -1953,8 +1958,10 @@ export const useStore = create<Store>()((set, get) => {
         text: dr.text.trim(),
         likes: 0,
         likedBy: [],
+        // Posts from players wait for an administrator. The database sets this too.
+        ...(coach ? {} : { pending: true }),
       };
-      // Only coaches send notifications.
+      // Only coaches send notifications. A player's post is announced when it's approved.
       const notifyAll = coach && dr.notify !== false;
       setData((d) => ({
         ...d,
@@ -1966,7 +1973,20 @@ export const useStore = create<Store>()((set, get) => {
       // Those who asked to hear about this match get it even with notifications for posts switched off.
       if (coach && (notifyAll || matchId)) void notify('posts', teamName(s()), author + ': ' + (post.text || mediaText(post.media)).slice(0, 120), { matchId, onlyWatchers: !notifyAll });
       scrollTop();
-      toast(notifyAll ? 'Publisert. Laget er varslet.' : 'Innlegget er publisert');
+      toast(!coach ? 'Sendt. Innlegget vises for laget når en administrator har godkjent det.' : notifyAll ? 'Publisert. Laget er varslet.' : 'Innlegget er publisert');
+    },
+    approvePost: (id) => {
+      const p = s().data.posts.find((x) => x.id === id);
+      if (!p || !p.pending || s().role !== 'coach') return;
+      const now = Date.now();
+      setData((d) => ({
+        ...d,
+        posts: d.posts.map((x) => (x.id === id ? { ...x, pending: false } : x)),
+        notifs: [{ id: 'n' + now, text: 'Nytt innlegg fra ' + p.author, ts: now, read: false, from: 'coach' as const }, ...d.notifs],
+      }));
+      set({ sheet: null, menuPost: null });
+      void notify('posts', teamName(s()), p.author + ': ' + (p.text || mediaText(p.media)).slice(0, 120), { matchId: p.matchId });
+      toast('Godkjent. Innlegget vises nå for laget.');
     },
     deletePost: (id) =>
       ask('Slette innlegget?', 'Innlegget og bildene forsvinner for alle. Dette kan ikke angres.', 'Slett', () => {

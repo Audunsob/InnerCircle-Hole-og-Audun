@@ -1,59 +1,47 @@
 'use client';
 
-import { useState } from 'react';
 import { eventHours, splitEvents, visiblePosts } from '@/lib/derive';
 import { fmtLong } from '@/lib/format';
 import { canPost, playerMap } from '@/lib/selectors';
 import { useStore } from '@/lib/store';
 import { allEvents, findEvent, isRunning, isTraining, repeatText, timeText, type TrainingEvent } from '@/lib/trainings';
 import type { TeamEvent } from '@/lib/types';
-import { DateCol, Icon, Tabs } from '../ui';
+import { DateCol, Icon } from '../ui';
 import { Feed, PostPrompt } from './LagView';
 
 
-/** Pizza nights, meetings, trainings: everything on the calendar that isn't a match. */
-export function ArrangementView() {
+/**
+ * Pizza nights, meetings, trainings: everything on the calendar that isn't a match, under the matches in Program.
+ * Subscribers see only those someone has posted from, and never the fixed trainings.
+ */
+export function EventsSection({ view }: { view: 'upcoming' | 'past' }) {
   const st = useStore();
   const isCoach = st.role === 'coach';
-  const [view, setView] = useState<'upcoming' | 'past'>('upcoming');
+  const isSub = st.role === 'sub';
+  const P = playerMap(st.data.players);
+  const posted = new Set(visiblePosts(st, st.data.posts, P).map((p) => p.eventId).filter(Boolean));
   const { upcoming, past } = splitEvents(allEvents(st.data));
-  const list = view === 'upcoming' ? upcoming : past;
+  const list = (view === 'upcoming' ? upcoming : past).filter((e) => !isSub || posted.has(e.id));
 
   return (
     <>
-      <header className="app-header">
-        <div className="app-title" style={{ flex: 1, minWidth: 0 }}>
-          Annet
-        </div>
-        {isCoach && (
-          <button type="button" className="btn-outline" onClick={() => st.openAddEvent()}>
-            + Nytt
-          </button>
-        )}
-      </header>
-      <Tabs
-        value={view}
-        items={[
-          ['upcoming', 'Kommende'],
-          ['past', 'Tidligere'],
-        ]}
-        onChange={setView}
-      />
-      {view === 'upcoming' && <TrainingSeriesList />}
-      {!list.length && (
-        <p className="note" style={{ padding: '40px 0', textAlign: 'center' }}>
-          {view === 'upcoming'
-            ? isCoach
-              ? 'Ingen kommende hendelser. Trykk «+ Nytt» for å legge inn pizzakveld, spillermøte eller noe annet.'
-              : 'Ingen kommende hendelser er lagt inn.'
-            : 'Ingen tidligere hendelser.'}
-        </p>
+      {(list.length > 0 || isCoach) && (
+        <section className="section">
+          <h2 className="h2">Arrangementer</h2>
+          {!list.length && <p className="note">{view === 'upcoming' ? 'Ingen kommende arrangementer.' : 'Ingen tidligere arrangementer.'}</p>}
+          <div className="list stagger">
+            {list.map((e) => (
+              <EventRow key={e.id} e={e} />
+            ))}
+          </div>
+          {isCoach && view === 'upcoming' && (
+            <button type="button" className="link-btn small start" style={{ marginTop: 6 }} onClick={() => st.openAddEvent()}>
+              + Arrangement, f.eks. pizzakveld eller spillermøte
+            </button>
+          )}
+        </section>
       )}
-      <div className="list stagger" style={{ paddingTop: 8 }}>
-        {list.map((e) => (
-          <EventRow key={e.id} e={e} />
-        ))}
-      </div>
+      {view === 'upcoming' && !isSub && <TrainingSeriesList />}
     </>
   );
 }
@@ -164,7 +152,7 @@ export function EventDetail({ id }: { id: string }) {
           }}
         >
           <Icon name="arrow_back" />
-          Annet
+          Program
         </button>
       </header>
       <section className="card" style={{ padding: '18px 16px', display: 'flex', flexDirection: 'column', gap: 12, animation: 'ic-rise 320ms var(--ease-out) both' }}>

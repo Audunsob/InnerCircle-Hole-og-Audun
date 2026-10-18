@@ -2,12 +2,12 @@
 
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { download, firstName, fmtAcct, fmtDate, fmtDay, fmtLong, fmtShort, iso, krd, matchTime, NB, rel, stripe } from '@/lib/format';
-import { EVENT_ICONS, TYPES } from '@/lib/seed';
+import { EVENT_ICONS } from '@/lib/seed';
 import { allEvents, isTraining, WEEK_ORDER, WEEKDAYS } from '@/lib/trainings';
 import { canPost, CONSENT_INK, CONSENT_LABEL, consentStatus, hasConsent, matchTitle, notInPhotos, playerMap, price, seesTeamInfo, shortTeam, teamName } from '@/lib/selectors';
 import { canInstall, installApp, phoneKind } from '@/lib/push';
 import { receiptText, useStore } from '@/lib/store';
-import type { Draft, Media, PayMethod, PostType, SheetName } from '@/lib/types';
+import type { Draft, Media, PayMethod, SheetName } from '@/lib/types';
 import { economy } from '../app/OkonomiView';
 import { METHOD_NAMES } from '../app/MinSide';
 import { Field, Icon, SwitchRow, Tabs } from '../ui';
@@ -125,80 +125,40 @@ function Composer() {
   const matches = [...st.data.matches].sort((a, b) => matchTime(b) - matchTime(a));
   const events = allEvents(st.data).filter((e) => !isTraining(e) || (!e.cancelled && e.date <= iso(new Date()))).sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
   const coach = st.role === 'coach';
-  const ready = (dr.text.trim() || dr.media.length) && !dr.loading && (coach || !!dr.matchId || !!dr.eventId);
+  const ready = (dr.text.trim() || dr.media.length) && !dr.loading;
+  // One list for everything a post can belong to: "m:<id>" for a match, "e:<id>" for an event.
+  const target = dr.matchId ? 'm:' + dr.matchId : dr.eventId ? 'e:' + dr.eventId : '';
+  const pick = (v: string) => st.setDraft({ matchId: v.startsWith('m:') ? v.slice(2) : '', eventId: v.startsWith('e:') ? v.slice(2) : '' });
   return (
     <>
       {!coach && (
         <p className="note" style={{ fontSize: 13 }}>
-          Del bilder og video fra en kamp, trening eller hendelse administratorene har lagt inn. Administratorene kan fjerne innlegg.
+          Innlegget vises for laget når en administrator har godkjent det.
         </p>
       )}
-      {coach && (
-      <div className="field">
-        <span className="field-label">Type</span>
-        <div
-          role="group"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3,1fr)',
-            gap: 1,
-            background: 'var(--line-strong)',
-            border: '1px solid var(--line-strong)',
-            borderRadius: 8,
-            overflow: 'hidden',
-          }}
-        >
-          {(Object.keys(TYPES) as PostType[]).map((k) => {
-            const on = dr.type === k;
-            return (
-              <button
-                key={k}
-                type="button"
-                aria-pressed={on}
-                onClick={() => st.setDraft({ type: k })}
-                style={{
-                  minHeight: 46,
-                  border: 'none',
-                  background: on ? 'var(--ink)' : 'var(--surface)',
-                  color: on ? 'var(--bg)' : 'var(--ink)',
-                  font: '600 15px var(--body)',
-                  cursor: 'pointer',
-                }}
-              >
-                {TYPES[k].label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-      )}
 
-      {(dr.type === 'kamp' || !coach) && (
-        <Field label="Kamp">
-          <select className="input" value={dr.matchId} onChange={(e) => st.setDraft(coach ? { matchId: e.target.value } : { matchId: e.target.value, eventId: '' })}>
-            <option value="">{coach ? 'Ingen kamp valgt' : 'Velg kamp'}</option>
-            {matches.map((m) => (
-              <option key={m.id} value={m.id}>
-                {matchTitle(st, m) + ' · ' + fmtDay(m.date)}
-              </option>
-            ))}
-          </select>
-        </Field>
-      )}
-
-      {(dr.type !== 'kamp' || !coach) && events.length > 0 && (
-        <Field label="Hendelse">
-          <select
-            className="input"
-            value={dr.eventId || ''}
-            onChange={(e) => st.setDraft(coach ? { eventId: e.target.value } : { eventId: e.target.value, matchId: '' })}
-          >
-            <option value="">{coach ? 'Ikke knyttet til en hendelse' : 'Velg hendelse'}</option>
-            {events.map((ev) => (
-              <option key={ev.id} value={ev.id}>
-                {ev.title + ' · ' + fmtDay(ev.date)}
-              </option>
-            ))}
+      {(matches.length > 0 || events.length > 0) && (
+        <Field label="Hører til (valgfritt)">
+          <select className="input" value={target} onChange={(e) => pick(e.target.value)}>
+            <option value="">Ingen kamp eller arrangement</option>
+            {matches.length > 0 && (
+              <optgroup label="Kamper">
+                {matches.map((m) => (
+                  <option key={m.id} value={'m:' + m.id}>
+                    {matchTitle(st, m) + ' · ' + fmtDay(m.date)}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {events.length > 0 && (
+              <optgroup label="Arrangementer">
+                {events.map((ev) => (
+                  <option key={ev.id} value={'e:' + ev.id}>
+                    {ev.title + ' · ' + fmtDay(ev.date)}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
         </Field>
       )}
@@ -690,6 +650,8 @@ function PostMenu() {
   const id = useStore((s) => s.menuPost);
   const openComposer = useStore((s) => s.openComposer);
   const deletePost = useStore((s) => s.deletePost);
+  const approvePost = useStore((s) => s.approvePost);
+  const pending = useStore((s) => s.role === 'coach' && !!s.data.posts.find((x) => x.id === id)?.pending);
   // Coaches edit their own posts and delete any post; players edit and delete their own.
   const canEdit = useStore((s) => {
     const p = s.data.posts.find((x) => x.id === id);
@@ -698,6 +660,11 @@ function PostMenu() {
   if (!id) return null;
   return (
     <div className="sheet-flush">
+      {pending && (
+        <button type="button" className="row-btn" style={{ font: '500 16px var(--body)' }} onClick={() => approvePost(id)}>
+          Godkjenn innlegget
+        </button>
+      )}
       {canEdit && (
         <button type="button" className="row-btn" style={{ font: '500 16px var(--body)' }} onClick={() => openComposer(id)}>
           Rediger innlegg

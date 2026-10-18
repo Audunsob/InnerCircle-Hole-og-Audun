@@ -1,12 +1,14 @@
--- InnerCircle database setup, version 9 (accounts, approval of players, list of coaches,
+-- InnerCircle database setup, version 10 (accounts, approval of players, list of coaches,
 -- team name and codes, reports, notifications for one match or some players,
 -- leaving a team, deleting your account and deleting files, removing coaches and deleting a team,
 -- players aged 15 or more post about matches and events the coaches made, comments on posts, no
 -- parent role: under 15 a parent signs the player's own consent form, and subscribers who are removed,
 -- cancel or haven't paid don't see the team, and only coaches see signatures, years of birth and
--- parents' contact details, and a read-only page for the people who made the app).
+-- parents' contact details, a read-only page for the people who made the app, posts from players wait
+-- for a coach's approval and may belong to nothing, and notifications about trainings and other events go
+-- to players and coaches only).
 -- Paste all of this into Supabase: SQL Editor -> New query -> Run.
--- Safe to run more than once, and safe to run on top of version 1, 2, 3, 4, 5, 6, 7 and 8.
+-- Safe to run more than once, and safe to run on top of version 1, 2, 3, 4, 5, 6, 7, 8 and 9.
 
 create extension if not exists pgcrypto;
 
@@ -202,7 +204,7 @@ language sql stable set search_path = public as $$
   end
 $$;
 
--- What a post from a player or parent can be about (its matchId or eventId): a match, training or event the coaches made.
+-- What a post from a player can belong to (its matchId or eventId), if anything: a match, training or event the coaches made.
 create or replace function public.ic_targets(p_data jsonb) returns text[]
 language sql immutable set search_path = public as $$
   select coalesce(array_agg(x ->> 'id') filter (where x ->> 'id' is not null), '{}')
@@ -219,9 +221,11 @@ language sql immutable set search_path = public as $$
         case when jsonb_typeof(p_data -> 'trainings') = 'array' then p_data -> 'trainings' else '[]'::jsonb end) x))
 $$;
 
--- A post from a player or parent, as it may be saved: about something the coaches made, with photos and
--- videos from the team's own folder, tagging players on the team. Who wrote it, when, and the hearts are
--- set here, never taken from the app. Returns null if the post isn't allowed.
+-- A post from a player, as it may be saved: about something the coaches made or about nothing in particular,
+-- with photos and videos from the team's own folder, tagging players on the team. Who wrote it, when, and the
+-- hearts are set here, never taken from the app. A new post, and a post whose content changes, waits for a
+-- coach's approval (pending), and until then only the coaches and the author see it. Returns null if the
+-- post isn't allowed.
 create or replace function public.ic_member_post(p_new jsonb, p_old jsonb, p_data jsonb, p_team uuid, p_uid text,
   p_author text, p_author_role text) returns jsonb
 language sql stable set search_path = public as $$
@@ -244,7 +248,6 @@ language sql stable set search_path = public as $$
       jsonb_typeof(p_new) = 'object'
       and c.id is not null and length(c.id) <= 80
       and c.type in ('kamp', 'trening', 'beskjed')
-      and (c.match_id is not null or c.event_id is not null)
       and (c.match_id is null or ic_target_ok(p_data, c.match_id))
       and (c.event_id is null or ic_target_ok(p_data, c.event_id))
       and jsonb_array_length(c.media) <= 10
@@ -263,6 +266,14 @@ language sql stable set search_path = public as $$
       'ts', coalesce(p_old -> 'ts', to_jsonb((extract(epoch from now()) * 1000)::bigint)),
       'matchId', c.match_id, 'eventId', c.event_id, 'media', c.clean_media, 'tagged', c.tagged, 'text', c.text,
       'likes', coalesce(p_old -> 'likes', '0'::jsonb), 'likedBy', coalesce(p_old -> 'likedBy', '[]'::jsonb))
+      || case
+           when p_old is null then '{"pending": true}'::jsonb
+           when (p_old ->> 'type', p_old ->> 'matchId', p_old ->> 'eventId', p_old -> 'media', p_old -> 'tagged', p_old ->> 'text')
+                is distinct from (c.type, c.match_id, c.event_id, c.clean_media, c.tagged, c.text)
+             then '{"pending": true}'::jsonb
+           when p_old -> 'pending' = 'true'::jsonb then '{"pending": true}'::jsonb
+           else '{}'::jsonb
+         end
       || case
            when p_old is null then '{}'::jsonb
            when p_old -> 'edited' = 'true'::jsonb
@@ -373,6 +384,12 @@ language sql stable set search_path = public as $$
           ), '[]'::jsonb),
           'teamName', t.name,
           'teamCode', t.team_code,
+          -- Posts waiting for a coach's approval: only your own.
+          'posts', coalesce((
+            select jsonb_agg(x order by ord)
+            from jsonb_array_elements(coalesce(t.data -> 'posts', '[]'::jsonb)) with ordinality p(x, ord)
+            where x -> 'pending' is distinct from 'true'::jsonb or x ->> 'authorId' = p_uid::text
+          ), '[]'::jsonb),
           'subs', ic_live_subs(t.data),
           'payments', coalesce((
             select jsonb_agg(x) from jsonb_array_elements(coalesce(t.data -> 'payments', '[]'::jsonb)) x
@@ -518,8 +535,8 @@ $$;
 -- Saves a new version of the team document.
 -- Coaches may change everything. Everyone else may only change their own things:
 -- their own hearts, their own player's consent, their own subscription and payments,
--- and their own reports to the coaches. Players aged 15 or more may also add posts about a
--- match, training or event the coaches made, and change or delete their own posts. Subscribers and
+-- and their own reports to the coaches. Players aged 15 or more may also add posts, about a
+-- match, training or event the coaches made or about nothing, waiting for a coach's approval, and change or delete their own posts. Subscribers and
 -- players aged 15 or more may comment on posts and delete their own comments.
 -- Returns ok=false with the current document if someone else saved first.
 create or replace function public.save_team(p_team uuid, p_role text, p_version integer, p_data jsonb) returns jsonb
@@ -713,8 +730,13 @@ begin
   return coalesce((
     select jsonb_agg(jsonb_build_object('endpoint', s.endpoint, 'p256dh', s.p256dh, 'auth', s.auth_key))
     from push_subscriptions s
-    where s.team_id = p_team and s.user_id <> uid and coalesce((s.prefs ->> p_kind)::boolean, true)
+    where s.team_id = p_team and s.user_id <> uid
+      and coalesce((s.prefs ->> case when p_kind = 'events' then 'matches' else p_kind end)::boolean, true)
       and ic_access(p_team, s.user_id)
+      -- Trainings and other events are for the players and coaches, not for subscribers.
+      and (p_kind <> 'events' or exists (
+        select 1 from team_members m
+        where m.team_id = p_team and m.user_id = s.user_id and m.role in ('player', 'coach') and m.status = 'active'))
   ), '[]'::jsonb);
 end $$;
 
