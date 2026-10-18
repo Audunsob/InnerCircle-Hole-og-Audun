@@ -1,11 +1,12 @@
--- InnerCircle database setup, version 7 (accounts, approval of players, list of coaches,
+-- InnerCircle database setup, version 8 (accounts, approval of players, list of coaches,
 -- team name and codes, reports, notifications for one match or some players,
 -- leaving a team, deleting your account and deleting files, removing coaches and deleting a team,
 -- players aged 15 or more post about matches and events the coaches made, comments on posts, no
 -- parent role: under 15 a parent signs the player's own consent form, and subscribers who are removed,
--- cancel or haven't paid don't see the team).
+-- cancel or haven't paid don't see the team, and only coaches see signatures, years of birth and
+-- parents' contact details).
 -- Paste all of this into Supabase: SQL Editor -> New query -> Run.
--- Safe to run more than once, and safe to run on top of version 1, 2, 3, 4, 5 and 6.
+-- Safe to run more than once, and safe to run on top of version 1, 2, 3, 4, 5, 6 and 7.
 
 create extension if not exists pgcrypto;
 
@@ -152,6 +153,19 @@ language sql stable security definer set search_path = public as $$
   select exists (select 1 from team_members m where m.team_id::text = p_folder and m.user_id = auth.uid() and m.role = 'coach' and m.status = 'active')
 $$;
 
+-- Used by the photo storage rules: is this file a signature on a consent form or the coach rules? New
+-- signatures are in the team folder's "sig" subfolder; older ones are found from the team document.
+create or replace function public.ic_is_signature(p_name text) returns boolean
+language sql stable security definer set search_path = public, storage as $$
+  select (storage.foldername(p_name))[2] = 'sig' or exists (
+    select 1 from teams t
+    where t.id::text = (storage.foldername(p_name))[1] and (
+      exists (select 1 from jsonb_array_elements(coalesce(t.data -> 'players', '[]'::jsonb)) p
+              where 'sb:' || p_name in (coalesce(p -> 'consent' ->> 'playerSig', ''), coalesce(p -> 'consent' ->> 'parentSig', '')))
+      or exists (select 1 from jsonb_array_elements(coalesce(t.data -> 'coachConsents', '[]'::jsonb)) c
+                 where c ->> 'sig' = 'sb:' || p_name)))
+$$;
+
 -- Removes array items whose text equals p_value.
 create or replace function public.ic_without(p_arr jsonb, p_value text) returns jsonb
 language sql immutable set search_path = public as $$
@@ -288,8 +302,29 @@ language sql stable set search_path = public as $$
        from (select x, ord from added order by ord limit 5) a), '[]'::jsonb)
 $$;
 
+-- A player as everyone but the coaches and the player themselves sees them: no year of birth, no parent's
+-- contact details, and no signatures or parent's name on the consent form. Where the form was signed,
+-- playerSig and parentSig say only 'signed', so the app can still tell whether a parent has signed.
+create or replace function public.ic_public_player(p jsonb) returns jsonb
+language sql immutable set search_path = public as $$
+  select p || jsonb_build_object(
+    'born', null,
+    'parent', jsonb_build_object('name', '', 'phone', '', 'email', ''),
+    'consent', case when jsonb_typeof(p -> 'consent') = 'object' then
+      (p -> 'consent') - 'parentName' - 'parentBy'
+      || case when p -> 'consent' ? 'playerSig'
+              then jsonb_build_object('playerSig', case when nullif(p -> 'consent' ->> 'playerSig', '') is null then null else 'signed' end)
+              else '{}'::jsonb end
+      || case when p -> 'consent' ? 'parentSig'
+              then jsonb_build_object('parentSig', case when nullif(p -> 'consent' ->> 'parentSig', '') is null then null else 'signed' end)
+              else '{}'::jsonb end
+      || case when nullif(p -> 'consent' ->> 'parentBy', '') is not null then jsonb_build_object('parentBy', 'signed') else '{}'::jsonb end
+    else p -> 'consent' end)
+$$;
+
 -- What a member gets back. Coaches see everything; others don't see the coach code,
--- payout account, coach signatures or other people's payments. A subscriber who isn't on the list
+-- payout account, coach signatures or other people's payments, and see other players without
+-- their year of birth, parent's contact details or signatures. A subscriber who isn't on the list
 -- (hasn't paid yet, or the subscription ran out) gets only what they need to pay: the team's name,
 -- code, price and player names. Subscriptions that ran out are left out of the list.
 create or replace function public.ic_payload(t public.teams, p_role text) returns jsonb
@@ -324,6 +359,15 @@ language sql stable set search_path = public as $$
       else
         (t.data - 'payout' - 'coachConsents')
         || jsonb_build_object(
+          'players', coalesce((
+            select jsonb_agg(case
+              when p ->> 'id' = (select m.player_id from team_members m
+                                 where m.team_id = t.id and m.user_id = auth.uid() and m.role = 'player' and p_role = 'player')
+                then p
+              else ic_public_player(p) end
+              order by ord)
+            from jsonb_array_elements(coalesce(t.data -> 'players', '[]'::jsonb)) with ordinality x(p, ord)
+          ), '[]'::jsonb),
           'teamName', t.name,
           'teamCode', t.team_code,
           'subs', ic_live_subs(t.data),
@@ -888,6 +932,7 @@ revoke all on function public.ic_uid() from public, anon, authenticated;
 revoke all on function public.ic_without(jsonb, text) from public, anon, authenticated;
 revoke all on function public.ic_consent(text, text, jsonb, jsonb) from public, anon, authenticated;
 revoke all on function public.ic_payload(public.teams, text) from public, anon, authenticated;
+revoke all on function public.ic_public_player(jsonb) from public, anon, authenticated;
 revoke all on function public.ic_forget(jsonb, text) from public, anon, authenticated;
 revoke all on function public.ic_last_coach(uuid, uuid) from public, anon, authenticated;
 revoke all on function public.ic_can_post(jsonb, text, text) from public, anon, authenticated;
@@ -903,6 +948,7 @@ revoke all on function public.ic_until(text) from public, anon, authenticated;
 revoke all on function public.ic_access(uuid, uuid) from public, anon, authenticated;
 revoke all on function public.ic_is_member(text) from public, anon;
 revoke all on function public.ic_is_coach(text) from public, anon;
+revoke all on function public.ic_is_signature(text) from public, anon;
 revoke all on function public.leave_team(uuid, text) from public, anon;
 revoke all on function public.delete_me() from public, anon;
 revoke all on function public.remove_coach(uuid, uuid) from public, anon;
@@ -942,11 +988,14 @@ grant execute on function public.notify_targets(uuid, text) to authenticated;
 grant execute on function public.delete_push(text) to anon, authenticated;
 grant execute on function public.ic_is_member(text) to authenticated;
 grant execute on function public.ic_is_coach(text) to authenticated;
+grant execute on function public.ic_is_signature(text) to authenticated;
 grant execute on function public.leave_team(uuid, text) to authenticated;
 grant execute on function public.delete_me() to authenticated;
 
 -- ---------- Photos, videos and signatures ----------
--- Private: only members of a team can upload to or open files in that team's folder.
+-- Private: only members of a team can upload to or open files in that team's folder. Signatures
+-- (new ones go in the folder's "sig" subfolder) only the team's coaches and the person who uploaded
+-- them can open.
 -- The team's coaches can delete them (when a post or a photo in it is deleted), and members can
 -- delete files they uploaded themselves (when they delete their own post).
 
@@ -965,7 +1014,10 @@ create policy "InnerCircle members upload" on storage.objects
   with check (bucket_id = 'media' and public.ic_is_member((storage.foldername(name))[1]));
 create policy "InnerCircle members read" on storage.objects
   for select to authenticated
-  using (bucket_id = 'media' and public.ic_is_member((storage.foldername(name))[1]));
+  using (bucket_id = 'media' and public.ic_is_member((storage.foldername(name))[1])
+         and (not public.ic_is_signature(name)
+              or owner_id = (select auth.uid())::text
+              or public.ic_is_coach((storage.foldername(name))[1])));
 create policy "InnerCircle coaches delete" on storage.objects
   for delete to authenticated
   using (bucket_id = 'media' and public.ic_is_coach((storage.foldername(name))[1]));

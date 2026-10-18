@@ -201,17 +201,21 @@ export const removeCoach = (teamId: string, userId: string) => rpc<void>('remove
 /** Coach: deletes the team for everyone. `confirm` must be the team's name. */
 export const deleteTeam = (teamId: string, confirm: string) => rpc<void>('delete_team', { p_team: teamId, p_confirm: confirm });
 
-/** Coach: deletes every file in the team's folder. Best effort; never throws. */
+/** Coach: deletes every file in the team's folder and its signature folder. Best effort; never throws. */
 export async function deleteTeamFiles(teamId: string) {
   const bucket = db().storage.from('media');
-  try {
-    for (let round = 0; round < 100; round++) {
-      const { data, error } = await bucket.list(teamId, { limit: 100 });
-      if (error || !data?.length) return;
-      const { error: rmError } = await bucket.remove(data.map((f) => teamId + '/' + f.name));
-      if (rmError) return;
-    }
-  } catch {}
+  for (const folder of [teamId, teamId + '/sig']) {
+    try {
+      for (let round = 0; round < 100; round++) {
+        const { data, error } = await bucket.list(folder, { limit: 100 });
+        // Subfolders are listed without an id; their files are removed in their own round.
+        const files = (data || []).filter((f) => f.id);
+        if (error || !files.length) break;
+        const { error: rmError } = await bucket.remove(files.map((f) => folder + '/' + f.name));
+        if (rmError) break;
+      }
+    } catch {}
+  }
 }
 
 /** Saves if `version` is still current; otherwise returns ok=false and the newer document. */
@@ -234,10 +238,11 @@ const EXT: Record<string, string> = {
 };
 
 /** Uploads to the team's private folder and returns a reference ("sb:<path>") to store in the team document. */
-export async function uploadMedia(teamId: string, src: string | Blob): Promise<string> {
+/** folder 'sig' is for signatures, which only the team's coaches and the uploader can open. */
+export async function uploadMedia(teamId: string, src: string | Blob, folder?: 'sig'): Promise<string> {
   const blob = typeof src === 'string' ? await dataUrlToBlob(src) : src;
   const type = blob.type || 'image/jpeg';
-  const path = `${teamId}/${crypto.randomUUID()}.${EXT[type] || 'bin'}`;
+  const path = `${teamId}/${folder ? folder + '/' : ''}${crypto.randomUUID()}.${EXT[type] || 'bin'}`;
   const { error } = await db().storage.from('media').upload(path, blob, { contentType: type, cacheControl: '31536000' });
   if (error) throw new Error(error.message);
   return STORAGE_PREFIX + path;
