@@ -157,7 +157,8 @@ $$;
 -- signatures are in the team folder's "sig" subfolder; older ones are found from the team document.
 create or replace function public.ic_is_signature(p_name text) returns boolean
 language sql stable security definer set search_path = public, storage as $$
-  select (storage.foldername(p_name))[2] = 'sig' or exists (
+  -- coalesce: a file right in the team folder has no second folder, and null would hide it from everyone but coaches.
+  select coalesce((storage.foldername(p_name))[2] = 'sig', false) or exists (
     select 1 from teams t
     where t.id::text = (storage.foldername(p_name))[1] and (
       exists (select 1 from jsonb_array_elements(coalesce(t.data -> 'players', '[]'::jsonb)) p
