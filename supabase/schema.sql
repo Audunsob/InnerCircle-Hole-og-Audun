@@ -1,12 +1,12 @@
--- InnerCircle database setup, version 8 (accounts, approval of players, list of coaches,
+-- InnerCircle database setup, version 9 (accounts, approval of players, list of coaches,
 -- team name and codes, reports, notifications for one match or some players,
 -- leaving a team, deleting your account and deleting files, removing coaches and deleting a team,
 -- players aged 15 or more post about matches and events the coaches made, comments on posts, no
 -- parent role: under 15 a parent signs the player's own consent form, and subscribers who are removed,
 -- cancel or haven't paid don't see the team, and only coaches see signatures, years of birth and
--- parents' contact details).
+-- parents' contact details, and a read-only page for the people who made the app).
 -- Paste all of this into Supabase: SQL Editor -> New query -> Run.
--- Safe to run more than once, and safe to run on top of version 1, 2, 3, 4, 5, 6 and 7.
+-- Safe to run more than once, and safe to run on top of version 1, 2, 3, 4, 5, 6, 7 and 8.
 
 create extension if not exists pgcrypto;
 
@@ -157,7 +157,8 @@ $$;
 -- signatures are in the team folder's "sig" subfolder; older ones are found from the team document.
 create or replace function public.ic_is_signature(p_name text) returns boolean
 language sql stable security definer set search_path = public, storage as $$
-  select (storage.foldername(p_name))[2] = 'sig' or exists (
+  -- coalesce: a file right in the team folder has no second folder, and null would hide it from everyone but coaches.
+  select coalesce((storage.foldername(p_name))[2] = 'sig', false) or exists (
     select 1 from teams t
     where t.id::text = (storage.foldername(p_name))[1] and (
       exists (select 1 from jsonb_array_elements(coalesce(t.data -> 'players', '[]'::jsonb)) p
@@ -327,7 +328,9 @@ $$;
 -- their year of birth, parent's contact details or signatures. A subscriber who isn't on the list
 -- (hasn't paid yet, or the subscription ran out) gets only what they need to pay: the team's name,
 -- code, price and player names. Subscriptions that ran out are left out of the list.
-create or replace function public.ic_payload(t public.teams, p_role text) returns jsonb
+-- p_uid is the account the payload is for. p_preview: no particular account, as a new member in the role
+-- would see it once on the team (a subscriber who has paid); only the moderator page asks for that.
+create or replace function public.ic_payload_as(t public.teams, p_role text, p_uid uuid, p_preview boolean) returns jsonb
 language sql stable set search_path = public as $$
   select jsonb_build_object(
     'teamId', t.id,
@@ -337,7 +340,7 @@ language sql stable set search_path = public as $$
       case when p_role = 'coach' then
         t.data || jsonb_build_object('teamName', t.name, 'teamCode', t.team_code, 'coachCode', t.coach_code,
                                      'subs', ic_live_subs(t.data))
-      when p_role = 'sub' and not ic_sub_ok(t.data, auth.uid()::text) then
+      when p_role = 'sub' and not p_preview and not ic_sub_ok(t.data, p_uid::text) then
         jsonb_build_object(
           'teamName', t.name,
           'teamCode', t.team_code,
@@ -354,7 +357,7 @@ language sql stable set search_path = public as $$
           'account', jsonb_build_object('connected', false, 'bank', '', 'number', ''), 'ytdBase', 0,
           'payments', coalesce((
             select jsonb_agg(x) from jsonb_array_elements(coalesce(t.data -> 'payments', '[]'::jsonb)) x
-            where x ->> 'subId' = 'sub-' || auth.uid()::text
+            where x ->> 'subId' = 'sub-' || p_uid::text
           ), '[]'::jsonb))
       else
         (t.data - 'payout' - 'coachConsents')
@@ -362,7 +365,7 @@ language sql stable set search_path = public as $$
           'players', coalesce((
             select jsonb_agg(case
               when p ->> 'id' = (select m.player_id from team_members m
-                                 where m.team_id = t.id and m.user_id = auth.uid() and m.role = 'player' and p_role = 'player')
+                                 where m.team_id = t.id and m.user_id = p_uid and m.role = 'player' and p_role = 'player')
                 then p
               else ic_public_player(p) end
               order by ord)
@@ -373,16 +376,19 @@ language sql stable set search_path = public as $$
           'subs', ic_live_subs(t.data),
           'payments', coalesce((
             select jsonb_agg(x) from jsonb_array_elements(coalesce(t.data -> 'payments', '[]'::jsonb)) x
-            where x ->> 'subId' in ('sub-' || auth.uid()::text, 'par-' || auth.uid()::text)
+            where x ->> 'subId' in ('sub-' || p_uid::text, 'par-' || p_uid::text)
           ), '[]'::jsonb),
           -- Reports and messages to the coaches: only your own.
           'reports', coalesce((
             select jsonb_agg(x) from jsonb_array_elements(coalesce(t.data -> 'reports', '[]'::jsonb)) x
-            where x ->> 'by' = auth.uid()::text
+            where x ->> 'by' = p_uid::text
           ), '[]'::jsonb))
       end
   )
 $$;
+
+create or replace function public.ic_payload(t public.teams, p_role text) returns jsonb
+language sql stable set search_path = public as $$ select ic_payload_as(t, p_role, auth.uid(), false) $$;
 
 -- ---------- Joining ----------
 
@@ -992,8 +998,229 @@ grant execute on function public.ic_is_signature(text) to authenticated;
 grant execute on function public.leave_team(uuid, text) to authenticated;
 grant execute on function public.delete_me() to authenticated;
 
+-- ---------- Moderators ----------
+-- The people who made the app have a page of their own at /moderator. It shows all teams and accounts,
+-- and the app as another account or role sees it, but it can't change anything. Nothing in the app links
+-- to it, and to everyone else it looks like a page that doesn't exist. Each visit is written to a log.
+
+-- Moderators by login email, in lower case. To add or remove one, change this list and run the file again.
+create table if not exists public.moderators (
+  email text primary key check (email = lower(email))
+);
+insert into public.moderators (email) values ('audunsob@icloud.com'), ('juliansnapface@gmail.com')
+on conflict (email) do nothing;
+
+-- Every time a moderator opens the page or views the app as someone else.
+create table if not exists public.moderator_log (
+  id bigint generated always as identity primary key,
+  at timestamptz not null default now(),
+  email text not null,
+  action text not null check (action in ('open', 'view_as')),
+  detail jsonb not null default '{}'::jsonb
+);
+create index if not exists moderator_log_at_idx on public.moderator_log (at desc);
+
+alter table public.moderators enable row level security;
+alter table public.moderator_log enable row level security;
+revoke all on public.moderators from anon, authenticated;
+revoke all on public.moderator_log from anon, authenticated;
+
+-- The signed-in account's email if it is on the moderator list, else null.
+create or replace function public.ic_mod_email() returns text
+language sql stable security definer set search_path = public as $$
+  select lower(u.email) from auth.users u join moderators m on m.email = lower(u.email)
+  where u.id = auth.uid() and u.email_confirmed_at is not null
+$$;
+
+-- Is the signed-in account a moderator? The page asks this to decide what to show; the photo rules use it too.
+create or replace function public.ic_is_moderator() returns boolean
+language sql stable security definer set search_path = public as $$ select ic_mod_email() is not null $$;
+
+-- "o•••@gmail.com": enough to tell accounts apart without showing the whole address.
+create or replace function public.ic_mask(p_email text) returns text
+language sql immutable set search_path = public as $$
+  select case when p_email is null or position('@' in p_email) = 0 then null
+    else left(p_email, 1) || '•••' || substr(p_email, position('@' in p_email)) end
+$$;
+
+-- The name an account goes by: the name they subscribed with, their player's name, or the name on the coach rules.
+create or replace function public.ic_account_name(p_uid uuid, p_email text) returns text
+language sql stable set search_path = public as $$
+  select coalesce(
+    (select nullif(trim(x ->> 'name'), '')
+       from team_members m join teams t on t.id = m.team_id,
+            jsonb_array_elements(coalesce(t.data -> 'subs', '[]'::jsonb)) x
+      where m.user_id = p_uid and m.role = 'sub' and x ->> 'id' = 'sub-' || p_uid::text limit 1),
+    (select nullif(trim(p ->> 'name'), '')
+       from team_members m join teams t on t.id = m.team_id,
+            jsonb_array_elements(coalesce(t.data -> 'players', '[]'::jsonb)) p
+      where m.user_id = p_uid and m.role = 'player' and p ->> 'id' = m.player_id limit 1),
+    (select nullif(trim(c ->> 'name'), '')
+       from team_members m join teams t on t.id = m.team_id,
+            jsonb_array_elements(coalesce(t.data -> 'coachConsents', '[]'::jsonb)) c
+      where m.user_id = p_uid and m.role = 'coach' and p_email is not null and lower(c ->> 'contact') = lower(p_email) limit 1))
+$$;
+
+-- Everything the moderator page shows. Emails are partly hidden; no years of birth, phone numbers,
+-- consent forms or signatures. Fails as if it didn't exist for anyone who isn't a moderator.
+create or replace function public.mod_overview() returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me text := ic_mod_email();
+begin
+  if me is null then raise exception 'not_found'; end if;
+  insert into moderator_log (email, action) values (me, 'open');
+  return jsonb_build_object(
+    'me', me,
+    'teams', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', t.id,
+        'name', t.name,
+        'createdAt', t.created_at,
+        'coaches', (select count(*) from team_members m where m.team_id = t.id and m.role = 'coach' and m.status = 'active'),
+        'players', jsonb_array_length(coalesce(t.data -> 'players', '[]'::jsonb)),
+        'playerAccounts', (select count(*) from team_members m where m.team_id = t.id and m.role = 'player' and m.status = 'active'),
+        'pending', (select count(*) from team_members m where m.team_id = t.id and m.role = 'player' and m.status = 'pending'),
+        'subs', jsonb_array_length(ic_live_subs(t.data)),
+        -- Photos allowed: the player said yes, and under 15 a parent signed too.
+        'consentGiven', (select count(*) from jsonb_array_elements(coalesce(t.data -> 'players', '[]'::jsonb)) p
+                          where p -> 'consent' ->> 'photo' = 'true'
+                            and (p -> 'consent' ->> 'adult' is distinct from 'false'
+                                 or nullif(p -> 'consent' ->> 'parentSig', '') is not null
+                                 or nullif(p -> 'consent' ->> 'parentBy', '') is not null)),
+        'consentDeclined', (select count(*) from jsonb_array_elements(coalesce(t.data -> 'players', '[]'::jsonb)) p
+                             where nullif(p ->> 'declined', '') is not null),
+        'reports', jsonb_array_length(coalesce(t.data -> 'reports', '[]'::jsonb)),
+        'posts', jsonb_array_length(coalesce(t.data -> 'posts', '[]'::jsonb)),
+        'lastPost', (select max((x ->> 'ts')::numeric) from jsonb_array_elements(coalesce(t.data -> 'posts', '[]'::jsonb)) x
+                      where x ->> 'ts' ~ '^\d+(\.\d+)?$'))
+        order by t.name)
+      from teams t
+    ), '[]'::jsonb),
+    'users', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', u.id,
+        'email', ic_mask(lower(u.email)),
+        'name', ic_account_name(u.id, u.email),
+        'createdAt', u.created_at,
+        'lastSignIn', u.last_sign_in_at,
+        'confirmed', u.email_confirmed_at is not null,
+        'moderator', exists (select 1 from moderators x where x.email = lower(u.email)),
+        'teams', coalesce((
+          select jsonb_agg(jsonb_build_object(
+            'teamId', m.team_id, 'teamName', t.name, 'role', m.role, 'status', m.status,
+            'live', m.role <> 'sub' or ic_sub_ok(t.data, u.id::text)) order by t.name, m.role)
+          from team_members m join teams t on t.id = m.team_id
+          where m.user_id = u.id and m.role in ('coach', 'player', 'sub')
+        ), '[]'::jsonb))
+        order by u.last_sign_in_at desc nulls last)
+      from auth.users u
+    ), '[]'::jsonb),
+    -- What members reported to the coaches. A report is gone once a coach has handled it.
+    'reports', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'teamId', t.id,
+        'teamName', t.name,
+        'at', r -> 'at',
+        'question', nullif(r ->> 'postId', '') is null,
+        'text', left(coalesce(r ->> 'text', ''), 300),
+        'post', (select left(coalesce(nullif(x ->> 'text', ''), case when jsonb_array_length(coalesce(x -> 'media', '[]'::jsonb)) > 0 then 'Bilde eller video' else '' end), 120)
+                   from jsonb_array_elements(coalesce(t.data -> 'posts', '[]'::jsonb)) x
+                  where x ->> 'id' = r ->> 'postId' limit 1))
+        order by (r ->> 'at') desc)
+      from teams t, jsonb_array_elements(coalesce(t.data -> 'reports', '[]'::jsonb)) r
+    ), '[]'::jsonb),
+    -- Places where people may have got stuck.
+    'stuck', jsonb_build_object(
+      'neverSignedIn', (select count(*) from auth.users u where u.email_confirmed_at is null),
+      'noTeam', (select count(*) from auth.users u where u.email_confirmed_at is not null
+                   and not exists (select 1 from team_members m where m.user_id = u.id and m.role in ('coach', 'player', 'sub'))
+                   and not exists (select 1 from moderators x where x.email = lower(u.email))),
+      'waitingLong', (select count(*) from team_members m where m.role = 'player' and m.status = 'pending' and m.created_at < now() - interval '3 days'),
+      'subsNotLive', (select count(*) from team_members m join teams t on t.id = m.team_id
+                       where m.role = 'sub' and not ic_sub_ok(t.data, m.user_id::text))),
+    'log', coalesce((
+      select jsonb_agg(jsonb_build_object('at', l.at, 'email', l.email, 'action', l.action, 'detail', l.detail) order by l.at desc)
+      from (select * from moderator_log order by at desc limit 50) l
+    ), '[]'::jsonb)
+  );
+end $$;
+
+-- The app as one account (p_user) or a role (p_user null) on a team sees it, for the moderator page.
+-- The same data the app itself would get, plus what the screens load on their own (linked players,
+-- coaches and teams), with emails partly hidden. Nothing can be saved with it.
+create or replace function public.mod_view_as(p_team uuid, p_role text, p_user uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  me text := ic_mod_email();
+  t teams;
+  m team_members;
+  who text;
+begin
+  if me is null then raise exception 'not_found'; end if;
+  if p_role not in ('coach', 'player', 'sub') then raise exception 'invalid_role'; end if;
+  t := (select x from teams x where x.id = p_team);
+  if t.id is null then raise exception 'unknown_team'; end if;
+  if p_user is not null then
+    m := (select x from team_members x where x.team_id = p_team and x.user_id = p_user and x.role = p_role);
+    if m.team_id is null then raise exception 'not_member'; end if;
+    if m.status = 'pending' then raise exception 'pending'; end if;
+    who := (select lower(u.email) from auth.users u where u.id = p_user);
+  end if;
+  insert into moderator_log (email, action, detail)
+  values (me, 'view_as', jsonb_strip_nulls(jsonb_build_object(
+    'teamId', t.id, 'team', t.name, 'role', p_role, 'userId', p_user,
+    'email', ic_mask(who), 'name', case when p_user is not null then ic_account_name(p_user, who) end)));
+  return jsonb_build_object(
+    'payload', ic_payload_as(t, p_role, p_user, p_user is null),
+    'playerId', m.player_id,
+    'name', case when p_user is not null then ic_account_name(p_user, who) end,
+    'email', ic_mask(who),
+    'links', case when p_role <> 'coach' then '[]'::jsonb else coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'userId', x.user_id, 'role', x.role, 'playerId', x.player_id, 'status', x.status,
+        'email', ic_mask(lower(u.email)), 'at', x.created_at) order by x.created_at)
+      from team_members x left join auth.users u on u.id = x.user_id
+      where x.team_id = t.id and x.role = 'player'
+    ), '[]'::jsonb) end,
+    'coaches', case when p_role <> 'coach' then '[]'::jsonb else coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'userId', x.user_id, 'email', ic_mask(lower(u.email)), 'at', x.created_at, 'me', x.user_id = p_user,
+        'name', c ->> 'name', 'signedAt', (c ->> 'at')::bigint) order by x.created_at)
+      from team_members x
+      left join auth.users u on u.id = x.user_id
+      left join lateral (
+        select y from jsonb_array_elements(coalesce(t.data -> 'coachConsents', '[]'::jsonb)) y
+        where u.email is not null and lower(y ->> 'contact') = lower(u.email)
+        order by (y ->> 'at')::bigint desc nulls last limit 1
+      ) cc(c) on true
+      where x.team_id = t.id and x.role = 'coach' and x.status = 'active'
+    ), '[]'::jsonb) end,
+    'teams', case when p_user is null then
+      jsonb_build_array(jsonb_build_object('teamId', t.id, 'role', p_role, 'playerId', null, 'teamName', t.name, 'status', 'active'))
+    else coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'teamId', x.team_id, 'role', x.role, 'playerId', x.player_id, 'teamName', y.name, 'status', x.status)
+        order by x.created_at desc)
+      from team_members x join teams y on y.id = x.team_id
+      where x.user_id = p_user and x.role in ('coach', 'player', 'sub')
+    ), '[]'::jsonb) end
+  );
+end $$;
+
+revoke all on function public.ic_mod_email() from public, anon, authenticated;
+revoke all on function public.ic_mask(text) from public, anon, authenticated;
+revoke all on function public.ic_account_name(uuid, text) from public, anon, authenticated;
+revoke all on function public.ic_payload_as(public.teams, text, uuid, boolean) from public, anon, authenticated;
+revoke all on function public.ic_is_moderator() from public, anon;
+revoke all on function public.mod_overview() from public, anon;
+revoke all on function public.mod_view_as(uuid, text, uuid) from public, anon;
+grant execute on function public.ic_is_moderator() to authenticated;
+grant execute on function public.mod_overview() to authenticated;
+grant execute on function public.mod_view_as(uuid, text, uuid) to authenticated;
+
 -- ---------- Photos, videos and signatures ----------
--- Private: only members of a team can upload to or open files in that team's folder. Signatures
+-- Private: only members of a team can upload to or open files in that team's folder (moderators can open them too). Signatures
 -- (new ones go in the folder's "sig" subfolder) only the team's coaches and the person who uploaded
 -- them can open.
 -- The team's coaches can delete them (when a post or a photo in it is deleted), and members can
@@ -1014,10 +1241,13 @@ create policy "InnerCircle members upload" on storage.objects
   with check (bucket_id = 'media' and public.ic_is_member((storage.foldername(name))[1]));
 create policy "InnerCircle members read" on storage.objects
   for select to authenticated
-  using (bucket_id = 'media' and public.ic_is_member((storage.foldername(name))[1])
-         and (not public.ic_is_signature(name)
-              or owner_id = (select auth.uid())::text
-              or public.ic_is_coach((storage.foldername(name))[1])));
+  using (bucket_id = 'media' and (
+    (public.ic_is_member((storage.foldername(name))[1])
+     and (not public.ic_is_signature(name)
+          or owner_id = (select auth.uid())::text
+          or public.ic_is_coach((storage.foldername(name))[1])))
+    -- Moderators see the photos and videos on the moderator page, never signatures.
+    or (public.ic_is_moderator() and not public.ic_is_signature(name))));
 create policy "InnerCircle coaches delete" on storage.objects
   for delete to authenticated
   using (bucket_id = 'media' and public.ic_is_coach((storage.foldername(name))[1]));

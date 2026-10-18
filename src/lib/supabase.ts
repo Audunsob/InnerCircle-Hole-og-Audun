@@ -82,6 +82,7 @@ export class LastCoachError extends Error {
 export class CodeTakenError extends Error {}
 
 async function rpc<T>(fn: string, args: Record<string, unknown> = {}): Promise<T> {
+  if (viewAs) return viewAsRpc(viewAs, fn) as T;
   const { data, error } = await db().rpc(fn, args);
   if (error) {
     if (/code_taken/.test(error.message)) throw new CodeTakenError(error.message);
@@ -100,6 +101,7 @@ async function rpc<T>(fn: string, args: Record<string, unknown> = {}): Promise<T
  * Creates the account the first time. The link brings the person back to this site, signed in.
  */
 export async function sendCode(email: string) {
+  if (viewAs) throw new Error(READ_ONLY);
   const { error } = await db().auth.signInWithOtp({
     email,
     options: { shouldCreateUser: true, emailRedirectTo: window.location.origin + '/' },
@@ -133,6 +135,7 @@ export async function verifyLink(tokenHash: string, type: string): Promise<strin
 
 /** Checks the code and signs in. Returns the account id. */
 export async function verifyCode(email: string, token: string): Promise<string> {
+  if (viewAs) throw new Error(READ_ONLY);
   const { data, error } = await db().auth.verifyOtp({ email, token, type: 'email' });
   if (error || !data.user) throw new Error(error?.message || 'Feil kode');
   return data.user.id;
@@ -159,6 +162,8 @@ export async function currentSession(): Promise<{ id: string; email: string } | 
 }
 
 export async function signOut() {
+  // Viewing the app as someone else must never sign the moderator out.
+  if (viewAs) return;
   try {
     await db().auth.signOut();
   } catch {}
@@ -203,6 +208,7 @@ export const deleteTeam = (teamId: string, confirm: string) => rpc<void>('delete
 
 /** Coach: deletes every file in the team's folder and its signature folder. Best effort; never throws. */
 export async function deleteTeamFiles(teamId: string) {
+  if (viewAs) return;
   const bucket = db().storage.from('media');
   for (const folder of [teamId, teamId + '/sig']) {
     try {
@@ -240,6 +246,7 @@ const EXT: Record<string, string> = {
 /** Uploads to the team's private folder and returns a reference ("sb:<path>") to store in the team document. */
 /** folder 'sig' is for signatures, which only the team's coaches and the uploader can open. */
 export async function uploadMedia(teamId: string, src: string | Blob, folder?: 'sig'): Promise<string> {
+  if (viewAs) throw new Error(READ_ONLY);
   const blob = typeof src === 'string' ? await dataUrlToBlob(src) : src;
   const type = blob.type || 'image/jpeg';
   const path = `${teamId}/${folder ? folder + '/' : ''}${crypto.randomUUID()}.${EXT[type] || 'bin'}`;
@@ -302,6 +309,7 @@ export function cachedMediaUrl(src: string): string | null {
 
 /** Deletes stored files (coaches only). Plain URLs and data URLs are ignored. Never throws. */
 export async function deleteMedia(srcs: (string | undefined)[]) {
+  if (viewAs) return;
   const paths = srcs.filter((x): x is string => !!x && x.startsWith(STORAGE_PREFIX)).map((x) => x.slice(STORAGE_PREFIX.length));
   if (!paths.length) return;
   for (const p of paths) signed.delete(p);
@@ -321,3 +329,112 @@ export const savePush = (teamId: string, sub: PushSubscriptionJSON, prefs: Recor
     p_prefs: prefs,
   });
 export const deletePush = (endpoint: string) => rpc<void>('delete_push', { p_endpoint: endpoint });
+
+// ---------- Moderators ----------
+// The people who made the app have a page at /moderator. The database decides who they are and
+// answers everyone else as if the page didn't exist.
+
+export interface ModTeam {
+  id: string;
+  name: string;
+  createdAt: string;
+  coaches: number;
+  players: number;
+  /** Players with an approved account. */
+  playerAccounts: number;
+  /** Players waiting for a coach to approve them. */
+  pending: number;
+  subs: number;
+  consentGiven: number;
+  consentDeclined: number;
+  reports: number;
+  posts: number;
+  lastPost: number | null;
+}
+
+export interface ModUser {
+  id: string;
+  /** Partly hidden: "o•••@gmail.com". */
+  email: string | null;
+  name: string | null;
+  createdAt: string;
+  lastSignIn: string | null;
+  /** Has used a login code at least once. */
+  confirmed: boolean;
+  moderator: boolean;
+  teams: { teamId: string; teamName: string; role: MemberRole; status: 'pending' | 'active'; live: boolean }[];
+}
+
+export interface ModReport {
+  teamId: string;
+  teamName: string;
+  at: number;
+  /** A question to the coaches rather than a post someone wants looked at. */
+  question: boolean;
+  text: string;
+  /** The start of the post it is about; null if the post is gone. */
+  post: string | null;
+}
+
+export interface ModLogEntry {
+  at: string;
+  email: string;
+  action: 'open' | 'view_as';
+  detail: { team?: string; role?: MemberRole; name?: string; email?: string };
+}
+
+export interface ModOverview {
+  me: string;
+  teams: ModTeam[];
+  users: ModUser[];
+  reports: ModReport[];
+  stuck: { neverSignedIn: number; noTeam: number; waitingLong: number; subsNotLive: number };
+  log: ModLogEntry[];
+}
+
+/** The app as an account or a role sees it, with what its screens load on their own. */
+export interface ModViewAs {
+  payload: TeamPayload;
+  playerId: string | null;
+  name: string | null;
+  email: string | null;
+  links: TeamLink[];
+  coaches: TeamCoach[];
+  teams: Membership[];
+}
+
+export const isModerator = () => rpc<boolean>('ic_is_moderator');
+/** Also writes the visit to the moderator log. */
+export const modOverview = () => rpc<ModOverview>('mod_overview');
+/** userId null: no particular account, as a new member in the role sees it. Written to the moderator log. */
+export const modViewAs = (teamId: string, role: MemberRole, userId: string | null) =>
+  rpc<ModViewAs>('mod_view_as', { p_team: teamId, p_role: role, p_user: userId });
+
+// ---------- Viewing the app as someone else ----------
+// While a moderator views the app as someone else, nothing reaches the database: reads are answered
+// from what mod_view_as returned, and everything else fails with READ_ONLY. Photos still load.
+
+export const READ_ONLY = 'read_only';
+let viewAs: ModViewAs | null = null;
+
+export const setViewAs = (v: ModViewAs | null) => {
+  viewAs = v;
+};
+export const isViewAs = () => viewAs !== null;
+
+function viewAsRpc(v: ModViewAs, fn: string): unknown {
+  switch (fn) {
+    case 'get_team':
+      return v.payload;
+    case 'team_version':
+      return v.payload.version;
+    case 'team_links':
+      return v.links;
+    case 'team_coaches':
+      return v.coaches;
+    case 'my_teams':
+      return v.teams;
+    default:
+      throw new Error(READ_ONLY);
+  }
+}

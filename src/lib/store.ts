@@ -38,6 +38,7 @@ import {
   deleteTeamFiles,
   removeCoach,
   getTeam,
+  isViewAs,
   joinTeam,
   LastCoachError,
   leaveTeam,
@@ -302,6 +303,10 @@ export interface Actions {
 export type Store = AppState & Actions;
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
+
+// While a moderator views the app as someone else (see setViewAs), nothing can be changed.
+const READ_ONLY_MSG = 'Bare lesing: du ser appen som en annen bruker.';
+let readOnlyAt = 0;
 let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 let otpTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -310,6 +315,32 @@ const scrollTop = () => {
     window.scrollTo(0, 0);
   } catch {}
 };
+
+/** Actions that change something, or start to. While a moderator views the app as someone else, they only say so. */
+const WRITES = [
+  'logout', 'leaveTeam', 'deleteAccount', 'switchTeam', 'submitSwitchCode', 'createAnotherTeam',
+  'openPay', 'paySubmit', 'cancelSub', 'openPlayerConsent', 'pcNext', 'ccNext',
+  'toggleLike', 'addComment', 'deleteComment', 'toggleNotifyMatch', 'openReport', 'sendReport',
+  'openComposer', 'addFiles', 'publish', 'deletePost', 'updPlayer',
+  'openAddMatch', 'saveMatch', 'deleteMatch', 'openAddEvent', 'saveEvent', 'deleteEvent',
+  'openTraining', 'saveTraining', 'endTraining', 'openTrainingDay', 'saveTrainingDay', 'cancelTrainingDay',
+  'openResult', 'saveResult', 'openTeamSettings', 'newCode', 'saveTeamSettings', 'remindConsent', 'dismissReport',
+  'openPrice', 'savePrice', 'openPayout', 'savePayout', 'removeSub', 'addPlayer', 'openEditPlayer', 'savePlayer',
+  'removePlayer', 'removeCoach', 'deleteTeam', 'decide',
+] as const satisfies readonly (keyof Actions)[];
+
+function blockWhileViewingAs(readOnly: () => void, st: Store): Store {
+  const out = st as unknown as Record<string, unknown>;
+  for (const k of WRITES) {
+    const fn = st[k] as (...a: unknown[]) => unknown;
+    out[k] = (...a: unknown[]) => {
+      if (!isViewAs()) return fn(...a);
+      readOnly();
+      return k === 'addComment' ? false : undefined;
+    };
+  }
+  return st;
+}
 
 export const useStore = create<Store>()((set, get) => {
   const s = () => get();
@@ -401,6 +432,7 @@ export const useStore = create<Store>()((set, get) => {
     if (pending.length) void flush();
   };
   const setData = (fn: (d: TeamData) => TeamData) => {
+    if (isViewAs()) return readOnly();
     set((st) => ({ data: fn(st.data) }));
     if (!s().team) return;
     pending.push(fn);
@@ -441,6 +473,7 @@ export const useStore = create<Store>()((set, get) => {
     if (/fetch|network|load failed|timeout/i.test(msg)) return netError;
     if (/not_signed_in|JWT|jwt/.test(msg)) return 'Du er logget ut. Gå tilbake og logg inn på nytt.';
     if (/not_member/.test(msg)) return 'Du er ikke lenger på laget. Snakk med administratoren.';
+    if (/read_only/.test(msg)) return READ_ONLY_MSG;
     return 'Noe gikk galt. Prøv igjen, eller snakk med administratoren hvis det skjer igjen.';
   };
   /** Why a login email couldn't be sent, in words the person can act on. */
@@ -459,7 +492,7 @@ export const useStore = create<Store>()((set, get) => {
     extra: { matchId?: string | null; onlyWatchers?: boolean; playerIds?: string[] } = {},
   ) => {
     const team = s().team;
-    if (!team || team.role !== 'coach') return;
+    if (!team || team.role !== 'coach' || isViewAs()) return;
     try {
       const token = await accessToken();
       await fetch('/api/notify', {
@@ -496,9 +529,15 @@ export const useStore = create<Store>()((set, get) => {
   const updPlayer = (id: string, patch: Partial<Player>) =>
     setData((d) => ({ ...d, players: d.players.map((p) => (p.id === id ? { ...p, ...patch } : p)) }));
   const toast = (msg: string) => {
+    // A blocked change is often followed by the action's own "Lagret"; keep saying that nothing was saved.
+    if (msg !== READ_ONLY_MSG && Date.now() - readOnlyAt < 1500) return;
     set({ toastMsg: msg });
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => set({ toastMsg: null }), 2600);
+  };
+  const readOnly = () => {
+    toast(READ_ONLY_MSG);
+    readOnlyAt = Date.now();
   };
   const go = (screen: Screen) => {
     set({ screen });
@@ -1021,7 +1060,7 @@ export const useStore = create<Store>()((set, get) => {
     selfLogin: false,
   });
 
-  return {
+  return blockWhileViewingAs(readOnly, {
     ...loadState(),
 
     refresh,
@@ -2249,7 +2288,7 @@ export const useStore = create<Store>()((set, get) => {
       set({ sheet: null, form: {} });
       toast(postId ? 'Takk! Administratorene ser på innlegget.' : 'Sendt til administratorene. De svarer på e-post.');
     },
-  };
+  });
 });
 
 /** Saves the persisted part of the state whenever it changes. Returns an unsubscribe function. */

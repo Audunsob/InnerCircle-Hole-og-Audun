@@ -1229,3 +1229,187 @@ textarea.input {
 .viewer-media {
   animation: ic-rise 260ms var(--ease-out) both;
 }
+
+/* ---------- Moderator page (/moderator) ---------- */
+
+.mod-page {
+  max-width: 960px;
+  margin: 0 auto;
+  min-height: 100dvh;
+  padding: 16px 16px 48px;
+  background: var(--bg);
+}
+.mod-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-height: 48px;
+}
+.mod-badge {
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--bg);
+  font: 600 12px var(--body);
+}
+.mod-h1 {
+  margin: 24px 0 6px;
+  font: 700 30px/1.1 var(--body);
+  letter-spacing: -0.01em;
+}
+.mod-stats {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+.mod-stat {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-radius: 16px;
+}
+.mod-stat-value {
+  font: 700 28px var(--body);
+}
+.mod-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  column-gap: 20px;
+}
+.mod-list {
+  padding: 0 14px;
+  border-radius: 16px;
+}
+.mod-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.mod-row:last-child {
+  border-bottom: none;
+}
+.mod-pad {
+  padding: 14px 0;
+}
+.mod-cards {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+.mod-card {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-radius: 16px;
+}
+.mod-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.mod-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 10px;
+  font: 400 14px var(--body);
+  color: var(--muted);
+}
+.mod-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+}
+.mod-sheet {
+  width: 100%;
+  max-width: 520px;
+  max-height: 85dvh;
+  overflow-y: auto;
+  padding: 16px 16px calc(24px + env(safe-area-inset-bottom));
+  border-radius: 22px 22px 0 0;
+  background: var(--bg);
+  animation: ic-sheet-up var(--t-med) var(--ease-out);
+}
+@media (min-width: 700px) {
+  .mod-backdrop {
+    align-items: center;
+  }
+  .mod-sheet {
+    border-radius: 22px;
+  }
+}
+.mod-pick-head {
+  margin: 20px 0 4px;
+}
+.mod-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+  background: #1c1c1e;
+  color: #ffffff;
+  font: 400 14px var(--body);
+}
+.mod-banner-btn {
+  min-height: 44px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 10px;
+  background: #7a0e22;
+  color: #ffffff;
+  font: 700 14px var(--body);
+  cursor: pointer;
+}
+/* The same look as Next.js's own 404 page. */
+.mod-404 {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: #fff;
+  color: #000;
+  font-family: system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+.mod-404 h1 {
+  display: inline-block;
+  margin: 0 20px 0 0;
+  padding: 0 23px 0 0;
+  border-right: 1px solid rgba(0, 0, 0, 0.3);
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 49px;
+  vertical-align: top;
+}
+.mod-404 > div > div {
+  display: inline-block;
+}
+.mod-404 h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 49px;
+}
+@media (prefers-color-scheme: dark) {
+  .mod-404 {
+    background: #000;
+    color: #fff;
+  }
+  .mod-404 h1 {
+    border-right-color: rgba(255, 255, 255, 0.3);
+  }
+}
