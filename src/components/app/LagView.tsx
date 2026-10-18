@@ -7,17 +7,16 @@ import { useStore } from '@/lib/store';
 import type { AppState, Player, Post } from '@/lib/types';
 import { Chips, DateCol, Icon } from '../ui';
 import { PostCard } from './PostCard';
-import { allEvents } from '@/lib/trainings';
 
 const FILTERS: [AppState['filter'], string][] = [
   ['all', 'Alle'],
-  ['kamp', 'Kamp'],
-  ['trening', 'Trening'],
-  ['beskjed', 'Beskjed'],
+  ['kamp', 'Kamper'],
+  ['arrangement', 'Arrangementer'],
 ];
 
 export function Feed({ posts, P, emptyText }: { posts: Post[]; P: Record<string, Player>; emptyText: string }) {
-  const sorted = [...posts].sort((a, b) => b.ts - a.ts);
+  // Newest first, with posts waiting for approval on top.
+  const sorted = [...posts].sort((a, b) => Number(!!b.pending) - Number(!!a.pending) || b.ts - a.ts);
   return (
     <div className="stagger" style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 14 }}>
       {sorted.map((p) => (
@@ -77,7 +76,9 @@ export function LagView() {
   const reminded = !!me && !!data.reminders?.[me.id] && !hasConsent(me) && !me.declined;
 
   let list = visiblePosts(st, data.posts, P);
-  if (filter !== 'all') list = list.filter((p) => p.type === filter);
+  if (filter === 'kamp') list = list.filter((p) => !!p.matchId);
+  if (filter === 'arrangement') list = list.filter((p) => !p.matchId && !!p.eventId);
+  const nPending = isCoach ? data.posts.filter((p) => p.pending).length : 0;
 
   const nVia = me ? data.subs.filter((x) => x.via === me.id).length : 0;
   const followText = nVia === 0 ? 'Ingen følger laget via deg ennå' : nVia === 1 ? '1 følger laget via deg' : nVia + ' følger laget via deg';
@@ -136,6 +137,23 @@ export function LagView() {
               <span className="row-sub">Spillere som vil inn på laget.</span>
             </span>
             <Icon name="arrow_forward" size={20} style={{ color: 'var(--accent-ink)' }} />
+          </button>
+        )}
+
+        {nPending > 0 && (
+          <button
+            type="button"
+            className="card card-btn"
+            style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', color: 'var(--ink)', textAlign: 'left', cursor: 'pointer' }}
+            onClick={() => st.setFilter('all')}
+          >
+            <span className="row-text">
+              <span style={{ font: '600 16px var(--body)', color: 'var(--accent-ink)' }}>
+                {nPending === 1 ? '1 innlegg venter på godkjenning' : nPending + ' innlegg venter på godkjenning'}
+              </span>
+              <span className="row-sub">Fra spillere. De ligger øverst i strømmen, og bare administratorene ser dem.</span>
+            </span>
+            <Icon name="arrow_downward" size={20} style={{ color: 'var(--accent-ink)' }} />
           </button>
         )}
 
@@ -230,8 +248,8 @@ export function LagView() {
           </div>
         )}
 
-        {canPost(st) && (isCoach || data.matches.length > 0 || allEvents(data).length > 0) && (
-          <PostPrompt label={isCoach ? 'Del noe med laget …' : 'Del bilder fra en kamp eller et arrangement …'} onClick={() => st.openComposer(null)} />
+        {canPost(st) && (
+          <PostPrompt label={isCoach ? 'Del noe med laget …' : 'Del bilder eller noe med laget …'} onClick={() => st.openComposer(null)} />
         )}
 
         <Chips label="Filter" value={filter} items={FILTERS} onChange={st.setFilter} />

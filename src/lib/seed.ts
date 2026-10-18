@@ -3,7 +3,6 @@ import type {
   Flow,
   PayForm,
   PersistedState,
-  PostType,
   Role,
   TeamData,
 } from './types';
@@ -13,11 +12,6 @@ export const DEFAULT_TEAM = 'Laget';
 export const COACH = 'Administrator';
 export const DEFAULT_PRICE = 20;
 
-export const TYPES: Record<PostType, { label: string }> = {
-  kamp: { label: 'Kamp' },
-  trening: { label: 'Trening' },
-  beskjed: { label: 'Beskjed' },
-};
 /** Icons a coach can pick for an event. */
 export const EVENT_ICONS = ['event', 'groups', 'restaurant', 'local_pizza', 'celebration', 'forum', 'directions_run', 'directions_bus', 'emoji_events', 'volunteer_activism', 'school', 'sports_soccer'];
 

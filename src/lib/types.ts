@@ -2,7 +2,10 @@ import type { Membership, TeamCoach, TeamLink } from './supabase';
 
 export type Role = 'player' | 'sub' | 'coach';
 export type Theme = 'light' | 'dark';
+/** Set from what the post belongs to: a match, a training, or anything else (or nothing). Not shown any more. */
 export type PostType = 'kamp' | 'trening' | 'beskjed';
+/** The feed's filter: everything, posts from matches, or posts from other events. */
+export type FeedFilter = 'all' | 'kamp' | 'arrangement';
 
 export type Screen =
   | 'role'
@@ -22,7 +25,7 @@ export type Screen =
   | 'cconsent'
   | 'app';
 
-export type Tab = 'lag' | 'kamper' | 'arrangement' | 'okonomi' | 'min';
+export type Tab = 'lag' | 'kamper' | 'okonomi' | 'min';
 
 export interface Consent {
   photo: boolean;
@@ -149,6 +152,8 @@ export interface Post {
   /** Device user ids that gave a heart. */
   likedBy: string[];
   edited?: boolean;
+  /** A post from a player that an administrator hasn't approved yet. Only coaches and the author see it. Set by the database. */
+  pending?: boolean;
   /** Oldest first. The database sets who wrote each one and when. */
   comments?: Comment[];
 }
@@ -343,7 +348,7 @@ export type SheetName =
 
 export interface Draft {
   id: string | null;
-  type: PostType;
+  /** What the post belongs to, if anything: a match or an event. */
   matchId: string;
   eventId?: string;
   media: Media[];
@@ -387,7 +392,7 @@ export interface PersistedState {
   onboarded: Partial<Record<Role, boolean>>;
   prof: Profiles;
   tab: Tab;
-  filter: 'all' | PostType;
+  filter: FeedFilter;
   kampTab: 'upcoming' | 'played';
   openMatch: string | null;
   notifyMatch: Record<string, boolean>;
