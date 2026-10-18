@@ -3,9 +3,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { OUTCOME_COLOR, outcomeOf, scoreTitle } from '@/lib/derive';
 import { initials, rel, stripe } from '@/lib/format';
-import { TYPES } from '@/lib/seed';
 import { findEvent } from '@/lib/trainings';
-import { canComment } from '@/lib/selectors';
+import { canComment, matchTitle } from '@/lib/selectors';
 import { useStore } from '@/lib/store';
 import type { Player, Post } from '@/lib/types';
 import { Icon } from '../ui';
@@ -16,10 +15,12 @@ export function PostCard({ post }: { post: Post; P?: Record<string, Player> }) {
   const uid = useStore((s) => s.uid);
   const dark = useStore((s) => s.theme === 'dark');
   const match = useStore((s) => (post.matchId ? s.data.matches.find((m) => m.id === post.matchId) : undefined));
-  const eventTitle = useStore((s) => findEvent(s.data, post.eventId)?.title);
-  const resultTitle = useStore((s) => (match && post.type === 'kamp' && outcomeOf(match) ? scoreTitle(s, match) : ''));
+  const eventTitle = useStore((s) => (post.matchId ? undefined : findEvent(s.data, post.eventId)?.title));
+  const matchName = useStore((s) => (match ? (match.opp ? 'Kamp mot ' + match.opp : matchTitle(s, match)) : ''));
+  const resultTitle = useStore((s) => (match && outcomeOf(match) ? scoreTitle(s, match) : ''));
   const toggleLike = useStore((s) => s.toggleLike);
   const openViewer = useStore((s) => s.openViewer);
+  const approvePost = useStore((s) => s.approvePost);
   const openReport = useStore((s) => s.openReport);
   const openLikes = useStore((s) => s.openLikes);
   const addComment = useStore((s) => s.addComment);
@@ -37,10 +38,8 @@ export function PostCard({ post }: { post: Post; P?: Record<string, Player> }) {
   // Coaches can remove any post; players their own.
   const hasMenu = role === 'coach' || mine;
 
-  const typeLabel =
-    (TYPES[post.type] || TYPES.beskjed).label +
-    (match && post.type === 'kamp' && match.opp ? ' mot ' + match.opp : '') +
-    (eventTitle && post.type !== 'kamp' ? ' · ' + eventTitle : '');
+  // Only what the post belongs to, if anything: no type.
+  const belongsTo = matchName || eventTitle || '';
   const many = post.media.length > 1;
   const comments = post.comments || [];
   const hearts = post.likes + post.likedBy.length;
@@ -84,7 +83,8 @@ export function PostCard({ post }: { post: Post; P?: Record<string, Player> }) {
             {post.author} <span style={{ fontWeight: 400, color: 'var(--muted)' }}>{post.authorRole === 'Trener' ? 'Administrator' : post.authorRole}</span>
           </div>
           <div style={{ font: '400 13px/1.3 var(--body)', color: 'var(--muted)' }}>
-            {typeLabel} · {rel(post.ts)}
+            {belongsTo ? belongsTo + ' · ' : ''}
+            {rel(post.ts)}
           </div>
         </div>
         {hasMenu && (
@@ -99,6 +99,29 @@ export function PostCard({ post }: { post: Post; P?: Record<string, Player> }) {
           </button>
         )}
       </div>
+
+      {post.pending && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            margin: '0 14px 12px',
+            padding: '8px 8px 8px 12px',
+            borderRadius: 10,
+            background: 'var(--field)',
+            font: '500 14px/1.3 var(--body)',
+          }}
+        >
+          <Icon name="hourglass_top" size={18} style={{ color: 'var(--gold)' }} />
+          <span style={{ flex: 1, minWidth: 0 }}>{role === 'coach' ? 'Venter på godkjenning. Bare administratorene ser det.' : 'Venter på godkjenning fra en administrator.'}</span>
+          {role === 'coach' && (
+            <button type="button" className="btn btn-primary" style={{ minHeight: 38, padding: '0 14px' }} onClick={() => approvePost(post.id)}>
+              Godkjenn
+            </button>
+          )}
+        </div>
+      )}
 
       {outcome && (
         <div className="tnum" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px 12px', font: 'italic 800 20px/1.1 var(--display)', textTransform: 'uppercase' }}>

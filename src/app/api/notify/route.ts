@@ -2,7 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 import webpush from 'web-push';
 import { VAPID_PUBLIC_KEY } from '@/lib/push';
 import { SUPABASE_KEY, SUPABASE_URL } from '@/lib/supabase';
-const KINDS = new Set(['posts', 'matches', 'results', 'reminders']);
+// events: trainings and other events, for players and coaches only. They follow the "matches" setting.
+const KINDS = new Set(['posts', 'matches', 'events', 'results', 'reminders']);
 
 type Target = { endpoint: string; p256dh: string; auth: string };
 type Body = {

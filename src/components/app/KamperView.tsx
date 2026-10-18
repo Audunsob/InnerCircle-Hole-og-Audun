@@ -19,6 +19,7 @@ import type { Match } from '@/lib/types';
 import { DateCol, Icon, SwitchRow, Tabs } from '../ui';
 import { Rings } from '../screens/RoleScreen';
 import { Feed } from './LagView';
+import { EventsSection } from './ArrangementView';
 
 function NotifyToggle({ id }: { id: string }) {
   const on = useStore((s) => !!s.notifyMatch[id]);
@@ -41,11 +42,11 @@ export function KamperView() {
     <>
       <header className="app-header">
         <div className="app-title" style={{ flex: 1, minWidth: 0 }}>
-          Kamper
+          Program
         </div>
         {isCoach && (
           <button type="button" className="btn-outline" onClick={() => st.openAddMatch()}>
-            + Legg til kamp
+            + Kamp
           </button>
         )}
       </header>
@@ -53,7 +54,7 @@ export function KamperView() {
         value={kampTab}
         items={[
           ['upcoming', 'Kommende'],
-          ['played', 'Spilt'],
+          ['played', 'Tidligere'],
         ]}
         onChange={st.setKampTab}
       />
@@ -62,7 +63,7 @@ export function KamperView() {
         <>
           {next && <NextMatch m={next} />}
           {!upcoming.length && (
-            <p className="note" style={{ padding: '40px 0', textAlign: 'center' }}>
+            <p className="note" style={{ padding: '24px 0', textAlign: 'center' }}>
               Ingen kommende kamper er lagt inn.
             </p>
           )}
@@ -102,13 +103,14 @@ export function KamperView() {
               </div>
             </section>
           )}
+          <EventsSection view="upcoming" />
         </>
       )}
 
       {kampTab === 'played' && (
         <>
           {!past.length && (
-            <p className="note" style={{ padding: '40px 0', textAlign: 'center' }}>
+            <p className="note" style={{ padding: '24px 0', textAlign: 'center' }}>
               Ingen spilte kamper ennå.
             </p>
           )}
@@ -153,6 +155,7 @@ export function KamperView() {
               );
             })}
           </div>
+          <EventsSection view="past" />
         </>
       )}
     </>
@@ -308,7 +311,7 @@ export function MatchDetail({ id }: { id: string }) {
           }}
         >
           <Icon name="arrow_back" />
-          Spilte kamper
+          Program
         </button>
       </header>
       <section className="card" style={{ position: 'relative', overflow: 'hidden', padding: '18px 16px', display: 'flex', flexDirection: 'column', gap: 12, animation: 'ic-rise 320ms var(--ease-out) both' }}>

@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useStore } from '@/lib/store';
 import type { Tab } from '@/lib/types';
 import { Icon } from '../ui';
-import { ArrangementView, EventDetail } from './ArrangementView';
+import { EventDetail } from './ArrangementView';
 import { KamperView, MatchDetail } from './KamperView';
 import { LagView } from './LagView';
 import { MinSide } from './MinSide';
@@ -19,8 +19,7 @@ export function AppShell() {
 
   const tabs: [Tab, string, string][] = [
     ['lag', 'Lag', 'groups'],
-    ['kamper', 'Kamper', 'sports_soccer'],
-    ['arrangement', 'Annet', 'celebration'],
+    ['kamper', 'Program', 'calendar_month'],
     ...(isCoach ? ([['okonomi', 'Økonomi', 'payments']] as [Tab, string, string][]) : []),
     ['min', 'Min side', 'person'],
   ];
@@ -33,16 +32,14 @@ export function AppShell() {
     lastTab = idx;
   }, [idx]);
   const dir = idx >= lastTab ? 'right' : 'left';
-  const view =
-    current === 'kamper' && openMatch ? 'match:' + openMatch : current === 'arrangement' && openEvent ? 'event:' + openEvent : current;
+  const view = current === 'kamper' && openMatch ? 'match:' + openMatch : current === 'kamper' && openEvent ? 'event:' + openEvent : current;
 
   return (
     <>
       <div className="screen" style={{ padding: '0 16px calc(104px + env(safe-area-inset-bottom))' }}>
         <TabView key={view} dir={view.includes(':') ? 'right' : dir}>
           {current === 'lag' && <LagView />}
-          {current === 'kamper' && (openMatch ? <MatchDetail id={openMatch} /> : <KamperView />)}
-          {current === 'arrangement' && (openEvent ? <EventDetail id={openEvent} /> : <ArrangementView />)}
+          {current === 'kamper' && (openMatch ? <MatchDetail id={openMatch} /> : openEvent ? <EventDetail id={openEvent} /> : <KamperView />)}
           {current === 'okonomi' && <OkonomiView />}
           {current === 'min' && <MinSide />}
         </TabView>
