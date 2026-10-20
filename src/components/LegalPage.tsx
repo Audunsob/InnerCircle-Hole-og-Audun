@@ -1,14 +1,12 @@
-import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { CONTACT_EMAIL, LEGAL_UPDATED } from '@/lib/legal';
+import { BackLink } from './BackLink';
 
 /** Shared frame for the privacy policy and the terms: a plain, readable page with a way back to the app. */
 export function LegalPage({ title, children }: { title: string; children: ReactNode }) {
   return (
     <main className="screen" style={{ padding: '24px 20px 48px', gap: 20 }}>
-      <Link href="/" className="link-btn start" style={{ alignSelf: 'flex-start', padding: 0 }}>
-        ← Tilbake til InnerCircle
-      </Link>
+      <BackLink />
       <h1 className="h1">{title}</h1>
       <p className="note">Sist oppdatert {LEGAL_UPDATED}</p>
       {children}
