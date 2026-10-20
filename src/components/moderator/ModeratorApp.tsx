@@ -262,6 +262,29 @@ function Overview({ data, err, onViewAs }: { data: ModOverview; err: string; onV
         <>
           <h1 className="mod-h1">Lag</h1>
           <div className="mod-cards">
+            <div className="card mod-card">
+              <div className="mod-card-head">
+                <span className="row-title">Demolaget · Fjellby IL G14</span>
+                {/* A full page load, so the demo's made-up team never mixes with this page's state. */}
+                <a href="/demo" className="btn-outline" style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }}>
+                  Åpne demoen
+                </a>
+              </div>
+              <div className="mod-facts">
+                <span>Oppdiktet lag uten innlogging, for pitch og visning</span>
+                <span>Ingenting blir lagret</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 12 }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/demo/qr.png" alt="QR-kode til demoen" width={120} height={120} style={{ borderRadius: 8, background: '#fff' }} />
+                <div className="row-text">
+                  <span className="note">Skann for å åpne inner-circle-hole-og-audun.vercel.app/demo</span>
+                  <a href="/demo/qr.png" download="innercircle-demo-qr.png" className="link-btn start" style={{ padding: 0 }}>
+                    Last ned QR-koden
+                  </a>
+                </div>
+              </div>
+            </div>
             {data.teams.map((t) => (
               <div key={t.id} className="card mod-card">
                 <div className="mod-card-head">
