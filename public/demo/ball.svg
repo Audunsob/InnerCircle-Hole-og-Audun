@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 1000">
+<defs>
+<linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b2a4a"/><stop offset=".55" stop-color="#e3765a"/><stop offset="1" stop-color="#f6c27a"/></linearGradient>
+<linearGradient id="grass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3f7d3a"/><stop offset="1" stop-color="#1f4a22"/></linearGradient>
+<radialGradient id="ballg" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#ffffff"/><stop offset=".7" stop-color="#e8e8e8"/><stop offset="1" stop-color="#9a9a9a"/></radialGradient>
+</defs>
+<rect width="800" height="1000" fill="url(#sky)"/>
+<circle cx="600" cy="470" r="70" fill="#ffd9a0" opacity=".9"/>
+<g stroke="#ffffff" stroke-opacity=".75" stroke-width="10" fill="none"><path d="M90 610 V330 H710 V610"/></g>
+<g stroke="#ffffff" stroke-opacity=".25" stroke-width="3">
+<path d="M110 340 V610 M150 340 V610 M190 340 V610 M230 340 V610 M270 340 V610 M310 340 V610 M350 340 V610 M390 340 V610 M430 340 V610 M470 340 V610 M510 340 V610 M550 340 V610 M590 340 V610 M630 340 V610 M670 340 V610"/>
+<path d="M95 370 H705 M95 410 H705 M95 450 H705 M95 490 H705 M95 530 H705 M95 570 H705"/></g>
+<rect y="600" width="800" height="400" fill="url(#grass)"/>
+<g fill="#ffffff" opacity=".06"><rect y="600" width="800" height="60"/><rect y="720" width="800" height="80"/><rect y="880" width="800" height="120"/></g>
+<path d="M0 640 H800" stroke="#fff" stroke-opacity=".7" stroke-width="6"/>
+<ellipse cx="400" cy="905" rx="170" ry="26" fill="#000" opacity=".35"/>
+<circle cx="400" cy="780" r="140" fill="url(#ballg)"/>
+<g fill="#222">
+<polygon points="400,725 445,758 428,810 372,810 355,758"/>
+<polygon points="300,700 330,690 352,742 318,778 278,760"/>
+<polygon points="500,700 470,690 448,742 482,778 522,760"/>
+<polygon points="330,880 362,840 438,840 470,880 430,915 370,915"/>
+</g>
+<g stroke="#333" stroke-width="5" fill="none" opacity=".6"><path d="M400 725 V660 M445 758 L500 700 M355 758 L300 700 M372 810 L340 860 M428 810 L460 860"/></g>
+</svg>

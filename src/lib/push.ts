@@ -1,4 +1,4 @@
-import { deletePush, isViewAs, savePush } from './supabase';
+import { deletePush, isDemo, isViewAs, savePush } from './supabase';
 
 /** Public half of the app's push key pair. The private half lives only on the server (VAPID_PRIVATE_KEY). */
 export const VAPID_PUBLIC_KEY =
@@ -67,7 +67,7 @@ export type EnableResult = 'ok' | 'denied' | 'unsupported' | 'homescreen' | 'err
 /** Asks for permission, subscribes this device and stores it for the team. */
 export async function enablePush(teamId: string, prefs: PushPrefs): Promise<EnableResult> {
   // Viewing the app as someone else: leave this device's own notifications alone.
-  if (isViewAs()) return 'error';
+  if (isViewAs()) return isDemo() ? 'ok' : 'error';
   if (needsHomeScreen()) return 'homescreen';
   if (!pushSupported()) return 'unsupported';
   const permission = await Notification.requestPermission();

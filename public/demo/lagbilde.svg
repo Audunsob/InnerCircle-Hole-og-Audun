@@ -1,0 +1,134 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 1000">
+<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fd0f5"/><stop offset="1" stop-color="#e4f5fd"/></linearGradient>
+<linearGradient id="gr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4f9a45"/><stop offset="1" stop-color="#2e6a2c"/></linearGradient></defs>
+<rect width="800" height="1000" fill="url(#sky)"/>
+<path d="M0 430 L120 330 L260 410 L400 300 L560 400 L700 320 L800 380 V520 H0 Z" fill="#7aa3bd"/>
+<path d="M0 470 H800 V520 H0 Z" fill="#dfe6ea"/>
+<g stroke="#fff" stroke-width="10" fill="none" opacity=".9"><path d="M170 520 V380 H630 V520"/></g>
+<rect y="510" width="800" height="490" fill="url(#gr)"/>
+<g fill="#fff" opacity=".07"><rect y="560" width="800" height="70"/><rect y="700" width="800" height="70"/><rect y="840" width="800" height="70"/></g>
+<rect x="190" y="150" width="420" height="80" rx="14" fill="#c8102e"/>
+<text x="400" y="204" fill="#fff" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="40" text-anchor="middle" letter-spacing="3">FJELLBY IL G14</text>
+<text x="400" y="270" fill="#1b2a4a" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="26" text-anchor="middle" letter-spacing="6">SESONGEN 2026</text>
+<rect x="86.9" y="633.5" width="18.900000000000002" height="73.5" rx="6.300000000000001" fill="#f4f4f4"/>
+<rect x="114.2" y="633.5" width="18.900000000000002" height="73.5" rx="6.300000000000001" fill="#f4f4f4"/>
+<rect x="84.8" y="698.6" width="23.1" height="12.600000000000001" rx="5.25" fill="#1b1b1b"/>
+<rect x="112.1" y="698.6" width="23.1" height="12.600000000000001" rx="5.25" fill="#1b1b1b"/>
+<rect x="82.7" y="614.6" width="54.6" height="29.400000000000002" rx="6.300000000000001" fill="#1b1b1b"/>
+<path d="M78.5 549.5 Q110 536.9 141.5 549.5 L156.2 585.2 L141.5 591.5 L139.4 620.9 L80.6 620.9 L78.5 591.5 L63.8 585.2 Z" fill="#c8102e"/>
+<text x="110" y="602.0" fill="#fff" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="27.3" text-anchor="middle">4</text>
+<rect x="102.65" y="532.7" width="14.700000000000001" height="14.700000000000001" fill="#a86f4c"/>
+<circle cx="110" cy="511.7" r="23.1" fill="#a86f4c"/>
+<path d="M85.85 509.6 Q89.0 482.3 110 484.4 Q133.1 482.3 134.15 509.6 Q120.5 497.0 85.85 509.6 Z" fill="#5a3a1e"/>
+<rect x="201.9" y="628.5" width="18.900000000000002" height="73.5" rx="6.300000000000001" fill="#f4f4f4"/>
+<rect x="229.2" y="628.5" width="18.900000000000002" height="73.5" rx="6.300000000000001" fill="#f4f4f4"/>
+<rect x="199.8" y="693.6" width="23.1" height="12.600000000000001" rx="5.25" fill="#1b1b1b"/>
+<rect x="227.1" y="693.6" width="23.1" height="12.600000000000001" rx="5.25" fill="#1b1b1b"/>
+<rect x="197.7" y="609.6" width="54.6" height="29.400000000000002" rx="6.300000000000001" fill="#1b1b1b"/>
+<path d="M193.5 544.5 Q225 531.9 256.5 544.5 L271.2 580.2 L256.5 586.5 L254.4 615.9 L195.6 615.9 L193.5 586.5 L178.8 580.2 Z" fill="#c8102e"/>
+<text x="225" y="597.0" fill="#fff" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="27.3" text-anchor="middle">6</text>
+<rect x="217.65" y="527.7" width="14.700000000000001" height="14.700000000000001" fill="#7a4a2e"/>
+<circle cx="225" cy="506.7" r="23.1" fill="#7a4a2e"/>
+<path d="M200.85 504.6 Q204.0 477.3 225 479.4 Q248.1 477.3 249.15 504.6 Q235.5 492.0 200.85 504.6 Z" fill="#3d2a1a"/>
+<rect x="316.9" y="623.5" width="18.900000000000002" height="73.5" rx="6.300000000000001" fill="#f4f4f4"/>
+<rect x="344.2" y="623.5" width="18.900000000000002" height="73.5" rx="6.300000000000001" fill="#f4f4f4"/>
+<rect x="314.8" y="688.6" width="23.1" height="12.600000000000001" rx="5.25" fill="#1b1b1b"/>
+<rect x="342.1" y="688.6" width="23.1" height="12.600000000000001" rx="5.25" fill="#1b1b1b"/>
+<rect x="312.7" y="604.6" width="54.6" height="29.400000000000002" rx="6.300000000000001" fill="#1b1b1b"/>
+<path d="M308.5 539.5 Q340 526.9 371.5 539.5 L386.2 575.2 L371.5 581.5 L369.4 610.9 L310.6 610.9 L308.5 581.5 L293.8 575.2 Z" fill="#c8102e"/>
+<text x="340" y="592.0" fill="#fff" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="27.3" text-anchor="middle">8</text>
+<rect x="332.65" y="522.7" width="14.700000000000001" height="14.700000000000001" fill="#f1c7a3"/>
+<circle cx="340" cy="501.7" r="23.1" fill="#f1c7a3"/>
+<path d="M315.85 499.6 Q319.0 472.3 340 474.4 Q363.1 472.3 364.15 499.6 Q350.5 487.0 315.85 499.6 Z" fill="#2b1a10"/>
+<rect x="436.9" y="623.5" width="18.900000000000002" height="73.5" rx="6.300000000000001" fill="#f4f4f4"/>
+<rect x="464.2" y="623.5" width="18.900000000000002" height="73.5" rx="6.300000000000001" fill="#f4f4f4"/>
+<rect x="434.8" y="688.6" width="23.1" height="12.600000000000001" rx="5.25" fill="#1b1b1b"/>
+<rect x="462.1" y="688.6" width="23.1" height="12.600000000000001" rx="5.25" fill="#1b1b1b"/>
+<rect x="432.7" y="604.6" width="54.6" height="29.400000000000002" rx="6.300000000000001" fill="#1b1b1b"/>
+<path d="M428.5 539.5 Q460 526.9 491.5 539.5 L506.2 575.2 L491.5 581.5 L489.4 610.9 L430.6 610.9 L428.5 581.5 L413.8 575.2 Z" fill="#c8102e"/>
+<text x="460" y="592.0" fill="#fff" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="27.3" text-anchor="middle">10</text>
+<rect x="452.65" y="522.7" width="14.700000000000001" height="14.700000000000001" fill="#f5d6bf"/>
+<circle cx="460" cy="501.7" r="23.1" fill="#f5d6bf"/>
+<path d="M435.85 499.6 Q439.0 472.3 460 474.4 Q483.1 472.3 484.15 499.6 Q470.5 487.0 435.85 499.6 Z" fill="#2b1a10"/>
+<rect x="551.9" y="628.5" width="18.900000000000002" height="73.5" rx="6.300000000000001" fill="#f4f4f4"/>
+<rect x="579.2" y="628.5" width="18.900000000000002" height="73.5" rx="6.300000000000001" fill="#f4f4f4"/>
+<rect x="549.8" y="693.6" width="23.1" height="12.600000000000001" rx="5.25" fill="#1b1b1b"/>
+<rect x="577.1" y="693.6" width="23.1" height="12.600000000000001" rx="5.25" fill="#1b1b1b"/>
+<rect x="547.7" y="609.6" width="54.6" height="29.400000000000002" rx="6.300000000000001" fill="#1b1b1b"/>
+<path d="M543.5 544.5 Q575 531.9 606.5 544.5 L621.2 580.2 L606.5 586.5 L604.4 615.9 L545.6 615.9 L543.5 586.5 L528.8 580.2 Z" fill="#c8102e"/>
+<text x="575" y="597.0" fill="#fff" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="27.3" text-anchor="middle">5</text>
+<rect x="567.65" y="527.7" width="14.700000000000001" height="14.700000000000001" fill="#a86f4c"/>
+<circle cx="575" cy="506.7" r="23.1" fill="#a86f4c"/>
+<path d="M550.85 504.6 Q554.0 477.3 575 479.4 Q598.1 477.3 599.15 504.6 Q585.5 492.0 550.85 504.6 Z" fill="#8a4b23"/>
+<rect x="666.9" y="633.5" width="18.900000000000002" height="73.5" rx="6.300000000000001" fill="#f4f4f4"/>
+<rect x="694.2" y="633.5" width="18.900000000000002" height="73.5" rx="6.300000000000001" fill="#f4f4f4"/>
+<rect x="664.8" y="698.6" width="23.1" height="12.600000000000001" rx="5.25" fill="#1b1b1b"/>
+<rect x="692.1" y="698.6" width="23.1" height="12.600000000000001" rx="5.25" fill="#1b1b1b"/>
+<rect x="662.7" y="614.6" width="54.6" height="29.400000000000002" rx="6.300000000000001" fill="#1b1b1b"/>
+<path d="M658.5 549.5 Q690 536.9 721.5 549.5 L736.2 585.2 L721.5 591.5 L719.4 620.9 L660.6 620.9 L658.5 591.5 L643.8 585.2 Z" fill="#c8102e"/>
+<text x="690" y="602.0" fill="#fff" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="27.3" text-anchor="middle">3</text>
+<rect x="682.65" y="532.7" width="14.700000000000001" height="14.700000000000001" fill="#f1c7a3"/>
+<circle cx="690" cy="511.7" r="23.1" fill="#f1c7a3"/>
+<path d="M665.85 509.6 Q669.0 482.3 690 484.4 Q713.1 482.3 714.15 509.6 Q700.5 497.0 665.85 509.6 Z" fill="#8a4b23"/>
+<rect x="55.8" y="837.0" width="19.8" height="77.0" rx="6.6000000000000005" fill="#f4f4f4"/>
+<rect x="84.4" y="837.0" width="19.8" height="77.0" rx="6.6000000000000005" fill="#f4f4f4"/>
+<rect x="53.599999999999994" y="905.2" width="24.200000000000003" height="13.200000000000001" rx="5.5" fill="#1b1b1b"/>
+<rect x="82.2" y="905.2" width="24.200000000000003" height="13.200000000000001" rx="5.5" fill="#1b1b1b"/>
+<rect x="51.4" y="817.2" width="57.2" height="30.800000000000004" rx="6.6000000000000005" fill="#1b1b1b"/>
+<path d="M47.0 749.0 Q80 735.8 113.0 749.0 L128.4 786.4 L113.0 793.0 L110.80000000000001 823.8 L49.199999999999996 823.8 L47.0 793.0 L31.599999999999994 786.4 Z" fill="#c8102e"/>
+<text x="80" y="804.0" fill="#fff" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="28.6" text-anchor="middle">7</text>
+<rect x="72.3" y="731.4" width="15.400000000000002" height="15.400000000000002" fill="#d9a27c"/>
+<circle cx="80" cy="709.4" r="24.200000000000003" fill="#d9a27c"/>
+<path d="M54.7 707.2 Q58.0 678.6 80 680.8 Q104.2 678.6 105.3 707.2 Q91.0 694.0 54.7 707.2 Z" fill="#2b1a10"/>
+<rect x="175.8" y="842.0" width="19.8" height="77.0" rx="6.6000000000000005" fill="#f4f4f4"/>
+<rect x="204.4" y="842.0" width="19.8" height="77.0" rx="6.6000000000000005" fill="#f4f4f4"/>
+<rect x="173.6" y="910.2" width="24.200000000000003" height="13.200000000000001" rx="5.5" fill="#1b1b1b"/>
+<rect x="202.2" y="910.2" width="24.200000000000003" height="13.200000000000001" rx="5.5" fill="#1b1b1b"/>
+<rect x="171.4" y="822.2" width="57.2" height="30.800000000000004" rx="6.6000000000000005" fill="#1b1b1b"/>
+<path d="M167.0 754.0 Q200 740.8 233.0 754.0 L248.4 791.4 L233.0 798.0 L230.8 828.8 L169.2 828.8 L167.0 798.0 L151.6 791.4 Z" fill="#c8102e"/>
+<text x="200" y="809.0" fill="#fff" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="28.6" text-anchor="middle">11</text>
+<rect x="192.3" y="736.4" width="15.400000000000002" height="15.400000000000002" fill="#f1c7a3"/>
+<circle cx="200" cy="714.4" r="24.200000000000003" fill="#f1c7a3"/>
+<path d="M174.7 712.2 Q178.0 683.6 200 685.8 Q224.2 683.6 225.3 712.2 Q211.0 699.0 174.7 712.2 Z" fill="#1a1a1a"/>
+<rect x="295.8" y="847.0" width="19.8" height="77.0" rx="6.6000000000000005" fill="#f4f4f4"/>
+<rect x="324.4" y="847.0" width="19.8" height="77.0" rx="6.6000000000000005" fill="#f4f4f4"/>
+<rect x="293.6" y="915.2" width="24.200000000000003" height="13.200000000000001" rx="5.5" fill="#1b1b1b"/>
+<rect x="322.2" y="915.2" width="24.200000000000003" height="13.200000000000001" rx="5.5" fill="#1b1b1b"/>
+<rect x="291.4" y="827.2" width="57.2" height="30.800000000000004" rx="6.6000000000000005" fill="#1b1b1b"/>
+<path d="M287.0 759.0 Q320 745.8 353.0 759.0 L368.4 796.4 L353.0 803.0 L350.8 833.8 L289.2 833.8 L287.0 803.0 L271.6 796.4 Z" fill="#c8102e"/>
+<text x="320" y="814.0" fill="#fff" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="28.6" text-anchor="middle">9</text>
+<rect x="312.3" y="741.4" width="15.400000000000002" height="15.400000000000002" fill="#7a4a2e"/>
+<circle cx="320" cy="719.4" r="24.200000000000003" fill="#7a4a2e"/>
+<path d="M294.7 717.2 Q298.0 688.6 320 690.8 Q344.2 688.6 345.3 717.2 Q331.0 704.0 294.7 717.2 Z" fill="#2b1a10"/>
+<rect x="415.8" y="847.0" width="19.8" height="77.0" rx="6.6000000000000005" fill="#f4f4f4"/>
+<rect x="444.4" y="847.0" width="19.8" height="77.0" rx="6.6000000000000005" fill="#f4f4f4"/>
+<rect x="413.6" y="915.2" width="24.200000000000003" height="13.200000000000001" rx="5.5" fill="#1b1b1b"/>
+<rect x="442.2" y="915.2" width="24.200000000000003" height="13.200000000000001" rx="5.5" fill="#1b1b1b"/>
+<rect x="411.4" y="827.2" width="57.2" height="30.800000000000004" rx="6.6000000000000005" fill="#1b1b1b"/>
+<path d="M407.0 759.0 Q440 745.8 473.0 759.0 L488.4 796.4 L473.0 803.0 L470.8 833.8 L409.2 833.8 L407.0 803.0 L391.6 796.4 Z" fill="#c8102e"/>
+<text x="440" y="814.0" fill="#fff" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="28.6" text-anchor="middle">1</text>
+<rect x="432.3" y="741.4" width="15.400000000000002" height="15.400000000000002" fill="#d9a27c"/>
+<circle cx="440" cy="719.4" r="24.200000000000003" fill="#d9a27c"/>
+<path d="M414.7 717.2 Q418.0 688.6 440 690.8 Q464.2 688.6 465.3 717.2 Q451.0 704.0 414.7 717.2 Z" fill="#2b1a10"/>
+<rect x="535.8" y="842.0" width="19.8" height="77.0" rx="6.6000000000000005" fill="#f4f4f4"/>
+<rect x="564.4" y="842.0" width="19.8" height="77.0" rx="6.6000000000000005" fill="#f4f4f4"/>
+<rect x="533.6" y="910.2" width="24.200000000000003" height="13.200000000000001" rx="5.5" fill="#1b1b1b"/>
+<rect x="562.2" y="910.2" width="24.200000000000003" height="13.200000000000001" rx="5.5" fill="#1b1b1b"/>
+<rect x="531.4" y="822.2" width="57.2" height="30.800000000000004" rx="6.6000000000000005" fill="#1b1b1b"/>
+<path d="M527.0 754.0 Q560 740.8 593.0 754.0 L608.4 791.4 L593.0 798.0 L590.8 828.8 L529.2 828.8 L527.0 798.0 L511.6 791.4 Z" fill="#c8102e"/>
+<text x="560" y="809.0" fill="#fff" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="28.6" text-anchor="middle">2</text>
+<rect x="552.3" y="736.4" width="15.400000000000002" height="15.400000000000002" fill="#f5d6bf"/>
+<circle cx="560" cy="714.4" r="24.200000000000003" fill="#f5d6bf"/>
+<path d="M534.7 712.2 Q538.0 683.6 560 685.8 Q584.2 683.6 585.3 712.2 Q571.0 699.0 534.7 712.2 Z" fill="#1a1a1a"/>
+<rect x="655.8" y="837.0" width="19.8" height="77.0" rx="6.6000000000000005" fill="#f4f4f4"/>
+<rect x="684.4" y="837.0" width="19.8" height="77.0" rx="6.6000000000000005" fill="#f4f4f4"/>
+<rect x="653.6" y="905.2" width="24.200000000000003" height="13.200000000000001" rx="5.5" fill="#1b1b1b"/>
+<rect x="682.2" y="905.2" width="24.200000000000003" height="13.200000000000001" rx="5.5" fill="#1b1b1b"/>
+<rect x="651.4" y="817.2" width="57.2" height="30.800000000000004" rx="6.6000000000000005" fill="#1b1b1b"/>
+<path d="M647.0 749.0 Q680 735.8 713.0 749.0 L728.4 786.4 L713.0 793.0 L710.8 823.8 L649.2 823.8 L647.0 793.0 L631.6 786.4 Z" fill="#c8102e"/>
+<text x="680" y="804.0" fill="#fff" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="28.6" text-anchor="middle">14</text>
+<rect x="672.3" y="731.4" width="15.400000000000002" height="15.400000000000002" fill="#f1c7a3"/>
+<circle cx="680" cy="709.4" r="24.200000000000003" fill="#f1c7a3"/>
+<path d="M654.7 707.2 Q658.0 678.6 680 680.8 Q704.2 678.6 705.3 707.2 Q691.0 694.0 654.7 707.2 Z" fill="#8a4b23"/>
+<circle cx="400" cy="935" r="34" fill="#fff" stroke="#222" stroke-width="5"/><polygon points="400,915 418,928 411,950 389,950 382,928" fill="#222"/>
+</svg>

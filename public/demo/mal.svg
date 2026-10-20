@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 1000">
+<defs>
+<linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0e1630"/><stop offset="1" stop-color="#2a3b6b"/></linearGradient>
+<radialGradient id="b" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#a0a0a0"/></radialGradient>
+</defs>
+<rect width="800" height="1000" fill="url(#s)"/>
+<g stroke="#ffffff" stroke-opacity=".22" stroke-width="3">
+<path d="M0 100 L800 140 M0 180 L800 220 M0 260 L800 300 M0 340 L800 380 M0 420 L800 460 M0 500 L800 540 M0 580 L800 620 M0 660 L800 700"/>
+<path d="M80 60 L60 760 M180 60 L170 760 M280 60 L280 760 M380 60 L390 760 M480 60 L500 760 M580 60 L610 760 M680 60 L720 760"/>
+</g>
+<path d="M0 60 H800" stroke="#fff" stroke-width="22"/>
+<path d="M30 60 V800" stroke="#fff" stroke-width="22"/><path d="M770 60 V800" stroke="#fff" stroke-width="22"/>
+<rect y="760" width="800" height="240" fill="#2e6a2c"/>
+<path d="M0 800 H800" stroke="#fff" stroke-opacity=".8" stroke-width="8"/>
+<g transform="rotate(-8 430 380)">
+<path d="M430 380 Q520 330 600 360" stroke="#fff" stroke-opacity=".25" stroke-width="5" fill="none"/>
+<circle cx="430" cy="380" r="120" fill="url(#b)"/>
+<g fill="#222"><polygon points="430,330 470,358 455,404 405,404 390,358"/><polygon points="340,310 368,300 388,346 358,378 322,362"/><polygon points="520,310 492,300 472,346 502,378 538,362"/><polygon points="370,470 398,434 462,434 490,470 455,500 405,500"/></g>
+</g>
+<g fill="#ffd34d">
+<polygon points="150,190 162,222 196,222 168,242 178,274 150,254 122,274 132,242 104,222 138,222"/>
+<polygon points="660,560 670,586 698,586 676,602 684,628 660,612 636,628 644,602 622,586 650,586"/>
+</g>
+<text x="400" y="910" fill="#ffd34d" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="96" text-anchor="middle" font-style="italic">MÅÅÅL!</text>
+</svg>

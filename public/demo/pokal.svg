@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 1000">
+<defs>
+<radialGradient id="bg" cx=".5" cy=".4" r=".8"><stop offset="0" stop-color="#3a1a5c"/><stop offset="1" stop-color="#0d0618"/></radialGradient>
+<linearGradient id="gold" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#a8761c"/><stop offset=".35" stop-color="#ffe08a"/><stop offset=".6" stop-color="#f2b73a"/><stop offset="1" stop-color="#8f5f12"/></linearGradient>
+</defs>
+<rect width="800" height="1000" fill="url(#bg)"/>
+<g fill="#ffd36b" opacity=".8"><circle cx="140" cy="160" r="6"/><circle cx="660" cy="220" r="8"/><circle cx="560" cy="110" r="4"/><circle cx="220" cy="300" r="4"/><circle cx="700" cy="420" r="5"/><circle cx="90" cy="520" r="5"/></g>
+<g fill="#ff5a5f"><rect x="180" y="200" width="18" height="34" transform="rotate(30 189 217)"/><rect x="600" y="320" width="18" height="34" transform="rotate(-25 609 337)"/></g>
+<g fill="#4ad3ff"><rect x="520" y="170" width="18" height="34" transform="rotate(60 529 187)"/><rect x="250" y="420" width="18" height="34" transform="rotate(-50 259 437)"/></g>
+<path d="M260 260 H540 V330 C540 470 470 560 400 580 C330 560 260 470 260 330 Z" fill="url(#gold)"/>
+<path d="M260 300 C170 300 170 450 290 470" stroke="url(#gold)" stroke-width="26" fill="none"/>
+<path d="M540 300 C630 300 630 450 510 470" stroke="url(#gold)" stroke-width="26" fill="none"/>
+<rect x="370" y="575" width="60" height="110" fill="url(#gold)"/>
+<path d="M300 690 H500 L520 740 H280 Z" fill="url(#gold)"/>
+<rect x="250" y="740" width="300" height="110" rx="10" fill="#2a1a10"/>
+<rect x="300" y="770" width="200" height="50" rx="6" fill="url(#gold)"/>
+<text x="400" y="806" fill="#3b2508" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="28" text-anchor="middle">CUP 2026</text>
+<path d="M330 290 C330 400 360 470 390 520" stroke="#fff" stroke-opacity=".45" stroke-width="16" fill="none" stroke-linecap="round"/>
+</svg>

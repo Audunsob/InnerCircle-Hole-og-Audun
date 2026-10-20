@@ -38,6 +38,7 @@ import {
   deleteTeamFiles,
   removeCoach,
   getTeam,
+  isDemo,
   isViewAs,
   joinTeam,
   LastCoachError,
@@ -310,7 +311,11 @@ export type Store = AppState & Actions;
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
 // While a moderator views the app as someone else (see setViewAs), nothing can be changed.
-const READ_ONLY_MSG = 'Bare lesing: du ser appen som en annen bruker.';
+let READ_ONLY_MSG = 'Bare lesing: du ser appen som en annen bruker.';
+/** What a blocked change says. The demo at /demo says it is a demo. */
+export const setReadOnlyMessage = (msg: string) => {
+  READ_ONLY_MSG = msg;
+};
 let readOnlyAt = 0;
 let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 let otpTimer: ReturnType<typeof setTimeout> | undefined;
@@ -320,6 +325,9 @@ const scrollTop = () => {
     window.scrollTo(0, 0);
   } catch {}
 };
+
+/** Changes the demo at /demo makes on screen only, like the real app would. */
+const DEMO_WRITES: readonly (keyof Actions)[] = ['toggleLike', 'addComment', 'deleteComment', 'toggleNotifyMatch', 'openReport', 'sendReport'];
 
 /** Actions that change something, or start to. While a moderator views the app as someone else, they only say so. */
 const WRITES = [
@@ -339,7 +347,7 @@ function blockWhileViewingAs(readOnly: () => void, st: Store): Store {
   for (const k of WRITES) {
     const fn = st[k] as (...a: unknown[]) => unknown;
     out[k] = (...a: unknown[]) => {
-      if (!isViewAs()) return fn(...a);
+      if (!isViewAs() || (isDemo() && DEMO_WRITES.includes(k))) return fn(...a);
       readOnly();
       return k === 'addComment' ? false : undefined;
     };
@@ -437,9 +445,9 @@ export const useStore = create<Store>()((set, get) => {
     if (pending.length) void flush();
   };
   const setData = (fn: (d: TeamData) => TeamData) => {
-    if (isViewAs()) return readOnly();
+    if (isViewAs() && !isDemo()) return readOnly();
     set((st) => ({ data: fn(st.data) }));
-    if (!s().team) return;
+    if (!s().team || isDemo()) return;
     pending.push(fn);
     if (server) void flush();
     else void refresh();
@@ -1438,7 +1446,7 @@ export const useStore = create<Store>()((set, get) => {
       const on = !s().notifyMatch[id];
       const team = s().team;
       set((st) => ({ notifyMatch: { ...st.notifyMatch, [id]: on } }));
-      if (!team) return toast(on ? 'Du får varsel når bildene kommer' : 'Varselet er slått av');
+      if (!team || isDemo()) return toast(on ? 'Du får varsel når bildene kommer' : 'Varselet er slått av');
       if (on && !s().pushOn) {
         // The wish only reaches this phone with notifications switched on.
         if (needsHomeScreen()) {
