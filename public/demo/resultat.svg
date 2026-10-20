@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 1000">
+<defs>
+<linearGradient id="n" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#05070f"/><stop offset="1" stop-color="#18223d"/></linearGradient>
+<radialGradient id="l" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#fff7d6"/><stop offset="1" stop-color="#fff7d6" stop-opacity="0"/></radialGradient>
+<linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2f6b31"/><stop offset="1" stop-color="#173d1a"/></linearGradient>
+</defs>
+<rect width="800" height="1000" fill="url(#n)"/>
+<circle cx="110" cy="140" r="160" fill="url(#l)"/><circle cx="690" cy="140" r="160" fill="url(#l)"/>
+<g fill="#fffbe8"><rect x="70" y="110" width="80" height="50" rx="6"/><rect x="650" y="110" width="80" height="50" rx="6"/></g>
+<g stroke="#3a4560" stroke-width="10"><path d="M110 160 V700 M690 160 V700"/></g>
+<rect y="700" width="800" height="300" fill="url(#g)"/>
+<path d="M0 760 H800 M400 700 V1000" stroke="#fff" stroke-opacity=".35" stroke-width="5"/>
+<rect x="170" y="300" width="460" height="300" rx="22" fill="#0b0b0e" stroke="#2c2c34" stroke-width="8"/>
+<text x="400" y="365" fill="#f2c94c" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="34" text-anchor="middle" letter-spacing="6">FULLTID</text>
+<text x="400" y="520" fill="#ff4d3d" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="150" text-anchor="middle">3–1</text>
+<text x="400" y="575" fill="#9aa3b5" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="26" text-anchor="middle" letter-spacing="3">FJELLBY · SOLVIK</text>
+</svg>

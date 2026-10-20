@@ -310,7 +310,11 @@ export type Store = AppState & Actions;
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
 // While a moderator views the app as someone else (see setViewAs), nothing can be changed.
-const READ_ONLY_MSG = 'Bare lesing: du ser appen som en annen bruker.';
+let READ_ONLY_MSG = 'Bare lesing: du ser appen som en annen bruker.';
+/** What a blocked change says. The demo at /demo says it is a demo. */
+export const setReadOnlyMessage = (msg: string) => {
+  READ_ONLY_MSG = msg;
+};
 let readOnlyAt = 0;
 let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 let otpTimer: ReturnType<typeof setTimeout> | undefined;

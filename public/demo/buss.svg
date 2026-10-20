@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 1000">
+<defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7ec8f0"/><stop offset="1" stop-color="#d8f0fb"/></linearGradient></defs>
+<rect width="800" height="1000" fill="url(#s)"/>
+<circle cx="640" cy="180" r="70" fill="#ffe27a"/>
+<path d="M0 520 L160 330 L300 470 L440 280 L620 480 L800 360 V620 H0 Z" fill="#6b8fa8"/>
+<path d="M0 560 L140 450 L260 540 L420 430 L560 560 L700 470 L800 520 V640 H0 Z" fill="#4f7a5a"/>
+<path d="M0 620 H800 V1000 H0 Z" fill="#6fae5b"/>
+<path d="M330 620 L470 620 L800 1000 L0 1000 Z" fill="#4b4f57"/>
+<path d="M400 640 V680 M400 720 V780 M400 830 V910 M400 960 V1000" stroke="#f6f6f6" stroke-width="10"/>
+<g transform="translate(150 600)">
+<rect x="0" y="0" width="500" height="220" rx="30" fill="#c8102e"/>
+<rect x="0" y="150" width="500" height="20" fill="#9a0b22"/>
+<g fill="#cfe9f7"><rect x="30" y="30" width="80" height="80" rx="10"/><rect x="130" y="30" width="80" height="80" rx="10"/><rect x="230" y="30" width="80" height="80" rx="10"/><rect x="330" y="30" width="80" height="80" rx="10"/><rect x="430" y="30" width="50" height="110" rx="10"/></g>
+<text x="210" y="145" fill="#fff" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="26" text-anchor="middle" letter-spacing="2">CUPTUR</text>
+<circle cx="110" cy="225" r="44" fill="#1d1d1d"/><circle cx="110" cy="225" r="18" fill="#9a9a9a"/>
+<circle cx="400" cy="225" r="44" fill="#1d1d1d"/><circle cx="400" cy="225" r="18" fill="#9a9a9a"/>
+<rect x="485" y="160" width="20" height="24" rx="4" fill="#ffe27a"/>
+</g>
+</svg>
