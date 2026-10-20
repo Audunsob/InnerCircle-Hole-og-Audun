@@ -422,6 +422,14 @@ export const setViewAs = (v: ModViewAs | null) => {
 };
 export const isViewAs = () => viewAs !== null;
 
+// The demo at /demo also runs as "se som", but there hearts, comments and the like change the app on
+// screen, as in the real app. Nothing reaches the database, and everything is gone on reload.
+let demo = false;
+export const setDemo = (on: boolean) => {
+  demo = on;
+};
+export const isDemo = () => demo;
+
 function viewAsRpc(v: ModViewAs, fn: string): unknown {
   switch (fn) {
     case 'get_team':

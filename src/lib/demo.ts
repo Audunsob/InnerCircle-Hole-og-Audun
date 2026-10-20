@@ -28,6 +28,21 @@ const matches: Match[] = [
 
 const posts: Post[] = [
   {
+    id: 'p0',
+    type: 'beskjed',
+    ...COACH,
+    ts: ago(1),
+    matchId: null,
+    media: [photo('i0', 'lagbilde', 'Lagbildet')],
+    text: 'Årets lagbilde er klart! Tusen takk til alle som stilte opp i finvær etter treningen. Del gjerne med familien.',
+    tagged: [],
+    likes: 38,
+    likedBy: [],
+    comments: [
+      { id: 'c0', authorId: 'demo-s4', author: 'Morfar Leif', authorRole: 'Abonnent', ts: ago(0.6), text: 'Det henger på kjøleskapet allerede!' },
+    ],
+  },
+  {
     id: 'p1',
     type: 'kamp',
     ...COACH,
@@ -42,6 +57,18 @@ const posts: Post[] = [
       { id: 'c1', authorId: 'demo-s1', author: 'Bestemor Ingrid', authorRole: 'Abonnent', ts: ago(2.5), text: 'Så gøy å se! Heia Fjellby 💪' },
       { id: 'c2', authorId: 'demo-s2', author: 'Onkel Per', authorRole: 'Abonnent', ts: ago(1), text: 'Synd jeg ikke kunne komme denne gangen. Neste kamp er jeg der!' },
     ],
+  },
+  {
+    id: 'p1b',
+    type: 'kamp',
+    ...COACH,
+    ts: ago(4),
+    matchId: 'm1',
+    media: [photo('i1b', 'mal', 'Målet til 2–1')],
+    text: 'Her sitter 2–1! Langskudd rett i krysset med ti minutter igjen.',
+    tagged: [],
+    likes: 19,
+    likedBy: [],
   },
   {
     id: 'p2',
@@ -70,6 +97,18 @@ const posts: Post[] = [
     likedBy: [],
   },
   {
+    id: 'p3b',
+    type: 'beskjed',
+    ...COACH,
+    ts: ago(24 * 18),
+    matchId: null,
+    media: [photo('i4b', 'bane', 'Trening')],
+    text: 'Ny øvelse på trening i dag: pasninger på tid mellom kjeglene. Rekorden står på 38 sekunder.',
+    tagged: [],
+    likes: 9,
+    likedBy: [],
+  },
+  {
     id: 'p4',
     type: 'beskjed',
     ...COACH,
@@ -82,6 +121,19 @@ const posts: Post[] = [
     likes: 31,
     likedBy: [],
     comments: [{ id: 'c4', authorId: 'demo-s1', author: 'Bestemor Ingrid', authorRole: 'Abonnent', ts: ago(24 * 19), text: 'Stolt av dere!' }],
+  },
+  {
+    id: 'p5',
+    type: 'kamp',
+    ...COACH,
+    ts: ago(24 * 22),
+    matchId: 'm3',
+    media: [photo('i7', 'heiagjeng', 'Heiagjengen')],
+    text: 'Tap i cupen, men for en heiagjeng! Dere hørtes over hele anlegget.',
+    tagged: [],
+    likes: 27,
+    likedBy: [],
+    comments: [{ id: 'c5', authorId: 'demo-s3', author: 'Tante Mona', authorRole: 'Abonnent', ts: ago(24 * 21), text: 'Vi stiller med enda flere flagg neste gang!' }],
   },
 ];
 
@@ -112,7 +164,7 @@ const data: TeamData = {
 export const demoView = (): ModViewAs => ({
   payload: { teamId: DEMO_TEAM_ID, role: 'sub', version: 1, data },
   playerId: null,
-  name: 'Demo',
+  name: 'Gjest',
   email: null,
   links: [],
   coaches: [],

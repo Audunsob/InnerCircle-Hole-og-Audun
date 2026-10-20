@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 1000">
+<rect width="800" height="1000" fill="#9fd6f2"/>
+<rect y="380" width="800" height="620" fill="#6c7480"/>
+<g fill="#5b626d"><rect y="460" width="800" height="18"/><rect y="600" width="800" height="18"/><rect y="740" width="800" height="18"/><rect y="880" width="800" height="18"/></g>
+<g>
+<path d="M120 300 V560" stroke="#3b2a1a" stroke-width="10"/><path d="M125 300 Q220 270 300 310 Q380 350 470 320 V430 Q380 460 300 420 Q220 380 125 410 Z" fill="#c8102e"/>
+<text x="300" y="385" fill="#fff" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="46" text-anchor="middle" transform="rotate(-3 300 385)">HEIA FJELLBY!</text>
+</g>
+<g fill="#c8102e"><circle cx="560" cy="300" r="40"/><circle cx="650" cy="250" r="32"/><circle cx="720" cy="320" r="36"/></g>
+<g stroke="#ffffff" stroke-width="3"><path d="M560 340 L580 470 M650 282 L640 470 M720 356 L700 470"/></g>
+<g fill="#ffffff"><circle cx="600" cy="230" r="28"/></g><path d="M600 258 L610 470" stroke="#fff" stroke-width="3"/>
+<g fill="#c8102e" opacity=".95">
+<rect x="40" y="520" width="90" height="80" rx="30"/><rect x="170" y="510" width="90" height="90" rx="30"/><rect x="300" y="520" width="90" height="80" rx="30"/><rect x="430" y="515" width="90" height="85" rx="30"/><rect x="560" y="520" width="90" height="80" rx="30"/><rect x="690" y="510" width="90" height="90" rx="30"/>
+</g>
+<g fill="#ffffff">
+<rect x="100" y="660" width="90" height="80" rx="30"/><rect x="230" y="650" width="90" height="90" rx="30"/><rect x="360" y="660" width="90" height="80" rx="30"/><rect x="490" y="655" width="90" height="85" rx="30"/><rect x="620" y="660" width="90" height="80" rx="30"/>
+</g>
+<g fill="#1b1b1b"><rect x="40" y="800" width="90" height="80" rx="30"/><rect x="170" y="790" width="90" height="90" rx="30"/><rect x="300" y="800" width="90" height="80" rx="30"/><rect x="430" y="795" width="90" height="85" rx="30"/><rect x="560" y="800" width="90" height="80" rx="30"/><rect x="690" y="790" width="90" height="90" rx="30"/></g>
+<g fill="#e9b98f"><circle cx="85" cy="490" r="30"/><circle cx="215" cy="478" r="30"/><circle cx="345" cy="490" r="30"/><circle cx="475" cy="484" r="30"/><circle cx="605" cy="490" r="30"/><circle cx="735" cy="478" r="30"/>
+<circle cx="145" cy="630" r="30"/><circle cx="275" cy="618" r="30"/><circle cx="405" cy="630" r="30"/><circle cx="535" cy="624" r="30"/><circle cx="665" cy="630" r="30"/>
+<circle cx="85" cy="770" r="30"/><circle cx="215" cy="758" r="30"/><circle cx="345" cy="770" r="30"/><circle cx="475" cy="764" r="30"/><circle cx="605" cy="770" r="30"/><circle cx="735" cy="758" r="30"/></g>
+<g stroke="#e9b98f" stroke-width="16" stroke-linecap="round"><path d="M200 520 L170 440 M230 520 L262 440 M460 525 L430 450 M490 525 L520 450 M260 660 L232 585 M290 660 L318 585 M720 800 L690 725 M750 800 L780 725"/></g>
+</svg>
