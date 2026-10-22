@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { registerWorker } from '@/lib/push';
 import { startPersistence, useStore } from '@/lib/store';
-import { currentSession, onSignedIn, verifyLink } from '@/lib/supabase';
+import { currentSession, isDemo, onSignedIn, verifyLink } from '@/lib/supabase';
 import { AppShell } from './app/AppShell';
 import { CoachConsent, PlayerConsent } from './overlays/Consent';
 import { Payment } from './overlays/Payment';
@@ -22,7 +22,11 @@ export default function InnerCircleApp() {
   const pconsOpen = useStore((s) => s.screen === 'pconsent' || s.pcCtx === 'app');
   const [, setTick] = useState(0);
 
-  useEffect(() => startPersistence(), []);
+  useEffect(() => {
+    // Came here from the demo without a reload: the app still holds the made-up team. Start clean.
+    if (isDemo()) return window.location.reload();
+    return startPersistence();
+  }, []);
 
   // The signed-in account (hearts and subscriptions are tied to it), and the push worker.
   useEffect(() => {
