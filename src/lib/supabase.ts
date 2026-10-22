@@ -472,7 +472,7 @@ function viewAsRpc(v: ModViewAs, fn: string): unknown {
 }
 
 // ---------- Test mode ----------
-// On /moderator/test the app runs against a made-up database in this browser (sandbox.ts) instead of
+// On /moderator?test the app runs against a made-up database in this browser (sandbox.ts) instead of
 // Supabase: every call above is answered there, no emails are sent and no files are uploaded.
 
 let sandbox = false;

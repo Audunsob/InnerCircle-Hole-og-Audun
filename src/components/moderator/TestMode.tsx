@@ -1,44 +1,29 @@
 'use client';
 
-import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ROLES, LS_KEY, freshState } from '@/lib/seed';
 import { resetSandbox, sandboxDb, sandboxRpc, sandboxSession, setSandboxSession, type SbMember, type SbUser } from '@/lib/sandbox';
 import { useStore, type Store } from '@/lib/store';
-import { currentSession, isModerator, setSandbox, type TeamPayload } from '@/lib/supabase';
+import type { TeamPayload } from '@/lib/supabase';
 import type { PersistedState } from '@/lib/types';
+import { switchTestMode } from '@/lib/testmode';
 import InnerCircleApp from '../InnerCircleApp';
 import { Icon } from '../ui';
-import { NotFound } from './ModeratorApp';
 
 /**
- * The test mode at /moderator/test: the whole app, with every screen and role, against a made-up
- * database in this browser. Log in as anyone on the made-up team, or start as a new user and go through
- * sign-up, create teams, post and delete teams. Codes are filled in for you. Nothing reaches the real
- * database, no emails are sent and no phones are notified. Only moderators get in (anyone while developing).
+ * The «Test» tab on the moderator page (/moderator?test): the whole app, with every screen and role,
+ * against a made-up database in this browser. Log in as anyone on the made-up team, or start as a new user
+ * and go through sign-up, create teams, post and delete teams. Codes are filled in for you. Nothing reaches
+ * the real database, no emails are sent and no phones are notified. ModeratorApp checks who may see it.
  */
-export default function TestMode() {
-  const [state, setState] = useState<'loading' | 'nope' | 'ready'>('loading');
-
+export default function TestMode({ nav }: { nav: ReactNode }) {
   useEffect(() => {
-    void (async () => {
-      let ok = process.env.NODE_ENV !== 'production';
-      if (!ok && (await currentSession())) ok = await isModerator().catch(() => false);
-      if (!ok) return setState('nope');
-      // From here on every database call is answered by the made-up database.
-      setSandbox(true);
-      setState('ready');
-    })();
+    document.title = 'InnerCircle · Testmodus';
   }, []);
 
-  useEffect(() => {
-    document.title = state === 'nope' ? '404: This page could not be found.' : 'InnerCircle · Testmodus';
-  }, [state]);
-
-  if (state === 'loading') return null;
-  if (state === 'nope') return <NotFound />;
   return (
     <>
+      <div className="mod-nav">{nav}</div>
       <TestBar />
       <InnerCircleApp />
     </>
@@ -242,9 +227,9 @@ function Panel({ onClose }: { onClose: () => void }) {
           <button type="button" className="btn-outline" onClick={reset}>
             Start testen på nytt
           </button>
-          <Link className="btn-outline" href="/moderator">
-            Til moderatorsiden
-          </Link>
+          <button type="button" className="btn-outline" onClick={() => switchTestMode(false)}>
+            Til oversikten
+          </button>
         </div>
       </div>
     </div>

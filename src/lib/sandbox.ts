@@ -3,11 +3,17 @@ import type { Membership, MemberRole, PendingJoin, TeamCoach, TeamLink, TeamPayl
 import type { Comment, Player, Post, TeamData } from './types';
 
 /**
- * A made-up database for the test mode at /moderator/test. It answers the same calls as the real
+ * A made-up database for the test mode on the moderator page (/moderator?test). It answers the same calls as the real
  * database functions in supabase/schema.sql, with the same rules for who may see and change what,
  * but lives only in this browser's localStorage. Nothing here ever reaches Supabase, no emails are
  * sent, and any login code works.
  */
+
+/**
+ * The version of supabase/schema.sql whose rules this copies. The build checks it against the schema
+ * (scripts/check-test-mode.mjs): when the schema changes, bring the rules here up to date, then raise this.
+ */
+export const SCHEMA_VERSION = 10;
 
 export interface SbUser {
   id: string;

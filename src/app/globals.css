@@ -1413,6 +1413,13 @@ textarea.input {
     border-right-color: rgba(255, 255, 255, 0.3);
   }
 }
+/* The moderator page's header and tabs above the app in the test mode. */
+.mod-nav {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 16px 16px 12px;
+  background: var(--bg);
+}
 /* The test mode's panel opens above the app's own menu and sheets. */
 .mod-backdrop.test-panel {
   z-index: 100;
