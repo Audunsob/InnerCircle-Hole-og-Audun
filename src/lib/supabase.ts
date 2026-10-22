@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { sandboxRpc, sandboxSession, sandboxSignIn, sandboxUpload, setSandboxSession } from './sandbox';
 import type { TeamData } from './types';
 
 // Project "InnerCircle". Both values are public (they ship to the browser anyway), so they are
@@ -81,16 +82,26 @@ export class LastCoachError extends Error {
 /** Thrown when a code is already used by another team. */
 export class CodeTakenError extends Error {}
 
+/** Turns a database error into the error the app looks for. */
+function rpcError(message: string): Error {
+  if (/code_taken/.test(message)) return new CodeTakenError(message);
+  if (/player_taken/.test(message)) return new PlayerTakenError(message);
+  const last = /last_coach(?::(.*))?/.exec(message);
+  if (last) return new LastCoachError(message, last[1]?.trim() || null);
+  return new Error(message);
+}
+
 async function rpc<T>(fn: string, args: Record<string, unknown> = {}): Promise<T> {
   if (viewAs) return viewAsRpc(viewAs, fn) as T;
-  const { data, error } = await db().rpc(fn, args);
-  if (error) {
-    if (/code_taken/.test(error.message)) throw new CodeTakenError(error.message);
-    if (/player_taken/.test(error.message)) throw new PlayerTakenError(error.message);
-    const last = /last_coach(?::(.*))?/.exec(error.message);
-    if (last) throw new LastCoachError(error.message, last[1]?.trim() || null);
-    throw new Error(error.message);
+  if (sandbox) {
+    try {
+      return sandboxRpc(fn, args) as T;
+    } catch (e) {
+      throw rpcError(e instanceof Error ? e.message : String(e));
+    }
   }
+  const { data, error } = await db().rpc(fn, args);
+  if (error) throw rpcError(error.message);
   return data as T;
 }
 
@@ -102,6 +113,8 @@ async function rpc<T>(fn: string, args: Record<string, unknown> = {}): Promise<T
  */
 export async function sendCode(email: string) {
   if (viewAs) throw new Error(READ_ONLY);
+  // Test mode: no email is sent, and any code logs in.
+  if (sandbox) return;
   const { error } = await db().auth.signInWithOtp({
     email,
     options: { shouldCreateUser: true, emailRedirectTo: window.location.origin + '/' },
@@ -111,6 +124,7 @@ export async function sendCode(email: string) {
 
 /** Calls back whenever this device becomes signed in, including from a login link. */
 export function onSignedIn(cb: (id: string, email: string) => void) {
+  if (sandbox) return () => {};
   const { data } = db().auth.onAuthStateChange((event, session) => {
     if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
       cb(session.user.id, (session.user.email || '').toLowerCase());
@@ -125,6 +139,7 @@ export function onSignedIn(cb: (id: string, email: string) => void) {
  * make the 6-digit code in the same email stop working.
  */
 export async function verifyLink(tokenHash: string, type: string): Promise<string> {
+  if (sandbox) throw new Error('not_in_test_mode');
   const { data, error } = await db().auth.verifyOtp({
     token_hash: tokenHash,
     type: type === 'signup' ? 'signup' : type === 'magiclink' ? 'magiclink' : 'email',
@@ -136,12 +151,14 @@ export async function verifyLink(tokenHash: string, type: string): Promise<strin
 /** Checks the code and signs in. Returns the account id. */
 export async function verifyCode(email: string, token: string): Promise<string> {
   if (viewAs) throw new Error(READ_ONLY);
+  if (sandbox) return sandboxSignIn(email).id;
   const { data, error } = await db().auth.verifyOtp({ email, token, type: 'email' });
   if (error || !data.user) throw new Error(error?.message || 'Feil kode');
   return data.user.id;
 }
 
 export async function currentUserId(): Promise<string | null> {
+  if (sandbox) return sandboxSession()?.id ?? null;
   try {
     const { data } = await db().auth.getSession();
     return data.session?.user.id ?? null;
@@ -152,6 +169,10 @@ export async function currentUserId(): Promise<string | null> {
 
 /** The signed-in account on this device, if any. */
 export async function currentSession(): Promise<{ id: string; email: string } | null> {
+  if (sandbox) {
+    const u = sandboxSession();
+    return u ? { id: u.id, email: u.email } : null;
+  }
   try {
     const { data } = await db().auth.getSession();
     const u = data.session?.user;
@@ -164,6 +185,7 @@ export async function currentSession(): Promise<{ id: string; email: string } | 
 export async function signOut() {
   // Viewing the app as someone else must never sign the moderator out.
   if (viewAs) return;
+  if (sandbox) return setSandboxSession(null);
   try {
     await db().auth.signOut();
   } catch {}
@@ -171,6 +193,7 @@ export async function signOut() {
 
 /** The current access token, for calls to our own API routes. */
 export async function accessToken(): Promise<string | null> {
+  if (sandbox) return null;
   const { data } = await db().auth.getSession();
   return data.session?.access_token ?? null;
 }
@@ -208,7 +231,7 @@ export const deleteTeam = (teamId: string, confirm: string) => rpc<void>('delete
 
 /** Coach: deletes every file in the team's folder and its signature folder. Best effort; never throws. */
 export async function deleteTeamFiles(teamId: string) {
-  if (viewAs) return;
+  if (viewAs || sandbox) return;
   const bucket = db().storage.from('media');
   for (const folder of [teamId, teamId + '/sig']) {
     try {
@@ -247,6 +270,7 @@ const EXT: Record<string, string> = {
 /** folder 'sig' is for signatures, which only the team's coaches and the uploader can open. */
 export async function uploadMedia(teamId: string, src: string | Blob, folder?: 'sig'): Promise<string> {
   if (viewAs) throw new Error(READ_ONLY);
+  if (sandbox) return sandboxUpload(src);
   const blob = typeof src === 'string' ? await dataUrlToBlob(src) : src;
   const type = blob.type || 'image/jpeg';
   const path = `${teamId}/${folder ? folder + '/' : ''}${crypto.randomUUID()}.${EXT[type] || 'bin'}`;
@@ -309,7 +333,7 @@ export function cachedMediaUrl(src: string): string | null {
 
 /** Deletes stored files (coaches only). Plain URLs and data URLs are ignored. Never throws. */
 export async function deleteMedia(srcs: (string | undefined)[]) {
-  if (viewAs) return;
+  if (viewAs || sandbox) return;
   const paths = srcs.filter((x): x is string => !!x && x.startsWith(STORAGE_PREFIX)).map((x) => x.slice(STORAGE_PREFIX.length));
   if (!paths.length) return;
   for (const p of paths) signed.delete(p);
@@ -446,3 +470,13 @@ function viewAsRpc(v: ModViewAs, fn: string): unknown {
       throw new Error(READ_ONLY);
   }
 }
+
+// ---------- Test mode ----------
+// On /moderator?test the app runs against a made-up database in this browser (sandbox.ts) instead of
+// Supabase: every call above is answered there, no emails are sent and no files are uploaded.
+
+let sandbox = false;
+export const setSandbox = (on: boolean) => {
+  sandbox = on;
+};
+export const isSandbox = () => sandbox;

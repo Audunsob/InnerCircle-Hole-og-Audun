@@ -192,6 +192,9 @@ const data: TeamData = {
   reports: [],
 };
 
+/** A copy of the made-up team's document, for the test mode on the moderator page. */
+export const demoTeamData = (): TeamData => structuredClone(data);
+
 export const demoView = (): ModViewAs => ({
   payload: { teamId: DEMO_TEAM_ID, role: 'sub', version: 1, data },
   playerId: null,

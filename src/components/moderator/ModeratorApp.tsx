@@ -4,12 +4,14 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { isEmail, rel } from '@/lib/format';
 import { ROLES } from '@/lib/seed';
 import { useStore, type Store } from '@/lib/store';
+import { onTestPage, switchTestMode } from '@/lib/testmode';
 import {
   currentSession,
   isModerator,
   modOverview,
   modViewAs,
   sendCode,
+  setSandbox,
   setViewAs,
   verifyCode,
   type MemberRole,
@@ -22,6 +24,7 @@ import { AppShell } from '../app/AppShell';
 import { Viewer } from '../overlays/Viewer';
 import { SheetHost } from '../sheets/Sheets';
 import { Icon, Tabs } from '../ui';
+import TestMode from './TestMode';
 
 /**
  * The page at /moderator for the people who made the app. Nothing in the app links here. Anyone the
@@ -29,7 +32,7 @@ import { Icon, Tabs } from '../ui';
  * /moderator?inn offers a login. Everything shown is read only.
  */
 export default function ModeratorApp() {
-  const [state, setState] = useState<'loading' | 'nope' | 'login' | 'ready'>('loading');
+  const [state, setState] = useState<'loading' | 'nope' | 'login' | 'ready' | 'test'>('loading');
   const [data, setData] = useState<ModOverview | null>(null);
   const [viewing, setViewing] = useState<{ v: ModViewAs; label: string; saved: Store } | null>(null);
   const [err, setErr] = useState('');
@@ -48,6 +51,13 @@ export default function ModeratorApp() {
   useEffect(() => {
     void (async () => {
       const session = await currentSession();
+      if (onTestPage()) {
+        // The test mode needs no data from the real database, only the moderator check (skipped while developing).
+        const ok = process.env.NODE_ENV !== 'production' || (!!session && (await isModerator().catch(() => false)));
+        // From here on every database call is answered by the made-up database.
+        if (ok) setSandbox(true);
+        return setState(ok ? 'test' : 'nope');
+      }
       if (session) return load();
       setState(new URLSearchParams(window.location.search).has('inn') ? 'login' : 'nope');
     })();
@@ -117,13 +127,14 @@ export default function ModeratorApp() {
   if (state === 'loading') return null;
   if (state === 'nope') return <NotFound />;
   if (state === 'login') return <Login onDone={load} />;
+  if (state === 'test') return <TestMode nav={<ModNav part="test" onChange={() => switchTestMode(false)} />} />;
   if (viewing) return <ViewAsHost label={viewing.label} onExit={stopViewing} />;
   if (!data) return null;
   return <Overview data={data} err={err} onViewAs={viewAs} />;
 }
 
 /** Looks like the page Next.js shows for an address that doesn't exist. */
-function NotFound() {
+export function NotFound() {
   return (
     <div className="mod-404">
       <div>
@@ -189,7 +200,33 @@ function Login({ onDone }: { onDone: () => void }) {
   );
 }
 
-type Part = 'oversikt' | 'lag' | 'brukere' | 'logg';
+type Part = 'oversikt' | 'lag' | 'brukere' | 'logg' | 'test';
+
+/** The page's tabs. «Testmodus» loads the page again in test mode, so the app starts clean against the made-up database. */
+function ModNav({ part, onChange, me }: { part: Part; onChange: (p: Part) => void; me?: string }) {
+  return (
+    <>
+      <header className="mod-header">
+        <span className="wordmark">InnerCircle</span>
+        <span className="mod-badge">Moderator</span>
+        <span className="spacer" />
+        {me && <span className="note">{me}</span>}
+      </header>
+      <Tabs<Part>
+        value={part}
+        onChange={(p) => (p === 'test' ? switchTestMode(true) : onChange(p))}
+        items={[
+          ['oversikt', 'Oversikt'],
+          ['lag', 'Lag'],
+          ['brukere', 'Brukere'],
+          ['logg', 'Logg'],
+          ['test', 'Test'],
+        ]}
+        style={{ marginTop: 12 }}
+      />
+    </>
+  );
+}
 type OnViewAs = (teamId: string, role: MemberRole, user: ModUser | null, label: string) => void;
 
 function Overview({ data, err, onViewAs }: { data: ModOverview; err: string; onViewAs: OnViewAs }) {
@@ -203,23 +240,7 @@ function Overview({ data, err, onViewAs }: { data: ModOverview; err: string; onV
 
   return (
     <main className="mod-page">
-      <header className="mod-header">
-        <span className="wordmark">InnerCircle</span>
-        <span className="mod-badge">Moderator</span>
-        <span className="spacer" />
-        <span className="note">{data.me}</span>
-      </header>
-      <Tabs<Part>
-        value={part}
-        onChange={setPart}
-        items={[
-          ['oversikt', 'Oversikt'],
-          ['lag', 'Lag'],
-          ['brukere', 'Brukere'],
-          ['logg', 'Logg'],
-        ]}
-        style={{ marginTop: 12 }}
-      />
+      <ModNav part={part} onChange={setPart} me={data.me} />
       {err && <p className="error" style={{ marginTop: 12 }}>{err}</p>}
 
       {part === 'oversikt' && (
