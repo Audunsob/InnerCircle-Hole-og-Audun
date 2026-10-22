@@ -1,4 +1,4 @@
-import { deletePush, isDemo, isViewAs, savePush } from './supabase';
+import { deletePush, isDemo, isSandbox, isViewAs, savePush } from './supabase';
 
 /** Public half of the app's push key pair. The private half lives only on the server (VAPID_PRIVATE_KEY). */
 export const VAPID_PUBLIC_KEY =
@@ -68,6 +68,8 @@ export type EnableResult = 'ok' | 'denied' | 'unsupported' | 'homescreen' | 'err
 export async function enablePush(teamId: string, prefs: PushPrefs): Promise<EnableResult> {
   // Viewing the app as someone else: leave this device's own notifications alone.
   if (isViewAs()) return isDemo() ? 'ok' : 'error';
+  // Test mode: pretend, and leave this device's real notifications alone.
+  if (isSandbox()) return 'ok';
   if (needsHomeScreen()) return 'homescreen';
   if (!pushSupported()) return 'unsupported';
   const permission = await Notification.requestPermission();
@@ -86,7 +88,7 @@ export async function enablePush(teamId: string, prefs: PushPrefs): Promise<Enab
 
 /** Updates which kinds of notifications this device wants. */
 export async function updatePushPrefs(teamId: string, prefs: PushPrefs) {
-  if (isViewAs()) return;
+  if (isViewAs() || isSandbox()) return;
   if (!pushSupported()) return;
   const reg = await navigator.serviceWorker.getRegistration();
   const sub = await reg?.pushManager.getSubscription();
@@ -94,7 +96,7 @@ export async function updatePushPrefs(teamId: string, prefs: PushPrefs) {
 }
 
 export async function disablePush() {
-  if (isViewAs()) return;
+  if (isViewAs() || isSandbox()) return;
   if (!pushSupported()) return;
   try {
     const reg = await navigator.serviceWorker.getRegistration();

@@ -1,9 +1,11 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { isEmail, rel } from '@/lib/format';
 import { ROLES } from '@/lib/seed';
 import { useStore, type Store } from '@/lib/store';
+import { TEST_PATH } from '@/lib/testmode';
 import {
   currentSession,
   isModerator,
@@ -123,7 +125,7 @@ export default function ModeratorApp() {
 }
 
 /** Looks like the page Next.js shows for an address that doesn't exist. */
-function NotFound() {
+export function NotFound() {
   return (
     <div className="mod-404">
       <div>
@@ -207,6 +209,9 @@ function Overview({ data, err, onViewAs }: { data: ModOverview; err: string; onV
         <span className="wordmark">InnerCircle</span>
         <span className="mod-badge">Moderator</span>
         <span className="spacer" />
+        <Link className="btn-outline" href={TEST_PATH}>
+          Testmodus
+        </Link>
         <span className="note">{data.me}</span>
       </header>
       <Tabs<Part>

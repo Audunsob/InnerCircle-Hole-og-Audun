@@ -1413,3 +1413,7 @@ textarea.input {
     border-right-color: rgba(255, 255, 255, 0.3);
   }
 }
+/* The test mode's panel opens above the app's own menu and sheets. */
+.mod-backdrop.test-panel {
+  z-index: 100;
+}

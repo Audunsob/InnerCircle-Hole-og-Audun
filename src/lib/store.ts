@@ -39,6 +39,7 @@ import {
   removeCoach,
   getTeam,
   isDemo,
+  isSandbox,
   isViewAs,
   joinTeam,
   LastCoachError,
@@ -506,6 +507,8 @@ export const useStore = create<Store>()((set, get) => {
   ) => {
     const team = s().team;
     if (!team || team.role !== 'coach' || isViewAs()) return;
+    // Test mode: nothing leaves the browser, so no phone is told.
+    if (isSandbox()) return;
     try {
       const token = await accessToken();
       await fetch('/api/notify', {

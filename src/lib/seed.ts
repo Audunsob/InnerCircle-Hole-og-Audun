@@ -6,8 +6,10 @@ import type {
   Role,
   TeamData,
 } from './types';
+import { onTestPage } from './testmode';
 
-export const LS_KEY = 'innercircle.v3';
+// The test mode keeps its own copy, so the real app on the same browser is left as it was.
+export const LS_KEY = onTestPage() ? 'innercircle.test.v3' : 'innercircle.v3';
 export const DEFAULT_TEAM = 'Laget';
 export const COACH = 'Administrator';
 export const DEFAULT_PRICE = 20;
