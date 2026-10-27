@@ -1484,7 +1484,7 @@ export const useStore = create<Store>()((set, get) => {
           'DTSTAMP:' + f(new Date()),
           'DTSTART:' + f(st),
           'DTEND:' + f(en),
-          'SUMMARY:' + title + ' (G12)',
+          'SUMMARY:' + title,
           'LOCATION:' + m.venue,
           'END:VEVENT',
           'END:VCALENDAR',
