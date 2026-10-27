@@ -17,7 +17,7 @@ import {
 import { pushPrefs, useStore } from '@/lib/store';
 import { disablePush, enablePush, isStandalone, needsHomeScreen, phoneKind, updatePushPrefs } from '@/lib/push';
 import type { Player } from '@/lib/types';
-import { Icon, SwitchRow } from '../ui';
+import { Icon, SwitchRow, TeamLogo } from '../ui';
 import { Rings } from '../screens/RoleScreen';
 
 export const METHOD_NAMES = (last4: string) => ({
@@ -83,7 +83,9 @@ export function MinSide() {
       ? 'Administrator · ' + team
       : role === 'player'
         ? 'Spiller · ' + team
-        : 'Du følger laget via ' + (via ? via.name : 'en spiller');
+        : via
+          ? 'Du følger laget via ' + via.name
+          : 'Du følger ' + team;
 
   return (
     <>
@@ -123,6 +125,7 @@ export function MinSide() {
       {role === 'sub' && <SubSections />}
       {role === 'player' && me && <PlayerSections me={me} />}
 
+      {role !== 'coach' && <LogoSection />}
       <TeamsSection />
       <PushSection />
       <HelpSection />
@@ -421,6 +424,7 @@ function CoachSections() {
           </>
         )}
       </Section>
+      <LogoSection />
       <Section title="Slett laget">
         <p className="note">
           Laget slettes for alle: spillerlista, kamper, innlegg, bilder og videoer. Alle mister tilgangen. Dette kan ikke angres.
@@ -617,6 +621,69 @@ function HelpSection() {
 const ROLE_NAME: Record<string, string> = { coach: 'Administrator', player: 'Spiller', sub: 'Abonnent' };
 
 /** Other teams and roles this account has. Shown only when there is somewhere else to go. */
+/** The club's logo. Everyone on the team may add or change it, and everyone sees it; coaches may remove it. */
+function LogoSection() {
+  const logo = useStore((s) => s.data.logo);
+  const isCoach = useStore((s) => s.role === 'coach');
+  const setLogo = useStore((s) => s.setLogo);
+  const removeLogo = useStore((s) => s.removeLogo);
+  const pick = (
+    <input
+      type="file"
+      accept="image/png,image/jpeg,image/webp,image/*"
+      onChange={(e) => {
+        const f = e.target.files?.[0];
+        e.target.value = '';
+        if (f) void setLogo(f);
+      }}
+      style={{ position: 'absolute', width: 1, height: 1, opacity: 0, overflow: 'hidden' }}
+    />
+  );
+  return (
+    <Section title="Lagets logo">
+      <p className="note">Logoen til idrettslaget vises for alle som bruker appen på laget.</p>
+      {logo ? (
+        <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: 14 }}>
+          <TeamLogo src={logo} size={64} style={{ borderRadius: 12, background: 'var(--field)', padding: 4 }} />
+          <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 20 }}>
+            <label className="link-btn" style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+              {pick}
+              Bytt logo
+            </label>
+            {isCoach && (
+              <button type="button" className="link-btn quiet" onClick={removeLogo}>
+                Fjern
+              </button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <label
+          className="card-btn"
+          style={{
+            position: 'relative',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            minHeight: 54,
+            padding: '0 16px',
+            border: '1px dashed var(--line-strong)',
+            borderRadius: 16,
+            background: 'var(--field)',
+            color: 'var(--accent-ink)',
+            font: '600 15px var(--body)',
+            cursor: 'pointer',
+          }}
+        >
+          {pick}
+          <Icon name="add_photo_alternate" size={22} />
+          Legg til lagets logo
+        </label>
+      )}
+    </Section>
+  );
+}
+
 function TeamsSection() {
   const st = useStore();
   const loadTeams = st.loadTeams;

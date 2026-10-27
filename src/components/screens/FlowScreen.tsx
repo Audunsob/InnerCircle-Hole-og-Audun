@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
 import { NB } from '@/lib/format';
-import { ROLES } from '@/lib/seed';
+import { NO_VIA, ROLES } from '@/lib/seed';
 import { useStore } from '@/lib/store';
 import type { Screen } from '@/lib/types';
 import { Checkbox, ChevronRow, Field, Icon, TopBar } from '../ui';
@@ -344,9 +344,10 @@ function Terms() {
       <Field label="Ditt navn" hint="Administratoren og familien ser navnet ditt i lista over dem som følger laget.">
         <FlowInput field="subName" autoComplete="name" placeholder="Fornavn og etternavn" />
       </Field>
-      <Field label="Hvem ble du vervet av?" hint="Spilleren som inviterte deg. Du ser fortsatt hele laget.">
+      <Field label="Hvem ble du vervet av?" hint="Spilleren som inviterte deg, eller «Ingen». Du ser hele laget uansett.">
         <select className="input" value={flow.inviteVia || ''} onChange={(e) => setFlow({ inviteVia: e.target.value || null, err: '' })}>
           <option value="">Velg spiller …</option>
+          <option value={NO_VIA}>Ingen</option>
           {sorted.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}

@@ -18,7 +18,7 @@ const TITLES: Record<Exclude<SheetName, 'confirm'>, string> = {
   addMatch: 'Legg til kamp',
   addEvent: 'Ny hendelse',
   training: 'Fast trening',
-  trainingDay: 'Endre én trening',
+  trainingDay: 'Endre treningen',
   result: 'Resultat',
   postMenu: 'Innlegg',
   likes: 'Hjerter',
@@ -548,7 +548,7 @@ function TrainingForm() {
   );
 }
 
-/** One training in a series: move it, or cancel just that day. */
+/** One training in a series: move it to another day or time, or cancel it. Just this one, or this one and those after it. */
 function TrainingDay() {
   const form = useStore((s) => s.form);
   const setForm = useStore((s) => s.setForm);
@@ -563,19 +563,32 @@ function TrainingDay() {
     e.preventDefault();
     save();
   };
-  const date = String(f.date || '');
+  const key = String(f.key || '');
+  const future = f.scope === 'future';
   return (
     <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <p style={{ margin: 0, font: '600 15px var(--body)' }}>{date && fmtLong(date).replace(/^./, (c) => c.toUpperCase())}</p>
+      <p style={{ margin: 0, font: '600 15px var(--body)' }}>{key && 'Planlagt ' + fmtLong(key)}</p>
       {f.cancelled ? (
         <p className="note" style={{ margin: 0 }}>
           Denne treningen er avlyst. De andre treningene går som vanlig.
         </p>
       ) : (
         <>
-          <p className="note" style={{ margin: 0 }}>
-            Endringene gjelder bare denne gangen. De andre treningene går som vanlig.
+          <div className="field">
+            <span className="field-label">Hva vil du endre?</span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              <Chip label="Bare denne treningen" on={!future} onClick={() => setForm({ scope: 'one', err: '' })} />
+              <Chip label="Denne og alle senere" on={future} onClick={() => setForm({ scope: 'future', err: '' })} />
+            </div>
+          </div>
+          <p className="note" style={{ margin: '-8px 0 0' }}>
+            {future
+              ? 'Treningene fra den valgte dagen og utover får ny dag, tid og sted. De som allerede er holdt, endres ikke.'
+              : 'Endringen gjelder bare denne gangen. De andre treningene går som vanlig.'}
           </p>
+          <Field label={future ? 'Første trening med ny plan' : 'Dato'}>
+            <input className="input" type="date" {...bind('date')} />
+          </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="Start">
               <input className="input" type="time" {...bind('time')} />
@@ -589,24 +602,60 @@ function TrainingDay() {
           </Field>
           <FormError text={f.err} />
           <button type="submit" className="btn btn-primary btn-block">
-            Lagre for denne gangen
+            {future ? 'Lagre for denne og alle senere' : 'Lagre for denne gangen'}
           </button>
         </>
       )}
-      <button type="button" className={f.cancelled ? 'btn btn-primary btn-block' : 'link-btn'} style={f.cancelled ? undefined : { color: 'var(--accent-ink)' }} onClick={() => cancel(!f.cancelled)}>
-        {f.cancelled ? 'Ta treningen tilbake' : 'Avlys denne treningen'}
-      </button>
+      {!future && (
+        <button type="button" className={f.cancelled ? 'btn btn-primary btn-block' : 'link-btn'} style={f.cancelled ? undefined : { color: 'var(--accent-ink)' }} onClick={() => cancel(!f.cancelled)}>
+          {f.cancelled ? 'Ta treningen tilbake' : 'Avlys denne treningen'}
+        </button>
+      )}
     </form>
   );
 }
 
-function ScoreBox({ label, value, onStep }: { label: string; value: number; onStep: (dir: number) => void }) {
+function ScoreBox({
+  label,
+  value,
+  onType,
+  onStep,
+  autoFocus,
+}: {
+  label: string;
+  value: string;
+  onType: (v: string) => void;
+  onStep: (dir: number) => void;
+  autoFocus?: boolean;
+}) {
   return (
-    <div style={{ background: 'var(--surface)', padding: '16px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-      <span style={{ font: '500 15px var(--body)' }}>{label}</span>
-      <span className="tnum" style={{ font: 'italic 800 56px/1 var(--display)' }}>
-        {value}
-      </span>
+    <div style={{ background: 'var(--surface)', padding: '16px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, minWidth: 0 }}>
+      <span style={{ font: '500 15px var(--body)', textAlign: 'center', overflowWrap: 'anywhere' }}>{label}</span>
+      <input
+        className="tnum"
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        maxLength={3}
+        autoFocus={autoFocus}
+        aria-label={'Mål for ' + label}
+        placeholder="0"
+        value={value}
+        onChange={(e) => onType(e.target.value.replace(/\D/g, '').slice(0, 3))}
+        onFocus={(e) => e.target.select()}
+        style={{
+          width: '100%',
+          maxWidth: 140,
+          padding: '4px 0',
+          border: 'none',
+          borderBottom: '2px solid var(--line-strong)',
+          background: 'none',
+          color: 'var(--ink)',
+          font: 'italic 800 56px/1 var(--display)',
+          textAlign: 'center',
+          outline: 'none',
+        }}
+      />
       <div style={{ display: 'flex', gap: 8 }}>
         <button type="button" className="btn btn-secondary btn-step" aria-label="Minus" onClick={() => onStep(-1)}>
           −
@@ -622,9 +671,15 @@ function ScoreBox({ label, value, onStep }: { label: string; value: number; onSt
 function Result() {
   const st = useStore();
   const m = st.data.matches.find((x) => x.id === st.form.matchId);
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    st.saveResult();
+  };
   return (
-    <>
-      <p className="note">{m ? matchTitle(st, m) : ''}</p>
+    <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <p className="note" style={{ margin: 0 }}>
+        {m ? matchTitle(st, m) : ''}
+      </p>
       <div
         style={{
           display: 'grid',
@@ -636,13 +691,28 @@ function Result() {
           overflow: 'hidden',
         }}
       >
-        <ScoreBox label={shortTeam(st)} value={Number(st.form.us) || 0} onStep={(d) => st.stepResult('us', d)} />
-        <ScoreBox label={m?.opp || 'Motstander'} value={Number(st.form.them) || 0} onStep={(d) => st.stepResult('them', d)} />
+        <ScoreBox
+          label={shortTeam(st)}
+          value={String(st.form.us ?? '')}
+          onType={(v) => st.setForm({ us: v, err: '' })}
+          onStep={(d) => st.stepResult('us', d)}
+          autoFocus={st.form.us === ''}
+        />
+        <ScoreBox
+          label={m?.opp || 'Motstander'}
+          value={String(st.form.them ?? '')}
+          onType={(v) => st.setForm({ them: v, err: '' })}
+          onStep={(d) => st.stepResult('them', d)}
+        />
       </div>
-      <button type="button" className="btn btn-primary btn-block" onClick={st.saveResult}>
+      <p className="note" style={{ margin: 0 }}>
+        Skriv inn målene, f.eks. 20 og 15. Spillerne og abonnentene får varsel når du lagrer.
+      </p>
+      <FormError text={st.form.err ? String(st.form.err) : undefined} />
+      <button type="submit" className="btn btn-primary btn-block">
         Lagre resultat
       </button>
-    </>
+    </form>
   );
 }
 
@@ -899,7 +969,7 @@ function Subscribers() {
       const p = id ? P[id] : undefined;
       return {
         key: id || 'none',
-        name: p ? p.name : 'Ukjent spiller',
+        name: p ? p.name : id ? 'Ukjent spiller' : 'Ikke vervet av noen',
         n: xs.length,
         names: xs.map((x) => x.name + (x.rel ? ' (' + x.rel + ')' : '')).join(', '),
       };
@@ -909,7 +979,7 @@ function Subscribers() {
   return (
     <>
       <p className="note">
-        {subs.length} abonnenter, vervet av {via.length} spillere.
+        {subs.length} abonnenter, vervet av {via.filter(Boolean).length} spillere.
       </p>
       <Tabs
         value={st.subView}
@@ -945,7 +1015,7 @@ function Subscribers() {
                 <span className="row-text">
                   <span style={{ font: '500 15px var(--body)' }}>{x.name}</span>
                   <span className="row-meta" style={{ lineHeight: 1.35 }}>
-                    {'Vervet av ' + (p ? p.name : 'ukjent spiller') + ' · ' + (x.rel ? x.rel + ' · ' : '') + 'siden ' + fmtShort(x.since) + (x.until ? ' · slutter ' + fmtShort(x.until) : '')}
+                    {(p ? 'Vervet av ' + p.name : x.via ? 'Vervet av ukjent spiller' : 'Ikke vervet av noen') + ' · ' + (x.rel ? x.rel + ' · ' : '') + 'siden ' + fmtShort(x.since) + (x.until ? ' · slutter ' + fmtShort(x.until) : '')}
                   </span>
                 </span>
                 <button type="button" className="link-btn quiet" aria-label={'Fjern tilgang for ' + x.name} onClick={() => st.removeSub(x.id)}>

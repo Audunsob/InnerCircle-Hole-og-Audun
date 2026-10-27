@@ -16,7 +16,7 @@ import { fmtLong } from '@/lib/format';
 import { matchTitle, opponentText, playerMap, shortTeam } from '@/lib/selectors';
 import { useStore } from '@/lib/store';
 import type { Match } from '@/lib/types';
-import { DateCol, Icon, SwitchRow, Tabs } from '../ui';
+import { DateCol, Icon, SwitchRow, Tabs, TeamLogo } from '../ui';
 import { Rings } from '../screens/RoleScreen';
 import { Feed } from './LagView';
 import { EventsSection } from './ArrangementView';
@@ -163,6 +163,8 @@ export function KamperView() {
 }
 
 function Crest({ text, us }: { text: string; us?: boolean }) {
+  const logo = useStore((s) => (us ? s.data.logo : undefined));
+  if (logo) return <TeamLogo src={logo} size={58} style={{ borderRadius: '50%', background: '#f5ede3', padding: 6 }} />;
   return (
     <span
       aria-hidden="true"

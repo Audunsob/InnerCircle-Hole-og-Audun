@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'InnerCircle',
     short_name: 'InnerCircle',
-    description: 'Lagets egen bildestrøm, bare for familien.',
+    description: 'Lagets egen bildestrøm.',
     lang: 'nb',
     start_url: '/',
     display: 'standalone',

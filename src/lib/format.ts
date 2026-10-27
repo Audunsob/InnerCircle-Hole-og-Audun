@@ -125,6 +125,39 @@ export function resizeImage(file: File): Promise<string> {
   });
 }
 
+/** Longest data URL the database keeps for a team's logo (ic_logo in schema.sql). */
+export const MAX_LOGO = 200000;
+
+/**
+ * A logo picture made small enough to keep in the team document: at most 256 pixels wide or tall, with its
+ * transparency kept (webp where the browser can make it, else png). Smaller sizes are tried if it is still too big.
+ */
+export function logoImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        for (const max of [256, 192, 128, 96]) {
+          const sc = Math.min(1, max / Math.max(img.width, img.height));
+          const c = document.createElement('canvas');
+          c.width = Math.max(1, Math.round(img.width * sc));
+          c.height = Math.max(1, Math.round(img.height * sc));
+          c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
+          let url = c.toDataURL('image/webp', 0.9);
+          if (!url.startsWith('data:image/webp')) url = c.toDataURL('image/png');
+          if (url.length <= MAX_LOGO) return resolve(url);
+        }
+        reject(new Error('too_big'));
+      };
+      img.onerror = reject;
+      img.src = r.result as string;
+    };
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+
 export function download(name: string, text: string, type: string) {
   try {
     const url = URL.createObjectURL(new Blob([text], { type }));

@@ -26,7 +26,7 @@ const dmSans = DM_Sans({
 
 export const metadata: Metadata = {
   title: 'InnerCircle',
-  description: 'Lagets egen bildestrøm, bare for familien.',
+  description: 'Lagets egen bildestrøm.',
   icons: { icon: '/icon-192.png', apple: '/apple-touch-icon.png' },
   appleWebApp: { capable: true, title: 'InnerCircle', statusBarStyle: 'black' },
 };

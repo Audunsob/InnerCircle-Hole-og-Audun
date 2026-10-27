@@ -96,9 +96,11 @@ export interface TeamEvent {
   seriesId?: string | null;
 }
 
-/** A change to one training in a series: moved, or cancelled. Keyed by its date. */
+/** A change to one training in a series: moved, or cancelled. Keyed by the date it was planned for. */
 export interface TrainingChange {
   cancelled?: boolean;
+  /** Moved to another day, yyyy-mm-dd. The key stays the planned date, so posts and links keep pointing at it. */
+  date?: string;
   time?: string;
   end?: string;
   venue?: string;
@@ -239,6 +241,8 @@ export interface TeamData {
   teamName?: string;
   teamCode?: string;
   coachCode?: string;
+  /** The club's logo, a small picture as a data URL. Everyone on the team may add or change it; coaches may remove it. */
+  logo?: string;
   price?: number;
   payout?: { owner: string; acct: string; at: number };
   payments?: Payment[];
