@@ -13,6 +13,8 @@ export const LS_KEY = onTestPage() ? 'innercircle.test.v3' : 'innercircle.v3';
 export const DEFAULT_TEAM = 'Laget';
 export const COACH = 'Administrator';
 export const DEFAULT_PRICE = 20;
+/** «Hvem ble du vervet av?» answered with «Ingen». Only used in the sign-up form; the subscription gets no player. */
+export const NO_VIA = 'none';
 
 /** Icons a coach can pick for an event. */
 export const EVENT_ICONS = ['event', 'groups', 'restaurant', 'local_pizza', 'celebration', 'forum', 'directions_run', 'directions_bus', 'emoji_events', 'volunteer_activism', 'school', 'sports_soccer'];

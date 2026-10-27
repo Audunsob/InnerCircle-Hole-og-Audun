@@ -1,7 +1,7 @@
 'use client';
 
 import { eventHours, splitEvents, visiblePosts } from '@/lib/derive';
-import { fmtLong } from '@/lib/format';
+import { fmtDay, fmtLong } from '@/lib/format';
 import { canPost, playerMap } from '@/lib/selectors';
 import { useStore } from '@/lib/store';
 import { allEvents, findEvent, isRunning, isTraining, repeatText, timeText, type TrainingEvent } from '@/lib/trainings';
@@ -112,7 +112,9 @@ function EventRow({ e }: { e: TeamEvent | TrainingEvent }) {
           <span style={{ minWidth: 0, overflowWrap: 'anywhere', ...(cancelled ? { textDecoration: 'line-through', color: 'var(--muted)' } : {}) }}>{e.title}</span>
         </span>
         <span className="row-sub">{cancelled ? 'Avlyst' : eventHours(e) + ' · ' + e.venue}</span>
-        {!cancelled && isTraining(e) && e.changed && <span className="row-meta">Endret denne gangen</span>}
+        {!cancelled && isTraining(e) && e.changed && (
+          <span className="row-meta">{e.key !== e.date ? 'Flyttet fra ' + fmtDay(e.key) : 'Endret denne gangen'}</span>
+        )}
         {e.kind !== e.title && <span className="row-meta">{e.kind}</span>}
         {media > 0 && <span className="row-meta">{media === 1 ? '1 bilde eller video' : media + ' bilder og videoer'}</span>}
       </span>
@@ -164,7 +166,11 @@ export function EventDetail({ id }: { id: string }) {
           {e.title}
         </h1>
         {training?.cancelled && <p style={{ margin: 0, font: '700 15px var(--body)', color: 'var(--accent-ink)' }}>Denne treningen er avlyst.</p>}
-        {training && !training.cancelled && training.changed && <p className="note" style={{ margin: 0 }}>Tid eller sted er endret denne gangen.</p>}
+        {training && !training.cancelled && training.changed && (
+          <p className="note" style={{ margin: 0 }}>
+            {training.key !== training.date ? 'Flyttet fra ' + fmtLong(training.key) + '.' : 'Tid eller sted er endret denne gangen.'}
+          </p>
+        )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, font: '400 15px/1.4 var(--body)' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Icon name="calendar_today" size={18} style={{ color: 'var(--muted)' }} />
@@ -194,8 +200,8 @@ export function EventDetail({ id }: { id: string }) {
         <div style={{ margin: '12px 0 0', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
           {training ? (
             <>
-              <button type="button" className="link-btn small" style={{ textAlign: 'left' }} onClick={() => st.openTrainingDay(training.seriesId, training.date)}>
-                Flytt eller avlys denne gangen
+              <button type="button" className="link-btn small" style={{ textAlign: 'left' }} onClick={() => st.openTrainingDay(training.seriesId, training.key)}>
+                Flytt, endre eller avlys denne treningen
               </button>
               <button type="button" className="link-btn small" style={{ textAlign: 'left' }} onClick={() => st.openTraining(training.seriesId)}>
                 Endre alle treningene

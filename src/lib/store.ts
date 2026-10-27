@@ -11,6 +11,7 @@ import {
   isEmail,
   iso,
   isPlayed,
+  logoImage,
   matchTime,
   nextChargeText,
   NB,
@@ -25,6 +26,7 @@ import {
   freshState,
   LS_KEY,
   newPay,
+  NO_VIA,
 } from './seed';
 import {
   accessToken,
@@ -59,11 +61,13 @@ import {
   type Membership,
   type TeamPayload,
 } from './supabase';
-import { scoreTitle } from './derive';
+import { OUTCOME_WORD, outcomeOf, scoreTitle } from './derive';
 import { disablePush, enablePush, isStandalone, needsHomeScreen, phoneKind, updatePushPrefs, type PushPrefs } from './push';
 import { canComment, canPost, coachName, matchTitle, memberAuthor, price, shortTeam, teamName } from './selectors';
 
 const MAX_VIDEO = 50 * 1024 * 1024;
+/** Highest score that can be entered; handball and basketball go well past 30. */
+const MAX_SCORE = 999;
 
 const VIDEO_EXT: Record<string, string> = { mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm' };
 
@@ -130,7 +134,7 @@ import type {
   TrainingSeries,
   TeamEvent,
 } from './types';
-import { findEvent, firstOn, isRunning, isTraining, repeatText, seriesIcs, timeText, WEEKDAYS, yesterday } from './trainings';
+import { addDaysIso, findEvent, firstOn, isPlanned, isRunning, isTraining, repeatText, seriesIcs, timeText, WEEKDAYS, yesterday } from './trainings';
 
 const EPHEMERAL_KEYS = Object.keys(ephemeral()) as (keyof EphemeralState)[];
 
@@ -244,12 +248,16 @@ export interface Actions {
   saveTraining: () => void;
   /** Stops a series after today; the trainings already held stay. */
   endTraining: (id: string) => void;
-  /** Opens one training in a series, to move or cancel just that day. */
-  openTrainingDay: (seriesId: string, date: string) => void;
+  /** Opens one training in a series (by the date the series planned it for), to move or cancel just that one. */
+  openTrainingDay: (seriesId: string, key: string) => void;
   saveTrainingDay: () => void;
   /** Cancels one training, or brings a cancelled one back. */
   cancelTrainingDay: (cancel: boolean) => void;
   trainingToCal: (id: string) => void;
+  /** Sets the club's logo from a picture. Anyone on the team may; everyone sees it. */
+  setLogo: (file: File) => Promise<void>;
+  /** Removes the club's logo. Coaches only. */
+  removeLogo: () => void;
   openResult: (id: string) => void;
   stepResult: (k: 'us' | 'them', dir: number) => void;
   saveResult: () => void;
@@ -338,7 +346,7 @@ const WRITES = [
   'openComposer', 'addFiles', 'publish', 'deletePost', 'updPlayer',
   'openAddMatch', 'saveMatch', 'deleteMatch', 'openAddEvent', 'saveEvent', 'deleteEvent',
   'openTraining', 'saveTraining', 'endTraining', 'openTrainingDay', 'saveTrainingDay', 'cancelTrainingDay',
-  'openResult', 'saveResult', 'openTeamSettings', 'newCode', 'saveTeamSettings', 'remindConsent', 'dismissReport',
+  'openResult', 'saveResult', 'setLogo', 'removeLogo', 'openTeamSettings', 'newCode', 'saveTeamSettings', 'remindConsent', 'dismissReport',
   'openPrice', 'savePrice', 'openPayout', 'savePayout', 'removeSub', 'addPlayer', 'openEditPlayer', 'savePlayer',
   'removePlayer', 'removeCoach', 'deleteTeam', 'decide',
 ] as const satisfies readonly (keyof Actions)[];
@@ -916,7 +924,7 @@ export const useStore = create<Store>()((set, get) => {
     if (s().flow.err) return;
     if (!p) return setFlow({ err: 'Fant ikke noe lag med den koden.' });
     const via = s().flow.inviteVia;
-    setFlow({ err: '', inviteVia: via && p.players.some((x) => x.id === via) ? via : null, terms: false });
+    setFlow({ err: '', inviteVia: via === NO_VIA || (via && p.players.some((x) => x.id === via)) ? via : null, terms: false });
     go('terms');
   };
 
@@ -924,7 +932,7 @@ export const useStore = create<Store>()((set, get) => {
     const f = s().flow;
     const name = (f.subName || '').trim().replace(/\s+/g, ' ');
     if (name.length < 2) return setFlow({ err: 'Skriv inn navnet ditt.' });
-    if (!f.inviteVia) return setFlow({ err: 'Velg hvem som vervet deg.' });
+    if (!f.inviteVia) return setFlow({ err: 'Velg hvem som vervet deg, eller «Ingen».' });
     if (!f.terms) return setFlow({ err: 'Du må godta vilkårene for å fortsette.' });
     if (!(await join('sub', null))) return;
     setProf('sub', { name });
@@ -1051,7 +1059,7 @@ export const useStore = create<Store>()((set, get) => {
       });
     const subName = st.prof.sub.name || 'Abonnent';
     if (ctx === 'flow') {
-      const via = st.flow.inviteVia || st.data.players[0]?.id || null;
+      const via = st.flow.inviteVia && st.flow.inviteVia !== NO_VIA ? st.flow.inviteVia : null;
       setProf('sub', { viaId: via, active: true, cancelled: false, method: p.method, last4, startedAt: now, autoRenew });
       addSub(mySubId(), subName, '', via);
       enterApp('sub');
@@ -1798,38 +1806,94 @@ export const useStore = create<Store>()((set, get) => {
         },
       );
     },
-    openTrainingDay: (seriesId, date) => {
+    openTrainingDay: (seriesId, key) => {
       const t = (s().data.trainings || []).find((x) => x.id === seriesId);
       if (!t) return;
-      const c = t.changes?.[date] || {};
+      const c = t.changes?.[key] || {};
       set({
         sheet: 'trainingDay',
-        form: { seriesId, date, time: c.time || t.time, end: c.end ?? t.end, venue: c.venue || t.venue, note: c.note ?? t.note ?? '', cancelled: !!c.cancelled, err: '' },
+        form: {
+          seriesId,
+          key,
+          date: c.date || key,
+          time: c.time || t.time,
+          end: c.end ?? t.end,
+          venue: c.venue || t.venue,
+          note: c.note ?? t.note ?? '',
+          cancelled: !!c.cancelled,
+          scope: 'one',
+          err: '',
+        },
       });
     },
     saveTrainingDay: () => {
       const f = s().form as Record<string, string | boolean>;
       const t = (s().data.trainings || []).find((x) => x.id === f.seriesId);
       if (!t) return set({ sheet: null });
-      const date = String(f.date);
+      const key = String(f.key);
+      const date = String(f.date || '');
       const venue = String(f.venue || '').trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return setForm({ err: 'Velg hvilken dag treningen skal være.' });
       if (!f.time) return setForm({ err: 'Legg inn når treningen starter.' });
       if (f.end && String(f.end) <= String(f.time)) return setForm({ err: 'Slutt må være etter start.' });
       if (!venue) return setForm({ err: 'Skriv inn hvor dere trener.' });
-      const prev = t.changes?.[date] || {};
+      const time = String(f.time);
+      const end = String(f.end || '');
+
+      if (f.scope === 'future') {
+        // This training and the ones after it: the old series stops before it, and a new one starts on the chosen day.
+        if (t.until && date > t.until) return setForm({ err: 'Datoen er etter den siste treningen. Endre heller «Til og med» under «Endre alle treningene».' });
+        const weekday = new Date(date + 'T12:00').getDay();
+        const first = key <= firstOn(t.from, t.weekday);
+        const next: TrainingSeries = {
+          id: first ? t.id : 't' + Date.now(),
+          title: t.title,
+          weekday,
+          every: t.every,
+          time,
+          end,
+          venue,
+          note: t.note || '',
+          from: date,
+          until: t.until || null,
+          changes: {},
+        };
+        // Single changes later on still apply where the new plan has a training that day.
+        for (const [k, c] of Object.entries(t.changes || {})) if (k > key && isPlanned(next, k)) next.changes[k] = c;
+        setData((d) => ({
+          ...d,
+          trainings: first
+            ? (d.trainings || []).map((x) => (x.id === t.id ? next : x))
+            : [...(d.trainings || []).map((x) => (x.id === t.id ? { ...x, until: addDaysIso(key, -1) } : x)), next],
+        }));
+        set({ sheet: null, openEvent: null });
+        toast('Treningene fra ' + fmtDay(date) + ' er endret');
+        const text = 'Endret trening fra ' + fmtDay(date) + ': ' + t.title + ' ' + repeatText(next).toLowerCase() + ' kl. ' + timeText(next) + ', ' + venue;
+        addNotif(text, true);
+        void notify('events', teamName(s()), text);
+        return;
+      }
+
+      const prev = t.changes?.[key] || {};
       const c = {
         ...(prev.cancelled ? { cancelled: true } : {}),
-        ...(String(f.time) !== t.time ? { time: String(f.time) } : {}),
-        ...(String(f.end || '') !== t.end ? { end: String(f.end || '') } : {}),
+        ...(date !== key ? { date } : {}),
+        ...(time !== t.time ? { time } : {}),
+        ...(end !== t.end ? { end } : {}),
         ...(venue !== t.venue ? { venue } : {}),
         ...(String(f.note || '').trim() !== (t.note || '') ? { note: String(f.note || '').trim() } : {}),
       };
-      const moved = (c.time || t.time) !== (prev.time || t.time) || (c.end ?? t.end) !== (prev.end ?? t.end) || (c.venue || t.venue) !== (prev.venue || t.venue);
-      putChange(t.id, date, c);
+      const was = prev.date || key;
+      const moved = date !== was || (c.time || t.time) !== (prev.time || t.time) || (c.end ?? t.end) !== (prev.end ?? t.end) || (c.venue || t.venue) !== (prev.venue || t.venue);
+      putChange(t.id, key, c);
       set({ sheet: null });
-      toast('Treningen ' + fmtDay(date) + ' er endret');
+      toast(date !== was ? 'Treningen er flyttet til ' + fmtDay(date) : 'Treningen ' + fmtDay(date) + ' er endret');
       if (!moved) return;
-      const text = 'Endret trening ' + fmtDay(date) + ': kl. ' + timeText({ time: c.time || t.time, end: c.end ?? t.end }) + ', ' + (c.venue || t.venue);
+      const when = 'kl. ' + timeText({ time, end }) + ', ' + venue;
+      const text =
+        date !== was
+          ? 'Flyttet trening: ' + t.title.toLowerCase() + ' ' + fmtDay(was) + ' er flyttet til ' + fmtDay(date) + ' ' + when
+          : 'Endret trening ' + fmtDay(date) + ': ' + when;
       addNotif(text, true);
       void notify('events', teamName(s()), text);
     },
@@ -1837,13 +1901,14 @@ export const useStore = create<Store>()((set, get) => {
       const f = s().form as Record<string, string | boolean>;
       const t = (s().data.trainings || []).find((x) => x.id === f.seriesId);
       if (!t) return set({ sheet: null });
-      const date = String(f.date);
-      const rest = { ...t.changes?.[date] };
+      const key = String(f.key);
+      const rest = { ...t.changes?.[key] };
       delete rest.cancelled;
-      putChange(t.id, date, cancel ? { ...rest, cancelled: true } : rest);
+      const date = rest.date || key;
+      putChange(t.id, key, cancel ? { ...rest, cancelled: true } : rest);
       set({ sheet: null });
       toast(cancel ? 'Treningen ' + fmtDay(date) + ' er avlyst' : 'Treningen ' + fmtDay(date) + ' blir likevel');
-      const text = (cancel ? 'Avlyst: ' : 'Blir likevel: ') + t.title.toLowerCase() + ' ' + fmtDay(date) + ' kl. ' + t.time;
+      const text = (cancel ? 'Avlyst: ' : 'Blir likevel: ') + t.title.toLowerCase() + ' ' + fmtDay(date) + ' kl. ' + (rest.time || t.time);
       addNotif(text, true);
       void notify('events', teamName(s()), text);
     },
@@ -1853,27 +1918,59 @@ export const useStore = create<Store>()((set, get) => {
       download('trening-' + WEEKDAYS[t.weekday].replace('ø', 'o') + '.ics', seriesIcs(t, shortTeam(s())), 'text/calendar');
       toast(isRunning(t) ? 'Treningene er lagt i kalenderen' : 'Treningen er lagt i kalenderen');
     },
+    setLogo: async (file) => {
+      if (!file.type.startsWith('image/')) return toast('Velg et bilde av logoen.');
+      let logo: string;
+      try {
+        logo = await logoImage(file);
+      } catch {
+        return toast('Fikk ikke lest bildet. Prøv et annet.');
+      }
+      setData((d) => ({ ...d, logo }));
+      toast('Logoen er lagt inn for hele laget');
+    },
+    removeLogo: () => {
+      if (s().role !== 'coach') return;
+      ask('Fjerne logoen?', 'Logoen forsvinner for alle på laget. Alle på laget kan legge inn en ny.', 'Fjern', () => {
+        setData((d) => {
+          const rest = { ...d };
+          delete rest.logo;
+          return rest;
+        });
+        toast('Logoen er fjernet');
+      });
+    },
     openResult: (id) => {
       const m = s().data.matches.find((x) => x.id === id);
       if (!m) return;
-      set({ sheet: 'result', form: { matchId: id, us: m.us ?? 0, them: m.them ?? 0 } });
+      set({ sheet: 'result', form: { matchId: id, us: m.us == null ? '' : String(m.us), them: m.them == null ? '' : String(m.them), err: '' } });
     },
     stepResult: (k, dir) => {
       const v = Number(s().form[k]) || 0;
-      setForm({ [k]: Math.max(0, Math.min(30, v + dir)) });
+      setForm({ [k]: String(Math.max(0, Math.min(MAX_SCORE, v + dir))), err: '' });
     },
     saveResult: () => {
       const f = s().form;
+      const goals = (v: unknown) => (/^\d{1,3}$/.test(String(v ?? '')) ? Math.min(MAX_SCORE, Number(v)) : null);
+      const us = goals(f.us);
+      const them = goals(f.them);
+      if (us == null || them == null) return setForm({ err: 'Skriv inn målene for begge lagene.' });
+      const old = s().data.matches.find((m) => m.id === f.matchId);
+      if (!old) return set({ sheet: null });
       setData((d) => ({
         ...d,
-        matches: d.matches.map((m) => (m.id === f.matchId ? { ...m, us: Number(f.us), them: Number(f.them) } : m)),
+        matches: d.matches.map((m) => (m.id === f.matchId ? { ...m, us, them } : m)),
       }));
       set({ sheet: null });
       toast('Resultatet er lagret');
+      // Saving the same result again doesn't tell everyone twice.
+      if (old.us === us && old.them === them) return;
       const rm = s().data.matches.find((m) => m.id === f.matchId);
       if (rm) {
-        addNotif('Resultat: ' + scoreTitle(s(), rm));
-        void notify('results', teamName(s()), 'Resultat: ' + scoreTitle(s(), rm));
+        const o = outcomeOf(rm);
+        const text = (old.us == null ? 'Resultat: ' : 'Rettet resultat: ') + scoreTitle(s(), rm) + (o ? ' · ' + OUTCOME_WORD[o] : '');
+        addNotif(text);
+        void notify('results', teamName(s()), text);
       }
     },
     openComposer: (postId, eventId) => {

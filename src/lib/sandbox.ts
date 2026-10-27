@@ -14,7 +14,7 @@ import type { Comment, Player, Post, TeamData } from './types';
  * The version of supabase/schema.sql whose rules this copies. The build checks it against the schema
  * (scripts/check-test-mode.mjs): when the schema changes, bring the rules here up to date, then raise this.
  */
-export const SCHEMA_VERSION = 11;
+export const SCHEMA_VERSION = 12;
 
 export interface SbUser {
   id: string;
@@ -351,7 +351,9 @@ function mergeMember(prev: TeamData, next: TeamData, m: SbMember, uid: string): 
   ];
   const payments = [...(prev.payments || []).filter((x) => !own.includes(x.subId)), ...(next.payments || []).filter((x) => own.includes(x.subId))];
   const reports = [...(prev.reports || []).filter((x) => x.by !== uid), ...(next.reports || []).filter((x) => x.by === uid).slice(0, 20)];
-  return { ...prev, posts, players, subs, payments, reports };
+  // The team's logo: players and paying subscribers may add or change it; only coaches remove it.
+  const logo = (m.role !== 'sub' || subOk(prev, uid)) && okLogo(next.logo);
+  return { ...prev, posts, players, subs, payments, reports, ...(logo ? { logo } : {}) };
 }
 
 /** Removes an account's hearts, comments and subscription from a team document. Payments stay. */
@@ -362,6 +364,16 @@ const forget = (d: TeamData, uid: string): TeamData => ({
 });
 
 const stripNames = (d: TeamData): TeamData => omit(d, 'coachCode', 'teamCode', 'teamName');
+
+/** Like ic_logo: the logo if it is a small picture, else nothing. */
+const okLogo = (v: unknown) =>
+  typeof v === 'string' && v.length <= 200000 && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(v) ? v : undefined;
+
+/** Coaches may change everything, also remove the logo; something that isn't a small picture is never kept. */
+const coachSave = (d: TeamData): TeamData => {
+  const out = stripNames(d);
+  return okLogo(out.logo) ? out : omit(out, 'logo');
+};
 
 // ---------- The calls ----------
 
@@ -471,7 +483,7 @@ export function sandboxRpc(fn: string, a: Record<string, unknown>): unknown {
       if (t.version !== a.p_version) return { ...payload(db, t, role, me), ok: false };
       const prev = t.data;
       const next = a.p_data as TeamData;
-      const merged = role === 'coach' ? stripNames(next) : mergeMember(prev, next, m, me);
+      const merged = role === 'coach' ? coachSave(next) : mergeMember(prev, next, m, me);
       // A player removed from the list takes the account linked to them along.
       if (role === 'coach')
         db.members = db.members.filter((x) => !(x.teamId === t.id && x.role === 'player' && x.playerId && !merged.players.some((p) => p.id === x.playerId)));

@@ -31,6 +31,10 @@ export function splitMatches(matches: Match[]) {
   return { upcoming, past, next, later };
 }
 
+/** A match that started in the last three days and has no result yet, newest first: the coach is reminded to enter it. */
+export const awaitingResult = (matches: Match[], now = Date.now()) =>
+  splitMatches(matches).past.find((m) => !hasResult(m) && now - matchTime(m) < 3 * 864e5);
+
 /** Posts the viewer may see: older posts with a player in focus who lacks consent are hidden. */
 export const visiblePosts = (_viewer: Pick<AppState, 'role'>, posts: Post[], P: Record<string, Player>) =>
   posts.filter((p) => postAllowed(P, p));

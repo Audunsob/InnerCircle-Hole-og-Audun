@@ -1,4 +1,4 @@
--- InnerCircle database setup, version 11 (accounts, approval of players, list of coaches,
+-- InnerCircle database setup, version 12 (accounts, approval of players, list of coaches,
 -- team name and codes, reports, notifications for one match or some players,
 -- leaving a team, deleting your account and deleting files, removing coaches and deleting a team,
 -- players aged 15 or more post about matches and events the coaches made, comments on posts, no
@@ -6,10 +6,10 @@
 -- cancel or haven't paid don't see the team, and only coaches see signatures, years of birth and
 -- parents' contact details, a read-only page for the people who made the app, posts from players wait
 -- for a coach's approval and may belong to nothing, and notifications about trainings and other events go
--- to players and coaches only, only coaches and players upload files, and the end of a cancelled
--- subscription is always in the future).
+-- to players and coaches only, only coaches and players upload files, the end of a cancelled
+-- subscription is always in the future, and everyone on the team may add the team's logo).
 -- Paste all of this into Supabase: SQL Editor -> New query -> Run.
--- Safe to run more than once, and safe to run on top of version 1, 2, 3, 4, 5, 6, 7, 8, 9 and 10.
+-- Safe to run more than once, and safe to run on top of version 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 and 11.
 
 create extension if not exists pgcrypto;
 
@@ -325,6 +325,15 @@ language sql stable set search_path = public as $$
        from (select x, ord from added order by ord limit 5) a), '[]'::jsonb)
 $$;
 
+-- The team's logo, kept in the team document as a small picture (a png, jpeg or webp data URL of at most
+-- 200 000 characters). Anything else gives null.
+create or replace function public.ic_logo(p jsonb) returns jsonb
+language sql immutable set search_path = public as $$
+  select case when jsonb_typeof(p) = 'string' and length(p #>> '{}') <= 200000
+                and (p #>> '{}') ~ '^data:image/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$'
+              then p end
+$$;
+
 -- A player as everyone but the coaches and the player themselves sees them: no year of birth, no parent's
 -- contact details, and no signatures or parent's name on the consent form. Where the form was signed,
 -- playerSig and parentSig say only 'signed', so the app can still tell whether a parent has signed.
@@ -580,6 +589,8 @@ begin
 
   if p_role = 'coach' then
     merged := coalesce(p_data, '{}'::jsonb) - 'coachCode' - 'teamCode' - 'teamName';
+    -- Coaches may also remove the logo; something that isn't a small picture is never kept.
+    if ic_logo(merged -> 'logo') is null then merged := merged - 'logo'; end if;
     -- A player removed from the list takes the accounts linked to them (player and parents) along.
     delete from team_members x
     where x.team_id = p_team and x.role in ('player', 'parent') and x.player_id is not null
@@ -691,6 +702,12 @@ begin
       || coalesce((select jsonb_agg(x) from (
            select x from jsonb_array_elements(coalesce(p_data -> 'reports', '[]'::jsonb)) x where x ->> 'by' = uid limit 20
          ) r(x)), '[]'::jsonb));
+
+    -- The team's logo: players and subscribers (while their subscription runs) may add or change it, and
+    -- everyone on the team sees it. Only coaches remove it.
+    if (p_role <> 'sub' or ic_sub_ok(prev, uid)) and ic_logo(p_data -> 'logo') is not null then
+      merged := jsonb_set(merged, '{logo}', ic_logo(p_data -> 'logo'));
+    end if;
   end if;
 
   -- A subscriber taken off the list (by a coach, or by themselves) is no longer on the team. A subscription
@@ -972,6 +989,7 @@ revoke all on function public.ic_without(jsonb, text) from public, anon, authent
 revoke all on function public.ic_consent(text, text, jsonb, jsonb) from public, anon, authenticated;
 revoke all on function public.ic_payload(public.teams, text) from public, anon, authenticated;
 revoke all on function public.ic_public_player(jsonb) from public, anon, authenticated;
+revoke all on function public.ic_logo(jsonb) from public, anon, authenticated;
 revoke all on function public.ic_forget(jsonb, text) from public, anon, authenticated;
 revoke all on function public.ic_last_coach(uuid, uuid) from public, anon, authenticated;
 revoke all on function public.ic_can_post(jsonb, text, text) from public, anon, authenticated;

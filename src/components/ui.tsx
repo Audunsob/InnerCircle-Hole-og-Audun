@@ -338,3 +338,11 @@ export function SignaturePad({
     </div>
   );
 }
+
+/** The club's logo (a data URL from the team document), kept whole inside a square. */
+export function TeamLogo({ src, size, style }: { src: string; size: number; style?: CSSProperties }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={src} alt="Lagets logo" width={size} height={size} style={{ width: size, height: size, flex: 'none', objectFit: 'contain', ...style }} />
+  );
+}

@@ -1,11 +1,11 @@
 'use client';
 
-import { homeAway, splitMatches, visiblePosts } from '@/lib/derive';
+import { awaitingResult, homeAway, splitMatches, visiblePosts } from '@/lib/derive';
 import { inviteLink, nextChargeText } from '@/lib/format';
 import { canPost, codes, hasConsent, matchTitle, missingParent, opponentText, playerMap, priceText, seesTeamInfo, teamName } from '@/lib/selectors';
 import { useStore } from '@/lib/store';
 import type { AppState, Player, Post } from '@/lib/types';
-import { Chips, DateCol, Icon } from '../ui';
+import { Chips, DateCol, Icon, TeamLogo } from '../ui';
 import { PostCard } from './PostCard';
 
 const FILTERS: [AppState['filter'], string][] = [
@@ -69,6 +69,7 @@ export function LagView() {
   const me = role === 'player' ? P[prof.player.playerId || ''] : undefined;
   const unread = data.notifs.filter((n) => n.ts > st.seenNotifsAt && !(isCoach && n.from === 'coach') && !(n.team && !seesTeamInfo(role))).length;
   const { next } = splitMatches(data.matches);
+  const noResult = isCoach ? awaitingResult(data.matches) : undefined;
   const price = priceText(st);
   const waiting = isCoach ? (st.links || []).filter((l) => l.status === 'pending').length : 0;
   const nReports = isCoach ? (data.reports || []).length : 0;
@@ -86,6 +87,7 @@ export function LagView() {
   return (
     <>
       <header className="app-header">
+        {data.logo && <TeamLogo src={data.logo} size={44} style={{ borderRadius: 10 }} />}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="app-title" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {teamName(st)}
@@ -135,6 +137,16 @@ export function LagView() {
                 {waiting === 1 ? '1 venter på godkjenning' : waiting + ' venter på godkjenning'}
               </span>
               <span className="row-sub">Spillere som vil inn på laget.</span>
+            </span>
+            <Icon name="arrow_forward" size={20} style={{ color: 'var(--accent-ink)' }} />
+          </button>
+        )}
+        {noResult && (
+          <button type="button" className="card card-btn" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', color: 'var(--ink)', textAlign: 'left', cursor: 'pointer' }} onClick={() => st.openResult(noResult.id)}>
+            <Icon name="scoreboard" size={24} style={{ color: 'var(--accent-ink)' }} />
+            <span className="row-text">
+              <span style={{ font: '600 16px var(--body)', color: 'var(--accent-ink)' }}>Legg inn resultatet</span>
+              <span className="row-sub">{matchTitle(st, noResult)}. Spillerne og abonnentene får varsel.</span>
             </span>
             <Icon name="arrow_forward" size={20} style={{ color: 'var(--accent-ink)' }} />
           </button>

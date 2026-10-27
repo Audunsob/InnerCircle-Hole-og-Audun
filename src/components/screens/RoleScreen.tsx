@@ -56,7 +56,6 @@ export function RoleScreen() {
         <h1 style={{ margin: 0, font: 'italic 800 60px/0.9 var(--display)', textTransform: 'uppercase', maxWidth: 340, textWrap: 'balance' }}>
           Lagets egen bildestrøm
         </h1>
-        <p style={{ margin: 0, font: 'italic 500 24px/1.2 var(--serif)', color: 'var(--muted)' }}>– bare for familien</p>
       </div>
       <nav aria-label="Velg rolle" className="stagger" style={{ position: 'relative' }}>
         <ChevronRow large num="01" arrow="arrow_forward" title="Jeg er spiller" sub="Over eller under 15 år" onClick={() => chooseRole('player')} />
