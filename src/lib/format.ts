@@ -75,9 +75,13 @@ export const validAcct = (n: string) => {
   return r !== 10 && r === +n[10];
 };
 
+/** `n` months after `t`. Past the end of a shorter month it stops at that month's last day (31 Jan + 1 = 28 Feb), like the database. */
 export const addMonths = (t: number, n: number) => {
   const d = new Date(t);
+  const day = d.getDate();
+  d.setDate(1);
   d.setMonth(d.getMonth() + n);
+  d.setDate(Math.min(day, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()));
   return d.getTime();
 };
 

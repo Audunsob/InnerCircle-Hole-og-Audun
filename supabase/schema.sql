@@ -1,4 +1,4 @@
--- InnerCircle database setup, version 10 (accounts, approval of players, list of coaches,
+-- InnerCircle database setup, version 11 (accounts, approval of players, list of coaches,
 -- team name and codes, reports, notifications for one match or some players,
 -- leaving a team, deleting your account and deleting files, removing coaches and deleting a team,
 -- players aged 15 or more post about matches and events the coaches made, comments on posts, no
@@ -6,9 +6,10 @@
 -- cancel or haven't paid don't see the team, and only coaches see signatures, years of birth and
 -- parents' contact details, a read-only page for the people who made the app, posts from players wait
 -- for a coach's approval and may belong to nothing, and notifications about trainings and other events go
--- to players and coaches only).
+-- to players and coaches only, only coaches and players upload files, and the end of a cancelled
+-- subscription is always in the future).
 -- Paste all of this into Supabase: SQL Editor -> New query -> Run.
--- Safe to run more than once, and safe to run on top of version 1, 2, 3, 4, 5, 6, 7, 8 and 9.
+-- Safe to run more than once, and safe to run on top of version 1, 2, 3, 4, 5, 6, 7, 8, 9 and 10.
 
 create extension if not exists pgcrypto;
 
@@ -129,8 +130,10 @@ language sql stable set search_path = public as $$
   with s as (
     select to_timestamp((least(coalesce(case when p_since ~ '^\d{1,15}(\.\d+)?$' then p_since::numeric end, ic_now_ms()), ic_now_ms()) / 1000)::float8) as ts
   )
-  select (extract(epoch from s.ts + make_interval(months =>
-           (extract(year from age(now(), s.ts)) * 12 + extract(month from age(now(), s.ts)))::int + 1)) * 1000)::bigint
+  -- Counts months one at a time: age() can be a month short (31 Jan to 28 Feb), which gave an end that had passed.
+  select (extract(epoch from coalesce(
+           (select min(s.ts + make_interval(months => k)) from generate_series(1, 1200) k where s.ts + make_interval(months => k) > now()),
+           s.ts + make_interval(months => 1200))) * 1000)::bigint
   from s
 $$;
 
@@ -147,6 +150,14 @@ $$;
 create or replace function public.ic_is_member(p_folder text) returns boolean
 language sql stable security definer set search_path = public as $$
   select exists (select 1 from teams t where t.id::text = p_folder and ic_access(t.id, auth.uid()))
+$$;
+
+-- Used by the photo storage rules: may the signed-in account add files to the team whose folder this is?
+-- Coaches and players only (posts and signatures); subscribers only look.
+create or replace function public.ic_can_upload(p_folder text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from team_members m where m.team_id::text = p_folder and m.user_id = auth.uid()
+                 and m.role in ('coach', 'player', 'parent') and m.status = 'active')
 $$;
 
 -- Used by the photo storage rules: is the signed-in account a coach on the team whose folder this is?
@@ -976,6 +987,7 @@ revoke all on function public.ic_until(text) from public, anon, authenticated;
 revoke all on function public.ic_access(uuid, uuid) from public, anon, authenticated;
 revoke all on function public.ic_is_member(text) from public, anon;
 revoke all on function public.ic_is_coach(text) from public, anon;
+revoke all on function public.ic_can_upload(text) from public, anon;
 revoke all on function public.ic_is_signature(text) from public, anon;
 revoke all on function public.leave_team(uuid, text) from public, anon;
 revoke all on function public.delete_me() from public, anon;
@@ -1015,6 +1027,7 @@ grant execute on function public.save_push(uuid, text, text, text, jsonb) to aut
 grant execute on function public.notify_targets(uuid, text) to authenticated;
 grant execute on function public.delete_push(text) to anon, authenticated;
 grant execute on function public.ic_is_member(text) to authenticated;
+grant execute on function public.ic_can_upload(text) to authenticated;
 grant execute on function public.ic_is_coach(text) to authenticated;
 grant execute on function public.ic_is_signature(text) to authenticated;
 grant execute on function public.leave_team(uuid, text) to authenticated;
@@ -1260,7 +1273,7 @@ drop policy if exists "InnerCircle coaches delete" on storage.objects;
 drop policy if exists "InnerCircle owners delete" on storage.objects;
 create policy "InnerCircle members upload" on storage.objects
   for insert to authenticated
-  with check (bucket_id = 'media' and public.ic_is_member((storage.foldername(name))[1]));
+  with check (bucket_id = 'media' and public.ic_can_upload((storage.foldername(name))[1]));
 create policy "InnerCircle members read" on storage.objects
   for select to authenticated
   using (bucket_id = 'media' and (

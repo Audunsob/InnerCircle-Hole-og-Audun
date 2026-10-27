@@ -1,4 +1,5 @@
 import { demoTeamData } from './demo';
+import { addMonths } from './format';
 import type { Membership, MemberRole, PendingJoin, TeamCoach, TeamLink, TeamPayload, TeamPeek } from './supabase';
 import type { Comment, Player, Post, TeamData } from './types';
 
@@ -13,7 +14,7 @@ import type { Comment, Player, Post, TeamData } from './types';
  * The version of supabase/schema.sql whose rules this copies. The build checks it against the schema
  * (scripts/check-test-mode.mjs): when the schema changes, bring the rules here up to date, then raise this.
  */
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 11;
 
 export interface SbUser {
   id: string;
@@ -235,10 +236,10 @@ const subOk = (d: TeamData, uid: string) => d.subs.some((x) => x.id === 'sub-' +
 
 /** The first monthly anniversary of `since` that is still in the future. */
 function until(since: number) {
-  const s = new Date(Math.min(since || Date.now(), Date.now()));
-  const d = new Date(s);
-  while (d.getTime() <= Date.now()) d.setMonth(d.getMonth() + 1);
-  return d.getTime();
+  const s = Math.min(since || Date.now(), Date.now());
+  let k = 1;
+  while (addMonths(s, k) <= Date.now()) k++;
+  return addMonths(s, k);
 }
 
 const publicPlayer = (p: Player): Player => {
